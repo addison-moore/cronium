@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, readRun } from "@/tools/utils/test-run";
 import { MAX_UNIFIED_IO_OUTPUT_BYTES, toMb } from "@/lib/unified-io/limits";
 import {
   mongoCredentialsSchema,
@@ -22,6 +23,9 @@ export const findDocumentsAction: ToolAction = {
   actionType: "search",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: readRun((result: { documentCount: number }) =>
+    counted(result.documentCount, "document"),
+  ),
   inputSchema: findDocumentsSchema,
   parameters: safeZodToParameters(findDocumentsSchema),
   outputSchema: z.object({

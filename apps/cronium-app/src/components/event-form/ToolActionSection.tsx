@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useLayoutEffect, useMemo } from "react";
+import React, {
+  useId,
+  useState,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -9,6 +15,7 @@ import { Badge } from "@cronium/ui";
 import { Alert, AlertDescription } from "@cronium/ui";
 import { Separator } from "@cronium/ui";
 import { Spinner } from "@cronium/ui";
+import { ConfirmationDialog } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -17,6 +24,7 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import {
   Search,
   Zap,
@@ -27,6 +35,7 @@ import {
   Users,
   FileText,
   AlertCircle,
+  Play,
   TestTube,
   Info,
   X,
@@ -34,6 +43,7 @@ import {
 import { useToast } from "@cronium/ui";
 import { type Tool } from "@/shared/schema";
 import {
+  type ActionTestRun,
   type ToolAction,
   type ToolPlugin,
   ToolPluginRegistry,
@@ -41,11 +51,7 @@ import {
 import { useToolPlugins } from "@/tools/use-tool-plugins";
 import ActionParameterForm from "./ActionParameterForm";
 import { cn } from "@/lib/utils";
-import {
-  SlackMessagePreview,
-  EmailPreview,
-  ApiRequestPreview,
-} from "@/tools/previews";
+import { SlackMessagePreview, EmailPreview } from "@/tools/previews";
 import Link from "next/link";
 
 // Tool Action Configuration Interface
@@ -65,6 +71,9 @@ interface ToolActionSectionProps {
   availableTools: Tool[];
   /** Whether the credentials are still loading: `availableTools` is empty until then. */
   isLoadingTools: boolean;
+  /** Whether they couldn't be loaded at all, which leaves `availableTools` empty too. */
+  toolsLoadFailed: boolean;
+  onRetryTools: () => void;
 }
 
 // Default fallback icons for categories (used if plugin doesn't provide categoryIcon)
@@ -88,14 +97,15 @@ const DEFAULT_ACTION_TYPE_COLORS: Record<string, string> = {
 
 // Helper function to get category icon from plugin or fallback
 const getCategoryIcon = (category: string): React.ReactNode => {
-  // Try to get from a plugin that has this category
-  const pluginsInCategory = ToolPluginRegistry.getByCategory(category);
-  if (pluginsInCategory.length > 0 && pluginsInCategory[0]?.categoryIcon) {
-    return pluginsInCategory[0].categoryIcon;
-  }
+  // Try to get from a plugin that has this category. Most of them only name an icon, in
+  // a string, and React would print that beside the category.
+  const pluginIcon = ToolPluginRegistry.getByCategory(category)
+    .map((plugin) => plugin.categoryIcon)
+    .find((icon) => icon && typeof icon !== "string");
+  if (pluginIcon) return pluginIcon;
   // Fallback to default icon
   const categoryLower = category.toLowerCase();
-  return DEFAULT_CATEGORY_ICONS[categoryLower] ?? <Zap className="h-3 w-3" />;
+  return DEFAULT_CATEGORY_ICONS[categoryLower] ?? <Zap className="h-4 w-4" />;
 };
 
 // Helper function to get action type color from action or fallback
@@ -108,12 +118,77 @@ const getActionTypeColor = (action: ToolAction): string => {
   );
 };
 
+// What the button does comes from what the action declares, because `isTest` only stops
+// an action that reads it. Most really run: a Slack message posts, a delete deletes.
+const runButtonLabel = (action: ToolAction): string =>
+  action.testRun.kind === "simulated" ? "Simulate" : `${action.name} Now`;
+
+// A run that changes nothing needs no question: a simulation contacts nothing, and a read
+// can't write.
+const asksBeforeRunning = ({ kind }: ActionTestRun): boolean =>
+  kind === "sends" || kind === "spends" || kind === "writes";
+
+const RUN_SUCCEEDED_TITLE: Record<ActionTestRun["kind"], string> = {
+  simulated: "Simulated",
+  reads: "Done",
+  sends: "Sent",
+  spends: "Done",
+  writes: "Done",
+};
+
+const runFailedTitle = (action: ToolAction): string =>
+  action.testRun.kind === "simulated"
+    ? "Simulation failed"
+    : `${action.name} failed`;
+
+const firstTemplateValue = (value: unknown): string | undefined => {
+  if (typeof value === "string") return /\{\{[^{}]+\}\}/.exec(value)?.[0];
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = firstTemplateValue(nested);
+      if (found) return found;
+    }
+  }
+  return undefined;
+};
+
+// A scheduled run fills these in, and this one doesn't, so a real run from the form sends
+// them with the braces. A simulation sends nothing, so there's nothing to say.
+const templateValueNote = (
+  action: ToolAction,
+  parameters: Record<string, unknown>,
+): string | undefined => {
+  if (action.testRun.kind === "simulated") return undefined;
+  const value = firstTemplateValue(parameters);
+  return value
+    ? `Template values such as ${value} aren't filled in here: they go as written.`
+    : undefined;
+};
+
+// What a stored config's tool and action are called. A row can name ones no plugin has
+// now, or leave the tool out: only the form writes whole ones, and the API takes any JSON.
+const storedConfigNames = (
+  config: Partial<ToolActionConfig>,
+  plugins: ToolPlugin[],
+): { tool: string; action: string | undefined } => {
+  const toolType = config.toolType?.toUpperCase();
+  const plugin = plugins.find((p) => p.id.toUpperCase() === toolType);
+  return {
+    tool: plugin?.name ?? config.toolType ?? "an unknown tool",
+    action:
+      plugin?.actions?.find((a) => a.id === config.actionId)?.name ??
+      config.actionId,
+  };
+};
+
 export default function ToolActionSection({
   value,
   onChange,
   active = true,
   availableTools,
   isLoadingTools,
+  toolsLoadFailed,
+  onRetryTools,
 }: ToolActionSectionProps) {
   const { toast } = useToast();
 
@@ -125,7 +200,8 @@ export default function ToolActionSection({
   const [selectedPlugin, setSelectedPlugin] = useState<ToolPlugin | null>(null);
   const [selectedAction, setSelectedAction] = useState<ToolAction | null>(null);
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
-  const [isTestingAction, setIsTestingAction] = useState(false);
+  const [askingToRun, setAskingToRun] = useState(false);
+  const runExplanationId = useId();
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     null,
   );
@@ -355,38 +431,68 @@ export default function ToolActionSection({
     }
   };
 
-  // Test action
-  const testActionMutation = trpc.tools.executeAction.useMutation({
-    onSuccess: (result) => {
+  // The answer is about the action that was pressed, and another can be chosen meanwhile.
+  const pressedAction = useRef<ToolAction | null>(null);
+
+  const runActionMutation = trpc.tools.executeAction.useMutation({
+    onSuccess: (answer) => {
+      const action = pressedAction.current;
+      if (!action) return;
+      if (!answer.success) {
+        toast({
+          title: runFailedTitle(action),
+          description: answer.error,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: "Test Successful",
-        description: "Action executed successfully in test mode",
+        title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
+        description: action.testRun.succeeded(answer.result),
       });
-      console.log("Test result:", result);
+      console.log("Tool action result:", answer.result);
     },
     onError: (error) => {
+      const action = pressedAction.current;
+      if (!action) return;
+      const message = trpcErrorMessage(error, "The server gave no reason.");
+      // The server only says no before running anything. With no answer, or a broken one,
+      // nobody here can tell, and a proxy can give up on a run that goes on without it.
+      const refused = (error.data?.httpStatus ?? 500) < 500;
       toast({
-        title: "Test Failed",
-        description: error.message,
+        title: runFailedTitle(action),
+        description:
+          refused || !asksBeforeRunning(action.testRun)
+            ? message
+            : `${message} It may still have run.`,
         variant: "destructive",
       });
     },
-    onSettled: () => {
-      setIsTestingAction(false);
-    },
   });
 
-  const handleTestAction = () => {
+  const runAction = () => {
     if (!selectedTool || !selectedAction) return;
 
-    setIsTestingAction(true);
-    testActionMutation.mutate({
+    pressedAction.current = selectedAction;
+    runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
       parameters,
       isTest: true,
     });
   };
+
+  const handleRunPressed = () => {
+    if (selectedAction && asksBeforeRunning(selectedAction.testRun)) {
+      setAskingToRun(true);
+    } else {
+      runAction();
+    }
+  };
+
+  const runNote = selectedAction
+    ? templateValueNote(selectedAction, parameters)
+    : undefined;
 
   // Clear selection
   const handleClearSelection = () => {
@@ -439,7 +545,8 @@ export default function ToolActionSection({
           </div>
           {plugin.actions && (
             <Badge variant="secondary" className="text-xs">
-              {plugin.actions.length} actions
+              {plugin.actions.length} action
+              {plugin.actions.length !== 1 ? "s" : ""}
             </Badge>
           )}
         </div>
@@ -454,14 +561,15 @@ export default function ToolActionSection({
     }
 
     // Slack preview
-    if (selectedPlugin.id === "slack" && selectedAction.id === "send-message") {
+    if (
+      selectedPlugin.id === "slack" &&
+      selectedAction.id === "slack-send-message"
+    ) {
       return (
         <SlackMessagePreview
-          channel={
-            typeof parameters.channel === "string"
-              ? parameters.channel
-              : "#general"
-          }
+          {...(typeof parameters.channel === "string" && {
+            channel: parameters.channel,
+          })}
           message={typeof parameters.text === "string" ? parameters.text : ""}
           {...(typeof parameters.username === "string" && {
             username: parameters.username,
@@ -512,39 +620,14 @@ export default function ToolActionSection({
       return <EmailPreview {...emailProps} />;
     }
 
-    // Webhook/API preview
-    if (
-      selectedPlugin.id === "webhook" &&
-      selectedAction.id === "send-request"
-    ) {
-      const apiProps: React.ComponentProps<typeof ApiRequestPreview> = {
-        method:
-          typeof parameters.method === "string" ? parameters.method : "GET",
-        url: typeof parameters.url === "string" ? parameters.url : "",
-      };
-
-      if (parameters.headers)
-        apiProps.headers = parameters.headers as Record<string, string>;
-      if (parameters.queryParams)
-        apiProps.queryParams = parameters.queryParams as Record<string, string>;
-      if (parameters.body)
-        apiProps.body = parameters.body as string | Record<string, unknown>;
-      if (parameters.authType)
-        apiProps.authType = parameters.authType as
-          "none" | "api_key" | "bearer" | "basic";
-      if (parameters.timeout) apiProps.timeout = parameters.timeout as number;
-
-      return <ApiRequestPreview {...apiProps} />;
-    }
-
     // Discord preview (similar to Slack)
     if (
       selectedPlugin.id === "discord" &&
-      selectedAction.id === "send-message"
+      selectedAction.id === "discord-send-message"
     ) {
       return (
         <SlackMessagePreview
-          channel={parameters.webhook_url ? "Discord Channel" : "#general"}
+          title="Discord Message Preview"
           message={
             typeof parameters.content === "string" ? parameters.content : ""
           }
@@ -572,7 +655,7 @@ export default function ToolActionSection({
 
   // Nothing below can be right until both have answered: it would say that no tools
   // match, or that no credentials are configured, about an event that has both.
-  if (pluginsStatus === "failed") {
+  if (pluginsStatus === "failed" || toolsLoadFailed) {
     return (
       <Card>
         <CardHeader>{title}</CardHeader>
@@ -581,17 +664,24 @@ export default function ToolActionSection({
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="space-y-3">
               <p>
-                Couldn&apos;t load the tool list.{" "}
+                Couldn&apos;t load{" "}
+                {pluginsStatus === "failed"
+                  ? "the tool list"
+                  : "your tool credentials"}
+                .{" "}
                 {value
-                  ? "This event's tool settings can't be shown or changed until it loads, and saving keeps them as they are."
-                  : "A tool action can't be set up until it loads."}{" "}
+                  ? "This event's tool settings can't be shown or changed until that works, and saving keeps them as they are."
+                  : "A tool action can't be set up until that works."}{" "}
                 Check your connection and try again, or reload the page.
               </p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={retryPlugins}
+                onClick={() => {
+                  if (pluginsStatus === "failed") retryPlugins();
+                  if (toolsLoadFailed) onRetryTools();
+                }}
               >
                 Try again
               </Button>
@@ -616,6 +706,22 @@ export default function ToolActionSection({
     );
   }
 
+  // What's stored has to show below. When its credential or action can't, the form still
+  // holds the config and a save sends it back, so say so: it's settings nobody can see
+  // otherwise. The credentials have answered by now, so one not in the list is gone.
+  const storedTool = availableTools.find((tool) => tool.id === value?.toolId);
+  const storedPlugin = allPlugins.find(
+    (plugin) => plugin.id.toUpperCase() === storedTool?.type.toUpperCase(),
+  );
+  const storedActionShows = storedPlugin?.actions?.some(
+    (action) => action.id === value?.actionId,
+  );
+  const storedNames =
+    !!value?.toolId &&
+    !!value.actionId &&
+    !storedActionShows &&
+    storedConfigNames(value, allPlugins);
+
   return (
     <Card>
       <CardHeader>
@@ -636,6 +742,24 @@ export default function ToolActionSection({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {storedNames && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="space-y-2">
+              <p>
+                {storedTool
+                  ? "This event's action isn't available."
+                  : "This event's credential is gone, so its runs will fail."}
+              </p>
+              <p>
+                It&apos;s set to run <strong>{storedNames.action}</strong> on{" "}
+                <strong>{storedNames.tool}</strong>. Saving keeps that as it is,
+                until you choose a replacement below.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Tool selection section */}
         {!selectedToolType ? (
           <div className="space-y-4">
@@ -874,25 +998,63 @@ export default function ToolActionSection({
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Configure Parameters</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleTestAction}
-                      disabled={isTestingAction}
-                      className="flex items-center gap-2"
-                    >
-                      <TestTube
-                        className={cn(
-                          "h-4 w-4",
-                          isTestingAction && "motion-safe:animate-spin",
+                  <div className="space-y-2">
+                    {/* The button names the action, which can be too long to fit beside this. */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                      <Label>Configure Parameters</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRunPressed}
+                        disabled={runActionMutation.isPending}
+                        aria-describedby={runExplanationId}
+                        className="ml-auto flex items-center gap-2"
+                      >
+                        {runActionMutation.isPending ? (
+                          <Spinner size="sm" />
+                        ) : selectedAction.testRun.kind === "simulated" ? (
+                          <TestTube className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
                         )}
-                      />
-                      Test Action
-                    </Button>
+                        {runButtonLabel(selectedAction)}
+                      </Button>
+                    </div>
+                    <div
+                      id={runExplanationId}
+                      className={cn(
+                        "text-right text-sm",
+                        asksBeforeRunning(selectedAction.testRun)
+                          ? "text-warning-text"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <p>{selectedAction.testRun.explains}</p>
+                      {runNote && <p>{runNote}</p>}
+                    </div>
                   </div>
+
+                  {/* Portaled out of the form, so its buttons can't submit it. */}
+                  <ConfirmationDialog
+                    open={askingToRun}
+                    onOpenChange={setAskingToRun}
+                    title={`${selectedAction.name} now?`}
+                    description={[
+                      selectedAction.testRun.explains,
+                      `It uses the credential ${selectedTool.name}.`,
+                      runNote,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    confirmText={selectedAction.name}
+                    confirmVariant={
+                      selectedAction.testRun.kind === "writes"
+                        ? "destructive"
+                        : "default"
+                    }
+                    onConfirm={runAction}
+                  />
 
                   <ActionParameterForm
                     action={selectedAction}

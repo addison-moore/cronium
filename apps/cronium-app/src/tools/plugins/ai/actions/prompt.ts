@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { spendRun } from "@/tools/utils/test-run";
 import {
   aiCredentialsSchema,
   aiPromptSchema,
@@ -50,6 +51,10 @@ export const promptAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: spendRun(
+    "sends the prompt to the model, and your provider may charge for it",
+    "The model answered.",
+  ),
   inputSchema: aiPromptSchema,
   parameters: safeZodToParameters(aiPromptSchema),
   outputSchema: z.record(z.string(), z.unknown()),

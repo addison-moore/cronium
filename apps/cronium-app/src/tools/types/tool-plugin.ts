@@ -19,10 +19,31 @@ export interface ActionParameter {
 
 // Features configuration for actions
 export interface ActionFeatures {
-  testMode?: boolean;
   realTime?: boolean;
   batchSupport?: boolean;
   webhookSupport?: boolean;
+}
+
+/**
+ * What the button on the event form does with an action. The form sends `isTest`, but
+ * only an action whose code reads it stops short of the real thing, so each one has to
+ * say which it is. The form goes by this to decide what the button says, whether to ask
+ * first, and what the toast says. `src/tools/__tests__/test-run.test.ts` checks it against
+ * what each action really does. Build one with the helpers in `@/tools/utils/test-run`.
+ */
+export interface ActionTestRun {
+  /**
+   * - `simulated`: stops at `isTest`, before contacting anything.
+   * - `reads`: really runs, and can't change anything.
+   * - `sends`: really delivers something to someone.
+   * - `spends`: really calls a service that may charge for it.
+   * - `writes`: really changes data, for good.
+   */
+  kind: "simulated" | "reads" | "sends" | "spends" | "writes";
+  /** Said beside the button, and again when asking first. */
+  explains: string;
+  /** What the toast says after a run that worked, from what the action returned. */
+  succeeded: (result: unknown) => string;
 }
 
 // Tool Action Interface
@@ -64,6 +85,7 @@ export interface ToolAction {
   ) => Promise<any>;
 
   // Testing support
+  testRun: ActionTestRun;
   testData?: () => Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validate?: (params: any) => { isValid: boolean; errors?: string[] };

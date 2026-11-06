@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, writeRun } from "@/tools/utils/test-run";
 import {
   mongoCredentialsSchema,
   updateDocumentsSchema,
@@ -23,6 +24,15 @@ export const updateDocumentsAction: ToolAction = {
   actionType: "update",
   actionTypeColor: "orange",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: {
+      matchedCount: number;
+      modifiedCount: number;
+      upsertedCount: number;
+    }) =>
+      `Matched ${counted(result.matchedCount, "document")}, changed ${result.modifiedCount}` +
+      (result.upsertedCount ? `, added ${result.upsertedCount}.` : "."),
+  ),
   inputSchema: updateDocumentsSchema,
   parameters: safeZodToParameters(updateDocumentsSchema),
   outputSchema: z.object({

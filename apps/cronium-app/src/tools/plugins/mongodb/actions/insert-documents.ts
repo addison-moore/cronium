@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, writeRun } from "@/tools/utils/test-run";
 import {
   mongoCredentialsSchema,
   insertDocumentsSchema,
@@ -19,6 +20,10 @@ export const insertDocumentsAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "green",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: { insertedCount: number }) =>
+      `Inserted ${counted(result.insertedCount, "document")}.`,
+  ),
   inputSchema: insertDocumentsSchema,
   parameters: safeZodToParameters(insertDocumentsSchema),
   outputSchema: z.object({
