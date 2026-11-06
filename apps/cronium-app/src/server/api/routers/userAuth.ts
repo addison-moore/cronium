@@ -11,6 +11,7 @@ import { isSetupRequired } from "@/lib/first-run";
 import { nanoid } from "nanoid";
 import { TokenStatus, UserRole, UserStatus } from "@/shared/schema";
 import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 import { hashApiToken } from "@/lib/api-token-hash";
 import { encryptionService } from "@/lib/encryption-service";
 import { passwordSchema } from "@/shared/schemas/password";
@@ -175,9 +176,15 @@ export const userAuthRouter = createTRPCRouter({
         // an existing ACTIVE account (via SMTP_CONFIG_MISSING from the send),
         // which let an attacker enumerate registered emails on any instance
         // without SMTP configured. Same required-field set as sendEmailDetailed.
-        const smtp = await getSmtpSettings();
+        // A saved password that can't be decrypted gets the same answer: this
+        // caller is anonymous, and can't do anything with more. The read logged
+        // which setting and why, and the admin page says so too.
+        const smtp = await getSmtpSettings().catch((error: unknown) => {
+          if (error instanceof UnreadableSettingError) return null;
+          throw error;
+        });
         if (
-          !smtp.host ||
+          !smtp?.host ||
           !smtp.port ||
           !smtp.user ||
           !smtp.password ||

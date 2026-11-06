@@ -120,8 +120,8 @@ describe("events.fork with an archived server", () => {
           "This event can't be forked while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
       });
 
-      // A draft left behind would be a REMOTE event with no servers, which runs
-      // in a container if anyone activates it.
+      // A draft left behind would be a REMOTE event with no servers, which can't
+      // be activated or run, and nothing would say why it lost the server.
       expect(await eventCount()).toBe(1);
       // The refusal changes nothing on the source either.
       expect(await linkedServerIds(source)).toEqual([archived]);

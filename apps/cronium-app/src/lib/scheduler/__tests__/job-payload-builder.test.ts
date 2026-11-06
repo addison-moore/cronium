@@ -63,6 +63,65 @@ describe("buildJobPayload targets", () => {
     );
     expect(payload.target).toEqual({ containerImage: "cronium/bash:latest" });
   });
+
+  it("REMOTE with a legacy serverId targets it", () => {
+    const payload = buildJobPayload(
+      makeEvent({ runLocation: RunLocation.REMOTE, serverId: 42 }),
+      10,
+    );
+    expect(payload.target).toEqual({ serverId: 42 });
+  });
+
+  it("a LOCAL event doesn't target a server it still has a stale link to", () => {
+    const payload = buildJobPayload(
+      makeEvent({
+        runLocation: RunLocation.LOCAL,
+        serverId: 42,
+        servers: [{ id: 6 }] as EventWithRelations["servers"],
+      }),
+      10,
+    );
+    expect(payload.target).toEqual({ containerImage: "cronium/bash:latest" });
+  });
+
+  describe("a REMOTE event with no servers", () => {
+    it("refuses a script rather than sending it to a container", () => {
+      expect(() =>
+        buildJobPayload(makeEvent({ runLocation: RunLocation.REMOTE }), 10),
+      ).toThrow(
+        "Event 1: This event runs only on servers and has none. Choose a server, or set it to run locally.",
+      );
+    });
+
+    it("still builds an HTTP request, which runs in the worker", () => {
+      const payload = buildJobPayload(
+        makeEvent({
+          type: EventType.HTTP_REQUEST,
+          runLocation: RunLocation.REMOTE,
+          httpMethod: "GET",
+          httpUrl: "https://example.test/hook",
+        }),
+        10,
+      );
+      expect(payload.target).toEqual({
+        containerImage: "cronium/http-client:latest",
+      });
+    });
+
+    it("still builds a tool action, which runs in the worker", () => {
+      const payload = buildJobPayload(
+        makeEvent({
+          type: EventType.TOOL_ACTION,
+          runLocation: RunLocation.REMOTE,
+          toolActionConfig: JSON.stringify({ toolType: "SLACK" }),
+        } as Partial<EventWithRelations>),
+        10,
+      );
+      expect(payload.target).toEqual({
+        containerImage: "cronium/tool-executor:latest",
+      });
+    });
+  });
 });
 
 describe("buildJobPayload environment secrecy (ME-02/ME-11)", () => {

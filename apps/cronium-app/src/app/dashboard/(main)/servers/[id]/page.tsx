@@ -405,7 +405,8 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the
               server and remove it from any events that are configured to run on
-              it.
+              it. An active event with no other server is paused, and one that
+              also runs locally keeps running there.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

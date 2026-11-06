@@ -154,6 +154,7 @@ import {
   UserRole,
   UserStatus,
 } from "@/shared/schema";
+import { NO_SERVERS_MESSAGE } from "@/shared/event-servers";
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
@@ -792,6 +793,68 @@ describe("update", () => {
     );
   });
 
+  describe("with a REMOTE event", () => {
+    const remoteOn = (servers: Array<{ id: number }>, overrides: Row = {}) =>
+      storageMock.getEventWithRelations.mockResolvedValue(
+        eventWithRelations({
+          runLocation: RunLocation.REMOTE,
+          servers,
+          ...overrides,
+        }),
+      );
+
+    it("refuses removing the last server, before writing anything", async () => {
+      remoteOn([{ id: 7 }]);
+      const caller = callerWith(sessionFor());
+      await expect(
+        caller.events.update({ id: 1, selectedServerIds: [] }),
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: NO_SERVERS_MESSAGE,
+      });
+      expect(storageMock.updateScript).not.toHaveBeenCalled();
+    });
+
+    it("refuses activating one with no servers", async () => {
+      remoteOn([], { status: EventStatus.PAUSED });
+      const caller = callerWith(sessionFor());
+      await expect(
+        caller.events.update({ id: 1, status: EventStatus.ACTIVE }),
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: NO_SERVERS_MESSAGE,
+      });
+      expect(storageMock.updateScript).not.toHaveBeenCalled();
+    });
+
+    it("still takes an edit to one with no servers that leaves where it runs alone", async () => {
+      remoteOn([], { status: EventStatus.PAUSED });
+      const caller = callerWith(sessionFor());
+      await caller.events.update({ id: 1, name: "Renamed" });
+      expect(storageMock.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "Renamed" },
+        expect.objectContaining({ userId: OWNER }),
+      );
+    });
+
+    it("still takes the form's save of a move to local", async () => {
+      remoteOn([{ id: 7 }]);
+      const caller = callerWith(sessionFor());
+      await caller.events.update({
+        id: 1,
+        runLocation: RunLocation.LOCAL,
+        serverId: null,
+        selectedServerIds: [],
+      });
+      expect(storageMock.updateScript).toHaveBeenCalledWith(
+        1,
+        { runLocation: RunLocation.LOCAL, serverId: null },
+        expect.objectContaining({ serverIds: [], userId: OWNER }),
+      );
+    });
+  });
+
   describe("with an archived server in the proposed list", () => {
     function ownServer(id: number, name: string, isArchived: boolean) {
       return { id, name, userId: OWNER, shared: false, isArchived };
@@ -987,6 +1050,35 @@ describe("activate", () => {
     });
   });
 
+  it("refuses a REMOTE script event with no servers, before writing anything", async () => {
+    storageMock.getEventWithRelations.mockResolvedValue(
+      eventWithRelations({
+        runLocation: RunLocation.REMOTE,
+        servers: [],
+      }),
+    );
+    const caller = callerWith(sessionFor());
+    await expect(caller.events.activate({ id: 1 })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: NO_SERVERS_MESSAGE,
+    });
+    expect(storageMock.updateScript).not.toHaveBeenCalled();
+    expect(schedulerMock.scheduleScript).not.toHaveBeenCalled();
+  });
+
+  it("activates a REMOTE event that has a server", async () => {
+    storageMock.getEventWithRelations.mockResolvedValue(
+      eventWithRelations({
+        runLocation: RunLocation.REMOTE,
+        servers: [{ id: 7 }],
+      }),
+    );
+    const caller = callerWith(sessionFor());
+    await expect(caller.events.activate({ id: 1 })).resolves.toEqual({
+      success: true,
+    });
+  });
+
   it("skips scheduling when the event vanished after the update", async () => {
     storageMock.getEventWithRelations.mockResolvedValue(undefined);
     const caller = callerWith(sessionFor());
@@ -1098,6 +1190,19 @@ describe("execute", () => {
     const caller = callerWith(sessionFor());
     await expect(caller.events.execute({ id: 1 })).rejects.toMatchObject({
       code: "CONFLICT",
+    });
+  });
+
+  it("surfaces CONFLICT with the reason when the event has no servers", async () => {
+    dispatchMock.mockResolvedValue({
+      job: null,
+      logId: null,
+      skipped: "no_servers",
+    });
+    const caller = callerWith(sessionFor());
+    await expect(caller.events.execute({ id: 1 })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: NO_SERVERS_MESSAGE,
     });
   });
 

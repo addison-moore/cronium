@@ -29,7 +29,7 @@ export const runEndpoints: readonly ApiEndpoint[] = [
     status: 202,
     response: responseExamples.eventRun,
     notes:
-      "Works in any event status and does not count toward maxExecutions. Answers 403 if the event is bound to an archived server or one you cannot use, and 409 if its overlap policy is SKIP and a previous run is still active.",
+      "Works in any event status and does not count toward maxExecutions. Answers 403 if the event is bound to an archived server or one you cannot use, and 409 if its overlap policy is SKIP and a previous run is still active, or if it runs only on servers and has none.",
     example: apiExample({
       method: "POST",
       path: "/api/events/42/execute",

@@ -1628,6 +1628,23 @@ describe("advanceWorkflowRun — dispatch failure paths", () => {
     expect(runRow(run.id).status).toBe(LogStatus.FAILURE);
   });
 
+  it("fails the step with the reason when the event has no servers", async () => {
+    const { run, step } = seedReadyStartNode();
+    mockDispatch.mockResolvedValue({
+      job: null,
+      logId: null,
+      skipped: "no_servers",
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(stepRow(step.id).status).toBe(WorkflowStepStatus.FAILED);
+    expect(stepRow(step.id).error).toBe(
+      "This event runs only on servers and has none. Choose a server, or set it to run locally.",
+    );
+    expect(runRow(run.id).status).toBe(LogStatus.FAILURE);
+  });
+
   it("fails the step when dispatch throws", async () => {
     const { run, step } = seedReadyStartNode();
     mockDispatch.mockRejectedValue(new Error("db down"));

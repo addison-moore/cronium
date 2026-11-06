@@ -19,6 +19,7 @@ import {
   serverGroupIdSchema,
 } from "@shared/schemas/servers";
 import { type InsertServer } from "@shared/schema";
+import { canRunWithoutServers, runsInProcess } from "@/shared/event-servers";
 import { storage } from "@/server/storage";
 import { type Log } from "@shared/schema";
 import { toEventListApiDto, toServerApiDto } from "@/server/security/api-dto";
@@ -274,7 +275,7 @@ export const serversRouter = createTRPCRouter({
         const { db } = await import("@/server/db");
         const { events, eventServers, executions, EventStatus } =
           await import("@shared/schema");
-        const { eq, and } = await import("drizzle-orm");
+        const { eq, and, or, inArray } = await import("drizzle-orm");
 
         // Get counts of affected resources
         const affectedEvents = await db
@@ -292,7 +293,7 @@ export const serversRouter = createTRPCRouter({
           .from(executions)
           .where(eq(executions.serverId, input.id));
 
-        // Get active events that would be affected
+        // Get active events that would be affected, however they're linked
         const activeEvents = await db
           .select({
             id: events.id,
@@ -302,17 +303,41 @@ export const serversRouter = createTRPCRouter({
           .from(events)
           .where(
             and(
-              eq(events.serverId, input.id),
+              or(
+                eq(events.serverId, input.id),
+                inArray(
+                  events.id,
+                  db
+                    .select({ eventId: eventServers.eventId })
+                    .from(eventServers)
+                    .where(eq(eventServers.serverId, input.id)),
+                ),
+              ),
               eq(events.status, EventStatus.ACTIVE),
             ),
           )
           .limit(10);
+
+        // What the delete does to the events it leaves with no servers, by the
+        // same rules deleteServer applies.
+        const losingLastServer = await storage.getEventsLosingLastServer(
+          input.id,
+        );
 
         const impact = {
           eventCount: affectedEvents.length,
           eventServerCount: affectedEventServers.length,
           executionCount: affectedExecutions.length,
           activeEvents,
+          eventsToPause: losingLastServer.filter(
+            (event) =>
+              !canRunWithoutServers(event) &&
+              event.status === EventStatus.ACTIVE,
+          ).length,
+          eventsToRunLocallyOnly: losingLastServer.filter(
+            (event) =>
+              canRunWithoutServers(event) && !runsInProcess(event.type),
+          ).length,
         };
 
         return {
