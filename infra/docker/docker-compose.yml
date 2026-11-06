@@ -77,6 +77,7 @@ services:
       SOCKET_ALLOWED_ORIGINS: ${SOCKET_ALLOWED_ORIGINS:-}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      ENCRYPTION_KEYS_RETIRED: ${ENCRYPTION_KEYS_RETIRED:-}
       CRONIUM_ORCHESTRATOR_KEY: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}
       SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
@@ -132,6 +133,7 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET:?generate with openssl rand -hex 32}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?generate with openssl rand -hex 32 (must be 64 hex chars)}
+      ENCRYPTION_KEYS_RETIRED: ${ENCRYPTION_KEYS_RETIRED:-}
       SOCKET_BROADCAST_KEY: ${SOCKET_BROADCAST_KEY:?generate with openssl rand -base64 32}
       JWT_SECRET: ${JWT_SECRET:?generate with openssl rand -hex 32}
       VALKEY_URL: valkey://:${VALKEY_PASSWORD:?generate with openssl rand -hex 24}@valkey:6379
