@@ -1,0 +1,1 @@
+ALTER TABLE "env_vars" ALTER COLUMN "value" SET DATA TYPE text;

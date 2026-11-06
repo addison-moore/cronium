@@ -257,6 +257,76 @@ describe("PATCH /api/events/[id]", () => {
   });
 });
 
+describe("env vars too long to deliver", () => {
+  const tooLong = {
+    envVars: [{ key: "TOKEN", value: "x".repeat(128_001) }],
+  };
+
+  it("POST answers 400 with the reason, and creates nothing", async () => {
+    const res = await post({ ...baseEvent, ...tooLong });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
+    expect(s.createScript).not.toHaveBeenCalled();
+    expect(s.createEnvVar).not.toHaveBeenCalled();
+  });
+
+  it("PATCH answers 400 with the reason, and leaves the variables alone", async () => {
+    const res = await patch(tooLong);
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
+    expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+    expect(s.createEnvVar).not.toHaveBeenCalled();
+  });
+
+  // What a body over the proxy's 10 MB cap looks like by the time it arrives.
+  const cutOff = '{"name":"e","envVars":[{"key":"K","value":"xxxxxxx';
+
+  it.each([
+    [
+      "POST",
+      () =>
+        POST(
+          new NextRequest("http://localhost:5001/api/events", {
+            method: "POST",
+            body: cutOff,
+          }),
+        ),
+    ],
+    [
+      "PATCH",
+      () =>
+        PATCH(
+          new NextRequest("http://localhost:5001/api/events/1", {
+            method: "PATCH",
+            body: cutOff,
+          }),
+          { params: Promise.resolve({ id: "1" }) },
+        ),
+    ],
+  ])(
+    "%s answers 400, not 500, to a body cut off at the cap",
+    async (_method, send) => {
+      const res = await send();
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: "Request body must be a JSON object under 10 MB",
+      });
+      expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+    },
+  );
+
+  it("both accept a value too long for the old column", async () => {
+    const long = { envVars: [{ key: "TOKEN", value: "x".repeat(4_096) }] };
+
+    expect((await post({ ...baseEvent, ...long })).status).toBe(201);
+    expect((await patch(long)).status).toBe(200);
+    expect(s.createEnvVar).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("env var values over REST", () => {
   const withEnv = {
     id: 1,
