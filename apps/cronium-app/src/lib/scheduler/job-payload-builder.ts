@@ -2,6 +2,10 @@ import type { EventWithRelations } from "@/server/storage";
 import { JobType, EventType, RunLocation } from "@/shared/schema";
 import type { ScriptType } from "@/shared/schema";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
+import {
+  NO_SERVERS_MESSAGE,
+  canRunWithoutServers,
+} from "@/shared/event-servers";
 
 export interface JobPayload {
   executionLogId: number;
@@ -115,49 +119,22 @@ export function buildJobPayload(
   // adds a local container branch to the fan-out.
   const runsOnServers = event.runLocation !== RunLocation.LOCAL;
   const runOnLocal = event.runLocation === RunLocation.LOCAL_AND_REMOTE;
-  if (runsOnServers) {
-    // Check for direct serverId first
-    if (event.serverId) {
-      jobPayload.target = {
-        serverId: event.serverId,
-        ...(runOnLocal && { runOnLocal: true }),
-      };
-    } else if (event.servers && event.servers.length > 0) {
-      // If no direct serverId, check servers table
-      // For now, use the first server (multi-server support will be added later)
-      const firstServer = event.servers[0];
-      if (firstServer?.id) {
-        jobPayload.target = {
-          serverId: firstServer.id,
-          ...(runOnLocal && { runOnLocal: true }),
-        };
-      } else {
-        // Fallback to container if no server found
-        jobPayload.target = {
-          containerImage:
-            jobType === JobType.SCRIPT
-              ? `cronium/${event.type.toLowerCase()}:latest`
-              : jobType === JobType.HTTP_REQUEST
-                ? "cronium/http-client:latest"
-                : "cronium/tool-executor:latest",
-        };
-      }
-    } else {
-      // No servers configured for remote event - fallback to container
-      console.warn(
-        `Event ${event.id} is set to REMOTE but has no servers configured`,
-      );
-      jobPayload.target = {
-        containerImage:
-          jobType === JobType.SCRIPT
-            ? `cronium/${event.type.toLowerCase()}:latest`
-            : jobType === JobType.HTTP_REQUEST
-              ? "cronium/http-client:latest"
-              : "cronium/tool-executor:latest",
-      };
-    }
+  // Check for direct serverId first, then the servers table. For now, use the
+  // first server (multi-server support will be added later)
+  const serverId = event.serverId ?? event.servers?.[0]?.id;
+  if (runsOnServers && serverId) {
+    jobPayload.target = {
+      serverId,
+      ...(runOnLocal && { runOnLocal: true }),
+    };
+  } else if (!canRunWithoutServers(event)) {
+    // dispatchEventJob refuses this before it gets here. Never fall back to a
+    // container: that runs a script written for a server on the Cronium host.
+    throw new Error(`Event ${event.id}: ${NO_SERVERS_MESSAGE}`);
   } else {
-    // Local execution - use container
+    // Local execution - use container. That includes the local half of a
+    // LOCAL_AND_REMOTE event whose servers are gone. HTTP requests and tool
+    // actions run in the worker, which doesn't read this target.
     jobPayload.target = {
       containerImage:
         jobType === JobType.SCRIPT

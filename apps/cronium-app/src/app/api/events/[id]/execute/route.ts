@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { executeErrorResponse, parseExecuteRequest } from "@/lib/api-execute";
 import { dispatchEventJob } from "@/lib/scheduling/dispatch";
+import { NO_SERVERS_MESSAGE } from "@/shared/event-servers";
 import { assertEventRelations } from "@/server/security/resource-access";
 import { storage } from "@/server/storage";
 
@@ -37,7 +38,9 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "A previous run of this event is still active (overlap policy: SKIP)",
+            result.skipped === "no_servers"
+              ? NO_SERVERS_MESSAGE
+              : "A previous run of this event is still active (overlap policy: SKIP)",
         },
         { status: 409 },
       );

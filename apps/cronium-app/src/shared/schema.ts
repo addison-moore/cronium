@@ -187,6 +187,7 @@ export enum ScheduleIncidentKind {
   CATCHUP_OVERFLOW = "CATCHUP_OVERFLOW",
   AUTO_PAUSED = "AUTO_PAUSED",
   LEASE_LOST = "LEASE_LOST",
+  NO_SERVERS = "NO_SERVERS",
 }
 
 export type ScriptType = EventType.NODEJS | EventType.PYTHON | EventType.BASH;

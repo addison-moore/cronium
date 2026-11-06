@@ -28,6 +28,7 @@ import { jobService } from "@/lib/services/job-service";
 import { buildJobPayload } from "@/lib/scheduler/job-payload-builder";
 import { eventTimeoutMs } from "@/lib/scheduler/event-timeout";
 import { recordJobCreated } from "./job-transition";
+import { isStrandedRemoteEvent } from "@/shared/event-servers";
 import { assertEventRelations } from "@/server/security/resource-access";
 import {
   assertRoleCapability,
@@ -62,7 +63,11 @@ export interface DispatchOptions {
 
 export type DispatchResult =
   | { job: Job; logId: number; skipped?: undefined }
-  | { job: null; logId: null; skipped: "overlap" | "max_executions" };
+  | {
+      job: null;
+      logId: null;
+      skipped: "overlap" | "max_executions" | "no_servers";
+    };
 
 function jobTypeForEvent(event: EventWithRelations): JobType {
   const map: Record<string, JobType> = {
@@ -86,6 +91,33 @@ function isUniqueViolation(error: unknown): boolean {
   return pgErrorCode(error) === "23505";
 }
 
+/** Pause an event dispatch won't run: a visible incident, not a silent stop. */
+async function autoPause(
+  event: EventWithRelations,
+  kind: ScheduleIncidentKind,
+  details: Record<string, unknown>,
+): Promise<void> {
+  await storage.updateScript(event.id, {
+    status: EventStatus.PAUSED,
+    nextRunAt: null,
+  });
+  await db.insert(scheduleIncidents).values({
+    eventId: event.id,
+    kind,
+    details,
+  });
+  // Cancel the legacy in-memory timer (dynamic import: scheduler → dispatch)
+  try {
+    const { scheduler } = await import("@/lib/scheduler");
+    await scheduler.deleteScript(event.id);
+  } catch (error) {
+    console.error(
+      `[Dispatch] Failed to cancel schedule for auto-paused event ${event.id}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 /**
  * Enforce maxExecutions before dispatch: at the limit, auto-pause the event
  * (visible incident, not a silent stop) and skip. Manual runs are exempt —
@@ -102,26 +134,31 @@ async function checkMaxExecutions(
   console.log(
     `[Dispatch] Event ${event.id} reached max executions (${event.maxExecutions}); auto-pausing`,
   );
-  await storage.updateScript(event.id, {
-    status: EventStatus.PAUSED,
-    nextRunAt: null,
+  await autoPause(event, ScheduleIncidentKind.AUTO_PAUSED, {
+    maxExecutions: event.maxExecutions,
   });
-  await db.insert(scheduleIncidents).values({
-    eventId: event.id,
-    kind: ScheduleIncidentKind.AUTO_PAUSED,
-    details: { maxExecutions: event.maxExecutions },
-  });
-  // Cancel the legacy in-memory timer (dynamic import: scheduler → dispatch)
-  try {
-    const { scheduler } = await import("@/lib/scheduler");
-    await scheduler.deleteScript(event.id);
-  } catch (error) {
-    console.error(
-      `[Dispatch] Failed to cancel schedule for auto-paused event ${event.id}:`,
-      error instanceof Error ? error.message : String(error),
-    );
-  }
   return false;
+}
+
+/**
+ * Refuse a script event that runs only on servers and has none (see
+ * shared/event-servers.ts). A schedule would be refused again on every tick, so
+ * it pauses with one incident, and the owner reactivates it once it's fixed. The
+ * other triggers tell someone anyway: an error to the caller, a failed step.
+ * Pausing wouldn't stop a workflow step, which doesn't check the event's status.
+ */
+async function refuseStrandedEvent(
+  event: EventWithRelations,
+  triggeredBy: TriggerSource,
+): Promise<void> {
+  console.warn(
+    `[Dispatch] Event ${event.id} runs only on servers and has none; not running it (${triggeredBy})`,
+  );
+  if (triggeredBy !== "schedule") return;
+  await autoPause(event, ScheduleIncidentKind.NO_SERVERS, {
+    reason:
+      "This event runs only on servers and has none, so it was paused. Choose a server or set it to run locally, then reactivate it.",
+  });
 }
 
 export async function dispatchEventJob(
@@ -138,6 +175,11 @@ export async function dispatchEventJob(
   const principal = await getAuthorizedPrincipal(authorizedUserId);
   assertRoleCapability(principal.role, "execute");
   await assertEventRelations(event.id, authorizedUserId, "execute");
+
+  if (isStrandedRemoteEvent(event)) {
+    await refuseStrandedEvent(event, opts.triggeredBy);
+    return { job: null, logId: null, skipped: "no_servers" };
+  }
 
   if (!(await checkMaxExecutions(event, opts.triggeredBy))) {
     return { job: null, logId: null, skipped: "max_executions" };

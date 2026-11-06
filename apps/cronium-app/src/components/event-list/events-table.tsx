@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { type Event, type ServerData } from "./types";
 import { formatDate } from "@/lib/utils";
+import { canRunWithoutServers } from "@/shared/event-servers";
 import { useAuth } from "@/hooks/useAuth";
 
 const copy = {
@@ -56,6 +57,7 @@ const copy = {
   delete: "Delete",
   noEventsFound: "No events found",
   noEventsDescription: "There are no events matching your filters.",
+  noServers: "no servers",
 } as const;
 
 interface EventsTableProps {
@@ -158,6 +160,18 @@ export function EventsTable({
     if (event.serverId) {
       const server = servers.find((s) => s.id === event.serverId);
       return localPrefix + (server ? server.name : `Server ${event.serverId}`);
+    }
+
+    // A script that runs only on servers isn't local just because it has none.
+    // Only its owner can tell: someone else's servers are left out of the row.
+    if (
+      event.userId === user?.id &&
+      !canRunWithoutServers({
+        type: event.type,
+        runLocation: event.runLocation?.toUpperCase() ?? null,
+      })
+    ) {
+      return copy.noServers;
     }
 
     // Default to local if no server configuration

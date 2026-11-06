@@ -43,6 +43,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
 import { dispatchEventJob } from "./dispatch";
+import { NO_SERVERS_MESSAGE } from "@/shared/event-servers";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
 
 const TERMINAL_RUN_STATUSES: LogStatus[] = [
@@ -922,7 +923,9 @@ async function dispatchClaimedStep(
     if (result.skipped) {
       await failClaimedStep(
         step,
-        `Run skipped (${result.skipped})`,
+        result.skipped === "no_servers"
+          ? NO_SERVERS_MESSAGE
+          : `Run skipped (${result.skipped})`,
         executionEventId,
       );
       return;

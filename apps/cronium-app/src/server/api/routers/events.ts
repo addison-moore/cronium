@@ -12,6 +12,11 @@ import {
 } from "../trpc";
 import { EventStatus, RunLocation } from "@/shared/schema";
 import {
+  NO_SERVERS_MESSAGE,
+  isStrandedRemoteEvent,
+  saveStrandsEvent,
+} from "@/shared/event-servers";
+import {
   createEventSchema,
   updateEventSchema,
   eventQuerySchema,
@@ -203,6 +208,14 @@ export const eventsRouter = createTRPCRouter({
           input.selectedServerIds,
         );
 
+        const current = await storage.getEventWithRelations(input.id);
+        if (current && saveStrandsEvent(current, input)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: NO_SERVERS_MESSAGE,
+          });
+        }
+
         const { id, envVars, selectedServerIds, ...eventData } = input;
 
         // Update the event
@@ -303,6 +316,14 @@ export const eventsRouter = createTRPCRouter({
       try {
         await assertEventRelations(input.id, userId, "execute");
 
+        const current = await storage.getEventWithRelations(input.id);
+        if (current && isStrandedRemoteEvent(current)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: NO_SERVERS_MESSAGE,
+          });
+        }
+
         // Update event status to ACTIVE
         await storage.updateScript(input.id, { status: EventStatus.ACTIVE });
 
@@ -398,7 +419,9 @@ export const eventsRouter = createTRPCRouter({
           throw new TRPCError({
             code: "CONFLICT",
             message:
-              "A previous run of this event is still active (overlap policy: SKIP)",
+              result.skipped === "no_servers"
+                ? NO_SERVERS_MESSAGE
+                : "A previous run of this event is still active (overlap policy: SKIP)",
           });
         }
 

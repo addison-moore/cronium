@@ -123,6 +123,13 @@ export function EventDetails({ eventId }: EventDetailsProps) {
       // Refresh logs to show new execution
       void refetchLogs();
     },
+    onError: (error) => {
+      toast({
+        title: "Event Not Run",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const activateEventMutation = trpc.events.activate.useMutation({
@@ -133,6 +140,13 @@ export function EventDetails({ eventId }: EventDetailsProps) {
         variant: "success",
       });
       void refetchEvent();
+    },
+    onError: (error) => {
+      toast({
+        title: "Event Not Activated",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 

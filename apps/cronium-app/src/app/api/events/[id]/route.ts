@@ -11,6 +11,7 @@ import {
   authenticateRestPrincipal,
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
+import { NO_SERVERS_MESSAGE, saveStrandsEvent } from "@/shared/event-servers";
 import { legacyEventPatchSchema } from "@/shared/schemas/events";
 import {
   assertEventCapability,
@@ -229,17 +230,29 @@ export async function PATCH(
       selectedServerIds,
     );
 
+    const current = await storage.getEventWithRelations(eventId);
+    if (
+      current &&
+      saveStrandsEvent(current, { ...allowedFields, selectedServerIds })
+    ) {
+      return NextResponse.json({ error: NO_SERVERS_MESSAGE }, { status: 400 });
+    }
+
     // Explicit allowed-field mapping is provided by the strict schema above;
     // owner, source, counters and every unknown security field are rejected.
     const filteredAllowedFields = Object.fromEntries(
       Object.entries(allowedFields).filter(([, value]) => value !== undefined),
     ) as Partial<InsertEvent>;
-    await storage.updateScript(eventId, {
+    const fieldsToUpdate = {
       ...filteredAllowedFields,
       ...(startTime !== undefined && {
         startTime: startTime ? new Date(startTime) : null,
       }),
-    });
+    };
+    // A PATCH may change only the env vars or servers, and an empty update throws.
+    if (Object.keys(fieldsToUpdate).length > 0) {
+      await storage.updateScript(eventId, fieldsToUpdate);
+    }
 
     // If env vars are provided, handle them
     if (envVars !== undefined) {
