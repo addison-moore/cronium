@@ -126,14 +126,15 @@ export async function PATCH(
 
     await assertEventCapability(eventId, userId, "edit");
 
-    const requestBody: unknown = await request.json();
+    // Past 10 MB the proxy passes on only the start of a body, which isn't JSON.
+    const requestBody: unknown = await request.json().catch(() => null);
     if (
       typeof requestBody !== "object" ||
       requestBody === null ||
       Array.isArray(requestBody)
     ) {
       return NextResponse.json(
-        { error: "Invalid request body" },
+        { error: "Request body must be a JSON object under 10 MB" },
         { status: 400 },
       );
     }

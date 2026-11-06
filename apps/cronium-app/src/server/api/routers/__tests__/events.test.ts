@@ -424,6 +424,28 @@ describe("getAll", () => {
   });
 });
 
+describe("saving env vars", () => {
+  // A save deletes the event's variables and then adds them back one at a time, so a
+  // row the database refuses used to cost every row after it.
+  it.each([
+    ["a value too long to deliver", { key: "A", value: "x".repeat(128_001) }],
+    ["a key the column can't hold", { key: "K".repeat(256), value: "v" }],
+    ["a NUL in a key, which Postgres can't store", { key: "A\0B", value: "v" }],
+  ])("refuses %s before touching the variables", async (_label, envVar) => {
+    const caller = callerWith(sessionFor());
+
+    await expect(
+      caller.events.update({
+        id: 1,
+        envVars: [{ key: "KEEP", value: "kept" }, envVar],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    expect(storageMock.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+    expect(storageMock.createEnvVar).not.toHaveBeenCalled();
+  });
+});
+
 describe("getById", () => {
   it("returns the full DTO for the owner", async () => {
     storageMock.getEventWithRelations.mockResolvedValue(
