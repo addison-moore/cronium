@@ -247,7 +247,7 @@ sweeper, and retention. All values have sensible defaults.
 | `CRONIUM_WORKFLOW_RETENTION_DAYS`        | Days to keep finished workflow runs, their step rows and workflow log lines        | `number` | `90`                | No       |
 | `CRONIUM_INCIDENT_RETENTION_DAYS`        | Days to keep schedule incidents                                                    | `number` | `90`                | No       |
 | `CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS` | Days to keep tool action logs                                                      | `number` | `90`                | No       |
-| `CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS`  | Days to keep the tool audit log, the record of who changed or used a credential    | `number` | `90`                | No       |
+| `CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS`  | Days to keep the tool audit log, the record of who changed or used a credential    | `number` | `0` (keep forever)  | No       |
 | `CRONIUM_WEBHOOK_RETENTION_DAYS`         | Days to keep webhook deliveries, events and logs                                   | `number` | `30`                | No       |
 
 For the `*_RETENTION_DAYS` variables, `0` keeps that data forever. An unset or

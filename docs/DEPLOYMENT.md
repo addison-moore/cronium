@@ -210,10 +210,10 @@ docker compose up -d
 - Take a database backup before major-version upgrades.
 - **Run history is deleted by age.** If your instance predates
   [Data Retention](#data-retention), the worker starts deleting history past the
-  default windows as soon as it comes up after the upgrade. That includes the tool
-  audit log, so if you need that record kept, set its variable first. To keep
-  everything, set those variables to `0` in `.env` first. Re-running `install.sh`
-  keeps your existing `.env` and does not add them for you.
+  default windows as soon as it comes up after the upgrade. To keep everything, set
+  those variables to `0` in `.env` first. Re-running `install.sh` keeps your existing
+  `.env` and does not add them for you. The tool audit log is the exception: nothing
+  is deleted from it until you set a window.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 
@@ -242,15 +242,15 @@ The `cronium-worker` service deletes old run history so the database does not
 grow without limit. It runs when the worker starts and every six hours. Each kind
 of data has its own window, set in `.env`; restart the worker to apply a change.
 
-| Variable                                 | Default (days) | What it deletes                                                                       |
-| ---------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
-| `CRONIUM_LOG_RETENTION_DAYS`             | 90             | Run logs (`logs`), the history shown on the Logs page                                 |
-| `CRONIUM_WORKFLOW_RETENTION_DAYS`        | 90             | Finished workflow runs, their per-step rows, and workflow log lines (`workflow_logs`) |
-| `CRONIUM_INCIDENT_RETENTION_DAYS`        | 90             | Schedule incidents (missed or skipped runs)                                           |
-| `CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS` | 90             | Tool action logs                                                                      |
-| `CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS`  | 90             | Tool audit log (`tool_audit_logs`): who changed or used a tool credential             |
-| `CRONIUM_JOB_RETENTION_DAYS`             | 30             | Finished job queue rows, with their executions and transitions                        |
-| `CRONIUM_WEBHOOK_RETENTION_DAYS`         | 30             | Webhook deliveries, events and logs                                                   |
+| Variable                                 | Default (days)   | What it deletes                                                                       |
+| ---------------------------------------- | ---------------- | ------------------------------------------------------------------------------------- |
+| `CRONIUM_LOG_RETENTION_DAYS`             | 90               | Run logs (`logs`), the history shown on the Logs page                                 |
+| `CRONIUM_WORKFLOW_RETENTION_DAYS`        | 90               | Finished workflow runs, their per-step rows, and workflow log lines (`workflow_logs`) |
+| `CRONIUM_INCIDENT_RETENTION_DAYS`        | 90               | Schedule incidents (missed or skipped runs)                                           |
+| `CRONIUM_TOOL_ACTION_LOG_RETENTION_DAYS` | 90               | Tool action logs                                                                      |
+| `CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS`  | 0 (keep forever) | Tool audit log (`tool_audit_logs`): who changed or used a tool credential             |
+| `CRONIUM_JOB_RETENTION_DAYS`             | 30               | Finished job queue rows, with their executions and transitions                        |
+| `CRONIUM_WEBHOOK_RETENTION_DAYS`         | 30               | Webhook deliveries, events and logs                                                   |
 
 - **`0` keeps that data forever.** A value that isn't a number of days up to 36500
   is ignored with a warning in the worker's log, and that data is kept until it is
@@ -260,11 +260,17 @@ of data has its own window, set in `.env`; restart the worker to apply a change.
   Definitions (events, workflows, servers, webhooks, tool credentials) are never
   touched. Workflow log lines aren't tied to a run, so each one ages from when it
   was written.
-- **The tool audit log has its own window** because it is a security record, not
-  run output. It holds who changed or used a tool credential, with the IP address
-  and user agent for changes. Raise the window if you must keep that record longer,
-  or lower it if you must drop those details sooner. The tool action window doesn't
-  affect it, and quotas don't read it.
+- **The tool audit log is kept until you set a window.** It is a security record,
+  not run output: it holds who changed or used a tool credential, with the IP address
+  and user agent for changes. Deleting that is your decision, so it keeps growing, by
+  about 150 bytes a row, until you set `CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS`. The
+  tool action window doesn't affect it, and quotas don't read it.
+- **Deleting audit rows leaves a record.** Each batch the worker deletes writes a row
+  to the same table, in the same transaction, with `action` set to `retention.purge`
+  and `user_id` to `system:retention`. Its `action_details` holds the window, the
+  cutoff, how many rows went, and their lowest and highest ids, so missing rows can
+  be told apart from tampering after the worker's logs are gone. These rows are never
+  purged.
 - **Logs outlive their jobs.** Deleting a job row only detaches its log, so logs
   stay on their own longer window.
 - **Keep the log and tool action windows at 31 days or more if you use quotas.**

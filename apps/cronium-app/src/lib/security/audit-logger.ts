@@ -18,7 +18,9 @@ export type AuditAction =
   | "tool.rate_limit_exceeded"
   | "config.update"
   | "permission.grant"
-  | "permission.revoke";
+  | "permission.revoke"
+  // Written by the retention purge, in the transaction that deletes the rows.
+  | "retention.purge";
 
 export interface AuditContext {
   userId: string;

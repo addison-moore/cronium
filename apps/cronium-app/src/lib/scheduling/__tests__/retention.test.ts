@@ -24,7 +24,7 @@ const DEFAULTS = {
   workflowExecutions: 90,
   scheduleIncidents: 90,
   toolActionLogs: 90,
-  toolAuditLogs: 90,
+  toolAuditLogs: 0,
   webhooks: 30,
 };
 
@@ -75,6 +75,17 @@ describe("retentionWindows", () => {
       webhooks: 6,
     });
   });
+
+  it.each([undefined, "", "   ", "0"])(
+    "keeps the tool audit log forever when its variable is %j",
+    (value) => {
+      expect(
+        retentionWindows({ CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS: value })
+          .toolAuditLogs,
+      ).toBe(0);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
 
   it("takes 0 to mean keep forever, for jobs too", () => {
     expect(retentionWindows({ CRONIUM_JOB_RETENTION_DAYS: "0" }).jobs).toBe(0);

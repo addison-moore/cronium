@@ -11,6 +11,7 @@
  */
 
 import { db } from "@/server/db";
+import type { AuditAction } from "@/lib/security/audit-logger";
 import {
   executions,
   jobs,
@@ -33,6 +34,7 @@ import {
   inArray,
   isNull,
   lt,
+  ne,
   notExists,
   or,
   sql,
@@ -61,6 +63,11 @@ const FINISHED_RUN_STATUSES: LogStatus[] = [
   LogStatus.PARTIAL,
 ];
 
+// What a purge of the tool audit log leaves behind. The actor can't be mistaken for
+// a user: user ids are UUIDs and nanoids, and neither contains a colon.
+const AUDIT_PURGE_ACTOR = "system:retention";
+const AUDIT_PURGE_ACTION = "retention.purge" satisfies AuditAction;
+
 const BATCH = 500;
 const MAX_BATCHES_PER_RUN = 20;
 const DAY_MS = 86_400_000;
@@ -88,9 +95,11 @@ const WINDOWS = {
   // That one is run output: disk space sets it, and monthly quotas need 31 days of
   // it. This one is the security record of who changed or used a credential, with
   // IP addresses, so compliance and privacy rules set it, in either direction.
+  // Deleting it takes an operator's decision, so it keeps everything until one sets
+  // a window. Someone who set every other window to 0 has no setting for it yet.
   toolAuditLogs: {
     env: "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS",
-    defaultDays: 90,
+    defaultDays: KEEP_FOREVER,
   },
   webhooks: { env: "CRONIUM_WEBHOOK_RETENTION_DAYS", defaultDays: 30 },
 } as const;
@@ -143,7 +152,11 @@ function finishedBefore(cutoff: Date, ...columns: AnyPgColumn[]): SQL {
   return sql`COALESCE(${coalesced}) < ${sql.param(cutoff, columns[0])}`;
 }
 
-type BatchPurge = (cutoff: Date, limit: number) => Promise<number>;
+type BatchPurge = (
+  cutoff: Date,
+  limit: number,
+  windowDays: number,
+) => Promise<number>;
 
 /**
  * One batch from a table whose dependents, if any, cascade. SKIP LOCKED lets a
@@ -251,6 +264,44 @@ const purgeJobsBatch: BatchPurge = (cutoff, limit) =>
   });
 
 /**
+ * Audit rows go in the same transaction as a row recording that they went, so an
+ * auditor who finds rows missing can tell retention from tampering long after the
+ * worker's logs have rotated, and a record that can't be written stops the delete.
+ * That makes it one record per batch, since a batch is the transaction. Records are
+ * never purged themselves, because they have to outlive what they account for.
+ */
+const purgeAuditLogsBatch: BatchPurge = (cutoff, limit, windowDays) =>
+  db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: toolAuditLogs.id })
+      .from(toolAuditLogs)
+      .where(
+        and(
+          lt(toolAuditLogs.createdAt, cutoff),
+          ne(toolAuditLogs.action, AUDIT_PURGE_ACTION),
+        ),
+      )
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    if (rows.length === 0) return 0;
+
+    const ids = rows.map((row) => row.id);
+    await tx.delete(toolAuditLogs).where(inArray(toolAuditLogs.id, ids));
+    await tx.insert(toolAuditLogs).values({
+      userId: AUDIT_PURGE_ACTOR,
+      action: AUDIT_PURGE_ACTION,
+      actionDetails: {
+        windowDays,
+        cutoff: cutoff.toISOString(),
+        deleted: ids.length,
+        minId: Math.min(...ids),
+        maxId: Math.max(...ids),
+      },
+    });
+    return ids.length;
+  });
+
+/**
  * In FK-safe order; tables that share a window age out together.
  *
  * quota_usage is left out because no window is safe for it. QuotaManager.getUsage
@@ -309,9 +360,7 @@ const PURGES = [
   {
     table: "tool_audit_logs",
     window: "toolAuditLogs",
-    batch: flatBatch(toolAuditLogs, toolAuditLogs.id, (cutoff) =>
-      lt(toolAuditLogs.createdAt, cutoff),
-    ),
+    batch: purgeAuditLogsBatch,
   },
   // Ahead of webhook_events, which are only eligible once no delivery is left.
   {
@@ -391,7 +440,7 @@ export async function runRetention(
 
     try {
       for (let i = 0; i < maxBatches; i++) {
-        const removed = await batch(cutoff, batchSize);
+        const removed = await batch(cutoff, batchSize, days);
         deleted[table] += removed;
         if (removed < batchSize) break;
         if (i === maxBatches - 1) backlog = true;

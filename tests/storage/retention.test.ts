@@ -6,10 +6,11 @@
  * Each test turns on only the windows it is about (see `pass`), so a row can only
  * disappear because of the purge under test.
  */
-import { count, eq, type SQL } from "drizzle-orm";
+import { count, eq, ne, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { db, pool } from "@/server/db";
 import { QuotaManager } from "@/lib/rate-limiting/QuotaManager";
+import { auditLogger } from "@/lib/security/audit-logger";
 import {
   runRetention,
   type RetentionOptions,
@@ -205,6 +206,20 @@ async function auditLogExists(id: number): Promise<boolean> {
   return (await countRows(toolAuditLogs, eq(toolAuditLogs.id, id))) === 1;
 }
 
+const PURGE_ACTION = "retention.purge";
+
+function purgeRecords() {
+  return db
+    .select()
+    .from(toolAuditLogs)
+    .where(eq(toolAuditLogs.action, PURGE_ACTION));
+}
+
+/** Audit rows other than the purge's own records. */
+function countAuditedEvents(): Promise<number> {
+  return countRows(toolAuditLogs, ne(toolAuditLogs.action, PURGE_ACTION));
+}
+
 async function seedCredential(userId: string): Promise<number> {
   const [row] = await db
     .insert(toolCredentials)
@@ -268,6 +283,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  auditLogger.stopFlushInterval();
   await closePool();
 });
 
@@ -784,6 +800,134 @@ describe("tool_audit_logs", () => {
   });
 });
 
+describe("the record an audit purge leaves", () => {
+  afterEach(async () => {
+    await pool.query(
+      "DROP TRIGGER IF EXISTS retention_test_no_record ON tool_audit_logs",
+    );
+    await pool.query("DROP FUNCTION IF EXISTS retention_test_no_record()");
+  });
+
+  it("holds the window, the cutoff and what went, under a non-user actor", async () => {
+    const userId = await seedUser();
+    const first = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    const second = await seedAuditLog(userId, { createdAt: daysAgo(400) });
+    await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.deleted.tool_audit_logs).toBe(2);
+    const records = await purgeRecords();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      userId: "system:retention",
+      toolId: null,
+      success: true,
+      errorMessage: null,
+      actionDetails: {
+        windowDays: 90,
+        cutoff: daysAgo(90).toISOString(),
+        deleted: 2,
+        minId: first,
+        maxId: second,
+      },
+    });
+  });
+
+  it("isn't written when nothing went", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+    await pass({ toolAuditLogs: 90 });
+    expect(await purgeRecords()).toHaveLength(0);
+
+    await seedAuditLog(userId, { createdAt: daysAgo(400) });
+    await pass({ toolAuditLogs: 0 });
+    expect(await purgeRecords()).toHaveLength(0);
+  });
+
+  it("is never purged, because it has to outlive what it accounts for", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await pass({ toolAuditLogs: 90 });
+    await db
+      .update(toolAuditLogs)
+      .set({ createdAt: daysAgo(3650) })
+      .where(eq(toolAuditLogs.action, PURGE_ACTION));
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.deleted.tool_audit_logs).toBe(0);
+    expect(await purgeRecords()).toHaveLength(1);
+  });
+
+  it("goes in the delete's transaction: no record, no delete", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {});
+    const userId = await seedUser();
+    const id = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await pool.query(`
+      CREATE FUNCTION retention_test_no_record() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'record failed on purpose'; END
+      $$ LANGUAGE plpgsql
+    `);
+    await pool.query(`
+      CREATE TRIGGER retention_test_no_record BEFORE INSERT ON tool_audit_logs
+      FOR EACH ROW EXECUTE FUNCTION retention_test_no_record()
+    `);
+
+    const result = await pass({ toolAuditLogs: 90 });
+
+    expect(result.failed).toEqual(["tool_audit_logs"]);
+    expect(result.deleted.tool_audit_logs).toBe(0);
+    expect(await auditLogExists(id)).toBe(true);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("tool_audit_logs"),
+      expect.objectContaining({
+        cause: expect.objectContaining({
+          message: "record failed on purpose",
+        }),
+      }),
+    );
+  });
+
+  it("adds up to what went, across batches and concurrent passes", async () => {
+    const userId = await seedUser();
+    for (let i = 0; i < 12; i++) {
+      await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    }
+    const options = { batchSize: 5 };
+
+    const [a, b] = await Promise.all([
+      pass({ toolAuditLogs: 90 }, options),
+      pass({ toolAuditLogs: 90 }, options),
+    ]);
+
+    expect(a.failed).toEqual([]);
+    expect(b.failed).toEqual([]);
+    expect(a.deleted.tool_audit_logs + b.deleted.tool_audit_logs).toBe(12);
+    expect(await countAuditedEvents()).toBe(0);
+    const records = await purgeRecords();
+    const recorded = records.map(
+      (record) => (record.actionDetails as { deleted: number }).deleted,
+    );
+    expect(recorded.reduce((sum, deleted) => sum + deleted, 0)).toBe(12);
+  });
+
+  it("is found by the logger's query, and not as any user's activity", async () => {
+    const userId = await seedUser();
+    await seedAuditLog(userId, { createdAt: daysAgo(91) });
+    await seedAuditLog(userId, { createdAt: daysAgo(1) });
+    await pass({ toolAuditLogs: 90 });
+
+    const purges = await auditLogger.query({ action: PURGE_ACTION });
+    const byUser = await auditLogger.query({ userId });
+
+    expect(purges.total).toBe(1);
+    expect(byUser.total).toBe(1);
+    expect(byUser.logs[0]?.action).toBe("tool.execute");
+  });
+});
+
 /**
  * Left out of retention on purpose: see the comment on PURGES in retention.ts.
  * These pin the reason through the real QuotaManager, so anyone adding a purge, or
@@ -1046,7 +1190,7 @@ describe("windows", () => {
         workflow_logs: 1,
         schedule_incidents: 1,
         tool_action_logs: 1,
-        tool_audit_logs: 1,
+        tool_audit_logs: 0,
         webhook_deliveries: 1,
         webhook_logs: 1,
         webhook_events: 1,
@@ -1058,13 +1202,63 @@ describe("windows", () => {
         workflowLogs,
         scheduleIncidents,
         toolActionLogs,
-        toolAuditLogs,
         webhookEvents,
         webhookDeliveries,
         webhookLogs,
       ]) {
         expect(await countRows(table)).toBe(1);
       }
+      expect(await countRows(toolAuditLogs)).toBe(2);
+    });
+
+    describe("the tool audit log, with no window set", () => {
+      it("keeps rows of any age and writes no record", async () => {
+        const userId = await seedUser();
+        await seedAuditLog(userId, { createdAt: daysAgo(3650) });
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted.tool_audit_logs).toBe(0);
+        expect(await countRows(toolAuditLogs)).toBe(1);
+      });
+
+      // PR 2's upgrade note told operators to do this to keep their history, before
+      // this variable existed, so a default that deletes would catch them out.
+      it("deletes nothing for an operator who set every other window to 0", async () => {
+        for (const name of VARIABLES) {
+          if (name !== "CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS") {
+            process.env[name] = "0";
+          }
+        }
+        await seedExpiredEverywhere();
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted).toEqual(NOTHING_DELETED);
+      });
+
+      // Compose passes an unset variable through as an empty string.
+      it("reads an empty variable the same way", async () => {
+        process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "";
+        const userId = await seedUser();
+        await seedAuditLog(userId, { createdAt: daysAgo(3650) });
+
+        const result = await runRetention({ now: NOW });
+
+        expect(result.deleted.tool_audit_logs).toBe(0);
+      });
+
+      it("starts purging once a window is set", async () => {
+        process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "90";
+        const userId = await seedUser();
+        const old = await seedAuditLog(userId, { createdAt: daysAgo(91) });
+        const recent = await seedAuditLog(userId, { createdAt: daysAgo(89) });
+
+        await runRetention({ now: NOW });
+
+        expect(await auditLogExists(old)).toBe(false);
+        expect(await auditLogExists(recent)).toBe(true);
+      });
     });
 
     it("keeps every table forever when its window is 0", async () => {
@@ -1108,6 +1302,7 @@ describe("windows", () => {
         { tool_audit_logs: 1, tool_action_logs: 0 },
       ],
     ])("doesn't let %s=0 reach the other tool log", async (name, expected) => {
+      process.env.CRONIUM_TOOL_AUDIT_LOG_RETENTION_DAYS = "30";
       process.env[name] = "0";
       await seedExpiredEverywhere();
 
@@ -1230,7 +1425,8 @@ describe("batching", () => {
     expect(await countRows(workflowStepRuns)).toBe(0);
     expect(await countRows(workflowExecutionEvents)).toBe(0);
     expect(await countRows(workflowLogs)).toBe(0);
-    expect(await countRows(toolAuditLogs)).toBe(0);
+    expect(await countAuditedEvents()).toBe(0);
+    expect(await purgeRecords()).toHaveLength(3);
   });
 
   it("stops at the cap, reports the backlog, and the next pass carries on", async () => {
@@ -1407,13 +1603,14 @@ describe("a fully connected graph", () => {
       workflowLogs,
       scheduleIncidents,
       toolActionLogs,
-      toolAuditLogs,
       webhookEvents,
       webhookDeliveries,
       webhookLogs,
     ]) {
       expect(await countRows(table)).toBe(0);
     }
+    expect(await countAuditedEvents()).toBe(0);
+    expect(await purgeRecords()).toHaveLength(1);
     expect(await Promise.all(definitions.map((t) => countRows(t)))).toEqual(
       before,
     );
