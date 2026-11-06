@@ -99,3 +99,23 @@ export async function consumeWebhookDeliveryOnce(
     return false;
   }
 }
+
+/**
+ * Forget a delivery ID, because its request was refused before anything was done. Only
+ * for that: a request that had any effect has to stay consumed. If the store is
+ * unavailable the ID stays consumed, so the sender needs a new one to send it again.
+ */
+export async function releaseWebhookDelivery(
+  webhookId: number,
+  deliveryId: string,
+): Promise<void> {
+  try {
+    const client = await commandClient();
+    await client.del(`${KEY_PREFIX}${webhookId}:${deliveryId}`);
+  } catch (error) {
+    console.error(
+      "Webhook replay store unavailable — couldn't release a refused delivery's id:",
+      describeFailure(error),
+    );
+  }
+}

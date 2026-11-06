@@ -100,7 +100,6 @@ export default function WorkflowForm({
     data: eventsData,
     isLoading: loadingEvents,
     error: eventsError,
-    refetch: refetchEvents,
   } = trpc.events.getAll.useQuery({
     limit: 1000,
     offset: 0,
@@ -129,21 +128,6 @@ export default function WorkflowForm({
   const servers = useMemo(() => {
     return serversData?.servers ?? [];
   }, [serversData]);
-
-  // Update events function to refresh workflow nodes when events change
-  const updateEvents = useCallback(async () => {
-    try {
-      console.log("Updating events...");
-      await refetchEvents();
-    } catch (error) {
-      console.error("Error fetching events:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load events. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [refetchEvents]);
 
   const handleCanvasChange = useCallback((nodes: Node[], edges: Edge[]) => {
     console.log("Canvas data updated:", { nodes, edges });
@@ -628,7 +612,6 @@ export default function WorkflowForm({
                       onChange={(nodes, edges) =>
                         handleCanvasChange(nodes, edges)
                       }
-                      updateEvents={updateEvents}
                     />
                   </div>
                 )}

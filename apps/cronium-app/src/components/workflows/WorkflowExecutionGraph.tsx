@@ -31,7 +31,6 @@ interface WorkflowExecutionGraphProps {
   executionId?: number;
   isExecuting?: boolean;
   onExecutionUpdate?: (execution: WorkflowExecution) => void;
-  updateEvents?: () => void;
 }
 
 interface WorkflowExecution {
@@ -72,7 +71,6 @@ export default function WorkflowExecutionGraph({
   executionId,
   isExecuting = false,
   onExecutionUpdate,
-  updateEvents,
 }: WorkflowExecutionGraphProps) {
   const [executionEvents, setExecutionEvents] = useState<
     WorkflowExecutionEvent[]
@@ -498,9 +496,6 @@ export default function WorkflowExecutionGraph({
                                   : {})}
                                 {...(node.data.updatedAt
                                   ? { updatedAt: node.data.updatedAt }
-                                  : {})}
-                                {...(updateEvents
-                                  ? { onEventUpdated: () => updateEvents() }
                                   : {})}
                               >
                                 <Button

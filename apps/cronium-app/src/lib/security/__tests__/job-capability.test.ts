@@ -370,6 +370,8 @@ describe("job capability tokens across an ENCRYPTION_KEY change", () => {
       expect(verifyJobCapability(current, NOW + 10).jobId).toBe("job-1");
       expect(() => verifyJobCapability(old, NOW + 10)).toThrow(CapabilityError);
       expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("ENCRYPTION_KEYS_RETIRED");
+      expect(warn.mock.calls[0]?.[0]).not.toContain(OLD.slice(0, 8));
     });
 
     it("keeps the good entries in a list with a bad one", () => {

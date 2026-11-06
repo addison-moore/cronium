@@ -37,7 +37,6 @@ interface EventDetailsPopoverProps {
   updatedAt?: string | Date;
   children: React.ReactNode;
   className?: string;
-  onEventUpdated?: () => void;
 }
 
 export function EventDetailsPopover({
@@ -52,7 +51,6 @@ export function EventDetailsPopover({
   updatedAt,
   children,
   className,
-  onEventUpdated,
 }: EventDetailsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -193,7 +191,6 @@ export function EventDetailsPopover({
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         eventId={eventId}
-        {...(onEventUpdated && { onEventUpdated })}
       />
     </Popover>
   );

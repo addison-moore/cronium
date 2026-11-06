@@ -28,6 +28,11 @@
  * Scenario 6 — a long env var: the longest value the app accepts, from the API through
  * the job's payload and the orchestrator into a real container. Only a real exec shows
  * the kernel taking it.
+ *
+ * Scenario 7 — variables with no value, and ones that can't be read: the real app's 404
+ * and 500 through the real runtime to the real SDK. The bash helpers start a counter from
+ * nothing on the one and must leave a stored value alone on the other, and only this
+ * stack shows that the two arrive looking different.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -590,5 +595,88 @@ describe("scenario 6 — a long env var reaches the script whole", () => {
     );
 
     expect(log.output).toContain(`LONG_VALUE_SHA:${sha256}`);
+  });
+});
+
+describe("scenario 7 — variables with no value, and ones that can't be read", () => {
+  it("starts from nothing for the first, and leaves the second alone", async () => {
+    const { token: owner, userId } = await seedPrincipal();
+    const marker = `e2e_vars_${Date.now().toString(36)}`;
+
+    // An envelope the app can't decrypt. Its reads answer 500 and its writes would work,
+    // which is how a rotated-away key looks to a script.
+    const unreadable = "crn.not-a-real-envelope";
+    await pool.query(
+      `INSERT INTO user_variables (user_id, key, value) VALUES ($1, $2, $3)`,
+      [userId, `${marker}_UNREADABLE`, unreadable],
+    );
+
+    const run = async (name: string, lines: string[]): Promise<string> => {
+      const event = await trpc<EventDto>(owner, "events.create", {
+        name: `${marker}-${name}`,
+        type: "BASH",
+        content: ["set -euo pipefail", ...lines].join("\n"),
+        triggerType: "MANUAL",
+        status: "DRAFT",
+        // Each read of the unreadable variable takes about 20 seconds of retries.
+        timeoutValue: 5,
+        timeoutUnit: "MINUTES",
+      });
+      const headers = { authorization: `Bearer ${owner}` };
+      const started = await fetch(`${APP_URL}/api/events/${event.id}/execute`, {
+        method: "POST",
+        headers,
+      });
+      expect(started.status).toBe(202);
+      const { logId } = (await started.json()) as { logId: number };
+
+      const log = await poll<{ output: string }>(
+        `log ${logId} to finish`,
+        async () => {
+          const res = await fetch(`${APP_URL}/api/logs/${logId}`, { headers });
+          const body = (await res.json()) as {
+            status: string;
+            output: string;
+          };
+          if (["FAILURE", "TIMEOUT", "PARTIAL"].includes(body.status)) {
+            throw new FatalPollError(`run ended: ${JSON.stringify(body)}`);
+          }
+          return body.status === "SUCCESS" ? body : undefined;
+        },
+        { timeoutMs: 150_000 },
+      );
+      return log.output;
+    };
+
+    const first = await run("first", [
+      `echo "NEW:[$(cronium_get_variable ${marker}_NEW)]"`,
+      `cronium_variable_exists ${marker}_NEW || echo "NEW_EXISTS:$?"`,
+      `echo "COUNT:$(cronium_increment_variable ${marker}_COUNT)"`,
+      `echo "COUNT:$(cronium_increment_variable ${marker}_COUNT 4)"`,
+      `cronium_append_variable ${marker}_LOG one`,
+      `cronium_append_variable ${marker}_LOG two ,`,
+    ]);
+    expect(first).toContain("NEW:[]");
+    expect(first).toContain("NEW_EXISTS:1");
+    expect(first).toContain("COUNT:1");
+    expect(first).toContain("COUNT:5");
+
+    // A job of its own, because the runtime answers an execution's rereads from its cache.
+    const second = await run("second", [
+      `echo "COUNT:$(cronium_increment_variable ${marker}_COUNT)"`,
+      `echo "LOG:[$(cronium_get_variable ${marker}_LOG)]"`,
+      `cronium_increment_variable ${marker}_UNREADABLE || echo "INCREMENT:$?"`,
+      `cronium_variable_exists ${marker}_UNREADABLE || echo "EXISTS:$?"`,
+    ]);
+    expect(second).toContain("COUNT:6");
+    expect(second).toContain("LOG:[one,two]");
+    expect(second).toContain("INCREMENT:1");
+    expect(second).toContain("EXISTS:2");
+
+    const { rows } = await pool.query<{ value: string }>(
+      `SELECT value FROM user_variables WHERE user_id = $1 AND key = $2`,
+      [userId, `${marker}_UNREADABLE`],
+    );
+    expect(rows[0]?.value).toBe(unreadable);
   });
 });
