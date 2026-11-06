@@ -25,32 +25,35 @@
 # variable set here.
 export CRONIUM_RUNTIME_API="${CRONIUM_RUNTIME_API:-http://localhost:8081}"
 
-# For scripts that read these names. The token's copy also lets a script unset
-# CRONIUM_EXECUTION_TOKEN to keep it from what it runs, and still call the functions
-# itself, so it must stay unexported: `env -u CRONIUM_EXECUTION_TOKEN tool` has to
-# leave `tool` without the token.
-CRONIUM_API="$CRONIUM_RUNTIME_API"
-CRONIUM_TOKEN="${CRONIUM_EXECUTION_TOKEN}"
-CRONIUM_EXEC_ID="${CRONIUM_EXECUTION_ID}"
+# A script's variables belong to its event, so anything else this file assigns is named
+# _cronium_*. A variable from the environment stays exported when assigned, so a plainer
+# name would overwrite an event's value in the script and in everything the script runs.
+#
+# This copy of the token lets a script unset CRONIUM_EXECUTION_TOKEN to keep it from what
+# it runs, and still call the functions itself. It must stay unexported, whatever the
+# event defines: `env -u CRONIUM_EXECUTION_TOKEN tool` has to leave `tool` without the
+# token.
+export -n _cronium_token="${CRONIUM_EXECUTION_TOKEN:-}"
 
 # Check required environment variables
-if [ -z "$CRONIUM_TOKEN" ]; then
+if [ -z "$_cronium_token" ]; then
     echo "Error: CRONIUM_EXECUTION_TOKEN environment variable not set" >&2
     exit 1
 fi
 
-if [ -z "$CRONIUM_EXEC_ID" ]; then
+if [ -z "${CRONIUM_EXECUTION_ID:-}" ]; then
     echo "Error: CRONIUM_EXECUTION_ID environment variable not set" >&2
     exit 1
 fi
 
 # Check for required commands
-for cmd in curl jq; do
-    if ! command -v "$cmd" &> /dev/null; then
-        echo "Error: Required command '$cmd' not found" >&2
+for _cronium_cmd in curl jq; do
+    if ! command -v "$_cronium_cmd" &> /dev/null; then
+        echo "Error: Required command '$_cronium_cmd' not found" >&2
         exit 1
     fi
 done
+unset _cronium_cmd
 
 # Helper function to make API requests with retry logic
 _cronium_request() {
@@ -70,7 +73,7 @@ _cronium_request() {
         local curl_args=(
             -s
             -X "$method"
-            -H "Authorization: Bearer ${CRONIUM_EXECUTION_TOKEN:-$CRONIUM_TOKEN}"
+            -H "Authorization: Bearer ${CRONIUM_EXECUTION_TOKEN:-${_cronium_token:-}}"
             -H "Content-Type: application/json"
             -H "Accept: application/json"
             -w "\n%{http_code}"
@@ -398,7 +401,7 @@ cronium_append_variable() {
 
 # Print SDK info (useful for debugging)
 cronium_info() {
-    local token="${CRONIUM_EXECUTION_TOKEN:-$CRONIUM_TOKEN}"
+    local token="${CRONIUM_EXECUTION_TOKEN:-${_cronium_token:-}}"
     echo "Cronium Bash SDK v2.0.0"
     echo "API URL: $CRONIUM_RUNTIME_API"
     echo "Execution ID: $CRONIUM_EXECUTION_ID"

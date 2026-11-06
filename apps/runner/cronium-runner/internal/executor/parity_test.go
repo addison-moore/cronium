@@ -431,6 +431,27 @@ func TestParityBash(t *testing.T) {
 	}
 }
 
+// TestParityBashKeepsAnEventsEnvVars covers names the container SDK used to assign as it
+// loaded, overwriting an event's env vars. The runner never did. The fake runtime refuses
+// any token but the execution's, so rc=0 also shows what each side's helpers send.
+func TestParityBashKeepsAnEventsEnvVars(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+	t.Setenv("CRONIUM_TOKEN", "my-api-token")
+	t.Setenv("CRONIUM_API", "https://cronium.example.com/api")
+	t.Setenv("CRONIUM_EXEC_ID", "my-execution")
+	t.Setenv("cmd", "mine")
+
+	result := compareRuns(t, types.ScriptTypeBash, `echo "$CRONIUM_TOKEN $CRONIUM_API $CRONIUM_EXEC_ID $cmd"
+bash -c 'echo "$CRONIUM_TOKEN $CRONIUM_API $CRONIUM_EXEC_ID $cmd"'
+cronium_output x; echo "rc=$?"
+`)
+
+	const values = "my-api-token https://cronium.example.com/api my-execution mine\n"
+	if want := values + values + "rc=0\n"; result.stdout != want {
+		t.Errorf("stdout = %q, want %q", result.stdout, want)
+	}
+}
+
 func TestParityBashFailingScript(t *testing.T) {
 	requireTools(t, "bash", "curl", "jq")
 	result := compareRuns(t, types.ScriptTypeBash, "echo before\necho problem >&2\ncronium_set_condition false\nexit 3\necho after\n")

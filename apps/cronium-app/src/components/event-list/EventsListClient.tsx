@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { EventStatus } from "@/shared/schema";
-import type { TimeUnit, RunLocation, EventType } from "@/shared/schema";
+import type { EventType } from "@/shared/schema";
 import { useToast } from "@cronium/ui";
 import { ConfirmationDialog } from "@cronium/ui";
 import { Pagination } from "@cronium/ui";
@@ -24,6 +25,7 @@ import type {
   EventListState,
   ServerData,
 } from "@/components/event-list";
+import { buildDuplicateEventInput } from "./duplicate-event";
 import { trpc } from "@/lib/trpc";
 import { trpcErrorMessage } from "@/trpc/shared";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
@@ -51,6 +53,7 @@ export function EventsListClient({
   onRefresh,
 }: EventsListClientProps) {
   const { itemsPerPage, setItemsPerPage } = usePersistentPagination(10);
+  const router = useRouter();
 
   // Filter state
   const [filters, setFilters] = useState<EventListFilters>({
@@ -86,6 +89,13 @@ export function EventsListClient({
       description: trpcErrorMessage(error, fallback),
       variant: "destructive",
     });
+  };
+
+  // The rows come from the page's server component, so a new event only appears
+  // once that runs again.
+  const showNewEvent = () => {
+    if (onRefresh) onRefresh();
+    else router.refresh();
   };
 
   // Sync itemsPerPage from localStorage when it loads
@@ -455,105 +465,11 @@ export function EventsListClient({
         return;
       }
 
-      const eventData = existingEvent;
+      await createEventMutation.mutateAsync(
+        buildDuplicateEventInput(existingEvent),
+      );
 
-      // Create duplicate event with "(copy)" appended to name
-      // Build the duplicate data object with proper type safety
-      const duplicateData = {
-        // Required fields
-        name: `${eventData.name} (copy)`,
-        type: eventData.type,
-
-        // Optional fields
-        ...(eventData.description !== undefined &&
-          eventData.description !== null && {
-            description: eventData.description,
-          }),
-        ...(eventData.shared !== undefined && {
-          shared: Boolean(eventData.shared),
-        }),
-        ...(Array.isArray(eventData.tags) && {
-          tags: eventData.tags.map(String),
-        }),
-        ...(eventData.content !== undefined &&
-          eventData.content !== null && {
-            content: eventData.content,
-          }),
-        status: EventStatus.DRAFT,
-
-        // HTTP specific fields
-        ...(eventData.httpMethod !== undefined &&
-          eventData.httpMethod !== null && {
-            httpMethod: eventData.httpMethod,
-          }),
-        ...(eventData.httpUrl !== undefined &&
-          eventData.httpUrl !== null && {
-            httpUrl: eventData.httpUrl,
-          }),
-        ...(Array.isArray(eventData.httpHeaders) && {
-          httpHeaders: eventData.httpHeaders.map(
-            (h: { key?: unknown; value?: unknown }) => ({
-              key:
-                typeof h.key === "string"
-                  ? h.key
-                  : typeof h.key === "number" || typeof h.key === "boolean"
-                    ? String(h.key)
-                    : "",
-              value:
-                typeof h.value === "string"
-                  ? h.value
-                  : typeof h.value === "number" || typeof h.value === "boolean"
-                    ? String(h.value)
-                    : "",
-            }),
-          ),
-        }),
-        ...(eventData.httpBody !== undefined &&
-          eventData.httpBody !== null && {
-            httpBody: eventData.httpBody,
-          }),
-
-        // Schedule related fields
-        ...(typeof eventData.scheduleNumber === "number" && {
-          scheduleNumber: eventData.scheduleNumber,
-        }),
-        ...(eventData.scheduleUnit && {
-          scheduleUnit: eventData.scheduleUnit as TimeUnit,
-        }),
-        ...(eventData.customSchedule !== undefined &&
-          eventData.customSchedule !== null && {
-            customSchedule: eventData.customSchedule,
-          }),
-
-        // Server related fields
-        ...(eventData.runLocation && {
-          runLocation: eventData.runLocation as RunLocation,
-        }),
-        ...(typeof eventData.serverId === "number" && {
-          serverId: eventData.serverId,
-        }),
-        ...(Array.isArray(eventData.eventServers) && {
-          serverIds: eventData.eventServers,
-        }),
-
-        // Additional fields
-        ...(typeof eventData.timeoutValue === "number" && {
-          timeoutValue: eventData.timeoutValue,
-        }),
-        ...(eventData.timeoutUnit && {
-          timeoutUnit: eventData.timeoutUnit as TimeUnit,
-        }),
-        ...(typeof eventData.retries === "number" && {
-          retries: eventData.retries,
-        }),
-      };
-
-      await createEventMutation.mutateAsync(duplicateData);
-
-      // Update local state to include the new event
-      if (onRefresh) {
-        onRefresh();
-      }
+      showNewEvent();
     } catch {
       // Error handling is done in the mutation onError callback
     }
@@ -564,10 +480,7 @@ export function EventsListClient({
     try {
       await forkEventMutation.mutateAsync({ id: eventId });
 
-      // Update local state to include the new event
-      if (onRefresh) {
-        onRefresh();
-      }
+      showNewEvent();
     } catch {
       // Error handling is done in the mutation onError callback
     }
