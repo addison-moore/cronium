@@ -61,6 +61,18 @@ function deny(resourceName: string): never {
   });
 }
 
+/** Only for servers the caller already has rights to, because it names them. */
+function denyArchivedServers(names: readonly string[]): never {
+  const list = names.join(", ");
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message:
+      names.length === 1
+        ? `An archived server can't be used: ${list}. Restore it or choose another server, then try again.`
+        : `Archived servers can't be used: ${list}. Restore them or choose other servers, then try again.`,
+  });
+}
+
 function notFound(resourceName: string): never {
   throw new TRPCError({
     code: "NOT_FOUND",
@@ -124,6 +136,7 @@ export async function assertServerCapabilities(
   const rows = await db
     .select({
       id: servers.id,
+      name: servers.name,
       userId: servers.userId,
       shared: servers.shared,
       isArchived: servers.isArchived,
@@ -131,11 +144,14 @@ export async function assertServerCapabilities(
     .from(servers)
     .where(inArray(servers.id, ids));
 
-  if (
-    (!options.allowArchived && rows.some((server) => server.isArchived)) ||
-    !allRequestedResourcesHaveCapability(ids, rows, userId, capability)
-  ) {
+  // First, so a server the caller has no rights to is never named.
+  if (!allRequestedResourcesHaveCapability(ids, rows, userId, capability)) {
     deny("server relationship");
+  }
+
+  const archived = rows.filter((server) => server.isArchived);
+  if (!options.allowArchived && archived.length > 0) {
+    denyArchivedServers(archived.map((server) => server.name));
   }
 }
 

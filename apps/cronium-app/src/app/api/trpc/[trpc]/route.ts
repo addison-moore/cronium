@@ -4,6 +4,7 @@ import { appRouter } from "@server/api/root";
 import { createTRPCContext } from "@server/api/trpc";
 import { type NextRequest } from "next/server";
 import { env } from "@/env.mjs";
+import { describeFailure } from "@/lib/pg-errors";
 import { withBodyLimit } from "@/lib/request-body";
 import {
   EVENT_TOO_LONG_MESSAGE,
@@ -41,7 +42,7 @@ const handler = (req: NextRequest) => {
   if (env.NODE_ENV === "development") {
     config.onError = ({ path, error }) => {
       console.error(
-        `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`,
+        `❌ tRPC failed on ${path ?? "<no-path>"}: ${describeFailure(error)}`,
       );
     };
   }
