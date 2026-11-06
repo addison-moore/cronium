@@ -76,6 +76,7 @@ jest.mock("@/components/event-list", () => {
       onSelectedEventsChange,
       onEventRun,
       onEventDuplicate,
+      onEventFork,
       onEventStatusChange,
       onEventDelete,
     }: {
@@ -84,6 +85,7 @@ jest.mock("@/components/event-list", () => {
       onSelectedEventsChange: (selected: Set<number>) => void;
       onEventRun: (id: number) => void;
       onEventDuplicate: (id: number) => void;
+      onEventFork: (id: number) => void;
       onEventStatusChange: (id: number, status: EventStatus) => void;
       onEventDelete: (id: number) => void;
     }) => (
@@ -95,6 +97,7 @@ jest.mock("@/components/event-list", () => {
             <button onClick={() => onEventDuplicate(event.id)}>
               Duplicate
             </button>
+            <button onClick={() => onEventFork(event.id)}>Fork</button>
             <button
               onClick={() => onEventStatusChange(event.id, Status.ACTIVE)}
             >
@@ -233,6 +236,7 @@ describe("an action on one event", () => {
   it.each([
     ["Run", "execute", EventStatus.PAUSED],
     ["Duplicate", "create", EventStatus.PAUSED],
+    ["Fork", "fork", EventStatus.PAUSED],
     ["Active", "activate", EventStatus.PAUSED],
     ["Paused", "deactivate", EventStatus.ACTIVE],
     ["Draft", "update", EventStatus.ACTIVE],
@@ -255,6 +259,7 @@ describe("an action on one event", () => {
   it.each([
     ["Run", "execute", "Failed to run event"],
     ["Duplicate", "create", "Failed to duplicate event"],
+    ["Fork", "fork", "Failed to fork event"],
     ["Active", "activate", "Failed to activate event"],
     ["Paused", "deactivate", "Failed to pause event"],
     ["Draft", "update", "Failed to update event"],
@@ -274,6 +279,7 @@ describe("an action on one event", () => {
   it.each([
     ["Run", "execute", "Event Executed"],
     ["Duplicate", "create", "Success"],
+    ["Fork", "fork", "Success"],
     ["Active", "activate", "Success"],
     ["Paused", "deactivate", "Success"],
     ["Draft", "update", "Success"],

@@ -145,13 +145,7 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fork event",
-        variant: "destructive",
-      });
-    },
+    onError: toastFailure("Failed to fork event"),
   });
 
   const updateEventMutation = trpc.events.update.useMutation({
@@ -738,7 +732,7 @@ export function EventsListClient({
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // The server leaves out what this person can't see any more, not refuses it.
+      // The server leaves out events this person can no longer see, rather than refusing.
       const missing = eventIds.length - downloadData.eventCount;
       toast(
         missing > 0
