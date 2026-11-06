@@ -293,7 +293,9 @@ export default function EventForm({
       }
 
       // Parse and set env vars
-      const envVars = parseInitialEnvVars(initialData.environmentVariables);
+      const envVars = parseInitialEnvVars(
+        initialData.environmentVariables ?? initialData.envVars,
+      );
       if (envVars) {
         setValue("envVars", envVars);
       }
