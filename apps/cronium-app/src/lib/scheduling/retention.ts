@@ -267,8 +267,10 @@ const purgeJobsBatch: BatchPurge = (cutoff, limit) =>
  * Audit rows go in the same transaction as a row recording that they went, so an
  * auditor who finds rows missing can tell retention from tampering long after the
  * worker's logs have rotated, and a record that can't be written stops the delete.
- * That makes it one record per batch, since a batch is the transaction. Records are
- * never purged themselves, because they have to outlive what they account for.
+ * That makes it one record per batch, since a batch is the transaction, and keeps it
+ * out of AuditLogger, whose buffer writes later. It holds only numbers and a date, so
+ * it needs none of the cleaning a logged entry gets. Records are never purged
+ * themselves, because they have to outlive what they account for.
  */
 const purgeAuditLogsBatch: BatchPurge = (cutoff, limit, windowDays) =>
   db.transaction(async (tx) => {
