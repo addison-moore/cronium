@@ -835,7 +835,7 @@ describe("a save that fails partway", () => {
       await db.insert(eventServers).values({ eventId: id, serverId });
 
       await expect(trpc().events.fork({ id })).rejects.toMatchObject({
-        code: "INTERNAL_SERVER_ERROR",
+        code: "CONFLICT",
       });
 
       expect(await eventCount()).toBe(1);
