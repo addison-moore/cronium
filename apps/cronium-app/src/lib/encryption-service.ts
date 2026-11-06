@@ -160,11 +160,13 @@ export const SENSITIVE_SYSTEM_SETTINGS = [
   // Add more sensitive keys here as needed
 ] as const;
 
+export type SensitiveSystemSetting = (typeof SENSITIVE_SYSTEM_SETTINGS)[number];
+
 /**
  * Check if a system setting key contains sensitive data
  */
-export function isSystemSettingSensitive(key: string): boolean {
-  return SENSITIVE_SYSTEM_SETTINGS.includes(
-    key as (typeof SENSITIVE_SYSTEM_SETTINGS)[number],
-  );
+export function isSystemSettingSensitive(
+  key: string,
+): key is SensitiveSystemSetting {
+  return SENSITIVE_SYSTEM_SETTINGS.includes(key as SensitiveSystemSetting);
 }

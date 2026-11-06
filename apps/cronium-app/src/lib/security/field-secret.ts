@@ -148,6 +148,15 @@ export function readsAsLegacyCiphertext(value: string): boolean {
     });
 }
 
+/**
+ * The plaintext of legacy ciphertext, under whichever key in the ring authenticates
+ * it, or null if none does. Unlike `readLegacyValue`, null also covers a value that
+ * was never ciphertext, which a read passes through.
+ */
+export function openLegacyCiphertextInRing(stored: string): string | null {
+  return looksLikeLegacyCiphertext(stored) ? readLegacyValue(stored) : null;
+}
+
 /* ---- servers.sshKey / servers.password (bound to userId + column) ----
  *
  * Bound to the owning tenant and the column, which is available at both create

@@ -11,7 +11,6 @@ const mockMonaco = { __esModule: true, editor: {} };
 
 jest.mock("monaco-editor", () => mockMonaco, { virtual: true });
 jest.mock("@cronium/ui", () => ({ setMonacoSetup: jest.fn() }));
-jest.mock("@/components/providers/NextAuthProvider", () => ({}));
 jest.mock("@/components/providers/TrpcProvider", () => ({}));
 jest.mock("@/components/providers/ThemeProvider", () => ({}));
 
