@@ -40,6 +40,17 @@ const generateJobId = customAlphabet(
 import { storage } from "@server/storage";
 import { shouldRetry, computeRetryBackoffMs } from "./retry-policy";
 
+// A report's error can be a script's whole stderr, up to 1 MB, and last_error comes
+// back on every row of a job list. All of it stays on the log and on the transition.
+const LAST_ERROR_MAX_CHARS = 4000;
+
+/** Keeps the end, which is where a traceback says what went wrong. */
+function forLastError(error: string): string {
+  return error.length > LAST_ERROR_MAX_CHARS
+    ? `…${error.slice(-LAST_ERROR_MAX_CHARS)}`
+    : error;
+}
+
 // Job queue management service
 export interface CreateJobInput {
   eventId: number;
@@ -514,7 +525,7 @@ export class JobService {
         completedAt: null,
         leaseExpiresAt: null,
         attempts: nextAttempt,
-        lastError: error ?? null,
+        lastError: error === undefined ? null : forLastError(error),
         scheduledFor,
       },
     });
@@ -550,7 +561,14 @@ export class JobService {
   }
 
   /**
-   * Update job status and associated log status
+   * Update job status and associated log status.
+   *
+   * The status commits first, on its own, with the reason on the job, and the log
+   * follows. A report the state machine rejects never reaches the log, and nothing
+   * about the log can keep a job from ending or leave it CLAIMED. So a throw doesn't
+   * say the job is unchanged: if the log write is what failed, the status is already
+   * committed, and a reporter that retries gets a same-status no-op, with no new
+   * transition, that writes the log again.
    */
   async updateJobStatus(
     jobId: string,
@@ -614,6 +632,11 @@ export class JobService {
     if (isTerminal) {
       // Release the overlap slot
       set.activeKey = null;
+      // Why it ended, on the job itself: the job page and a workflow step read this,
+      // and if the log can't be written below, it's the only place a user can read it.
+      if (status !== JobStatus.COMPLETED && data?.error !== undefined) {
+        set.lastError = forLastError(data.error);
+      }
     }
 
     // CAS through the state machine: late/duplicate reports against a job
@@ -653,6 +676,17 @@ export class JobService {
       // Get the existing log to calculate duration
       const existingLog = await storage.getLog(executionLogId);
 
+      // A log can go while its job is still active: deleting a workflow takes its
+      // runs' logs and leaves their jobs, and nothing ties a log to the id in a job's
+      // payload. There's nothing to write and no retry would change that, so throwing
+      // would only make a reporter keep repeating a status that has already committed.
+      if (!existingLog) {
+        console.warn(
+          `[JobService] Job ${jobId} is ${status}, but its log ${executionLogId} no longer exists`,
+        );
+        return job;
+      }
+
       // Calculate duration if job is completing
       let duration: number | undefined;
       const isCompleting =
@@ -661,7 +695,7 @@ export class JobService {
         status === JobStatus.TIMED_OUT ||
         status === JobStatus.CANCELLED;
 
-      if (isCompleting && existingLog?.startTime) {
+      if (isCompleting && existingLog.startTime) {
         const endTime = new Date();
         duration =
           endTime.getTime() - new Date(existingLog.startTime).getTime();
