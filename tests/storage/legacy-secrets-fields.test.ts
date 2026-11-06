@@ -41,6 +41,7 @@ import {
   type SecretBinding,
 } from "@/lib/security/secret-vault";
 import { generateTotp, verifyTotp } from "@/lib/security/totp";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 import { pool } from "@/server/db";
 import { toEventApiDto } from "@/server/security/api-dto";
 import { storage } from "@/server/storage";
@@ -675,6 +676,61 @@ describe("sensitive settings", () => {
     ]);
   });
 
+  it("leaves a long plaintext setting for someone to enter again, as the app does", async () => {
+    const quiet = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    await seedOldServer(old("readable-by-this-key"), null);
+    const id = await seedSetting("smtpPassword", LOOKS_LIKE_CIPHERTEXT);
+    const before = await storedSetting(id);
+
+    const { code, output } = await runCli("--encrypt-legacy");
+
+    expect(code).toBe(1);
+    expect(output).toContain(
+      `FAILED, left unchanged: system_settings id=smtpPassword column=value: ${CANT_TELL}`,
+    );
+    expect(output).toContain("Legacy rows remaining: 1");
+    expect(output).not.toContain(LOOKS_LIKE_CIPHERTEXT);
+    expect(await storedSetting(id)).toEqual(before);
+    await expect(getSmtpSettings()).rejects.toBeInstanceOf(
+      UnreadableSettingError,
+    );
+    // The worker's warning at boot goes on counting it, and points at this run.
+    expect(await countLegacyRows()).toBe(1);
+
+    // The same text, typed in. It goes straight into the vault, so nothing has to guess.
+    await storage.upsertSetting("smtpPassword", LOOKS_LIKE_CIPHERTEXT);
+
+    const again = await runCli("--encrypt-legacy");
+
+    expect(again.code).toBe(0);
+    expect(again.output).toContain("Legacy rows remaining: 0");
+    expect(await countLegacyRows()).toBe(0);
+    expect((await getSmtpSettings()).password).toBe(LOOKS_LIKE_CIPHERTEXT);
+    quiet.mockRestore();
+  });
+
+  it("stops the whole run if a long plaintext setting is all that looks encrypted", async () => {
+    const id = await seedSetting("smtpPassword", LOOKS_LIKE_CIPHERTEXT);
+    const other = await seedSetting("openaiApiKey", "short-plaintext");
+    const before = await storedSetting(id);
+
+    await expect(encryptLegacySecrets()).rejects.toThrow(
+      /system_settings\.value \(1\)/,
+    );
+
+    expect(await storedSetting(id)).toEqual(before);
+    expect((await storedSetting(other)).value).toBe("short-plaintext");
+
+    await storage.upsertSetting("smtpPassword", LOOKS_LIKE_CIPHERTEXT);
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    expect(report.remaining).toBe(0);
+    expect(isSecretEnvelope((await storedSetting(other)).value)).toBe(true);
+  });
+
   it("covers every setting the app treats as sensitive", async () => {
     const { SENSITIVE_SYSTEM_SETTINGS } =
       await import("@/lib/encryption-service");
@@ -871,6 +927,24 @@ describe("a value under a retired key", () => {
     expect((await storage.getServerForExecution(id, OWNER))?.sshKey).toBe(
       SSH_KEY,
     );
+  });
+
+  it("starts working for a setting the app refused to use", async () => {
+    const quiet = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    await seedSetting("smtpPassword", old(SMTP_PASSWORD));
+    useKeys(NEW_KEY, [OLD_KEY]);
+    await expect(getSmtpSettings()).rejects.toBeInstanceOf(
+      UnreadableSettingError,
+    );
+
+    await encryptLegacySecrets();
+
+    // With the old key gone too, so this can only be the new one.
+    useKeys(NEW_KEY);
+    expect((await getSmtpSettings()).password).toBe(SMTP_PASSWORD);
+    quiet.mockRestore();
   });
 });
 
