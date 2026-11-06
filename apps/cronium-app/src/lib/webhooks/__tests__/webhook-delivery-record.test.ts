@@ -88,4 +88,13 @@ describe("webhook delivery record", () => {
     await deliver();
     expect(JSON.stringify(inserted[0])).not.toContain("SENTINEL");
   });
+
+  it("reports no more of a long response than it records", async () => {
+    axiosRequest.mockResolvedValue({ status: 200, data: "x".repeat(5000) });
+
+    const result = await deliver();
+
+    expect(inserted[0]!.response).toBe("x".repeat(1000));
+    expect(result.response).toBe("x".repeat(1000));
+  });
 });
