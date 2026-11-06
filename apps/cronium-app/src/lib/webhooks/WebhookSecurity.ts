@@ -14,7 +14,7 @@ export class WebhookSecurity {
   /**
    * Generate HMAC signature for webhook payload
    */
-  generateSignature(payload: string, secret: string): string {
+  generateSignature(payload: string | Buffer, secret: string): string {
     const hmac = crypto.createHmac("sha256", secret);
     hmac.update(payload);
     return `${WebhookSecurity.SIGNATURE_PREFIX}${hmac.digest("hex")}`;
@@ -37,11 +37,12 @@ export class WebhookSecurity {
   generateDeliverySignature(
     timestamp: string,
     deliveryId: string,
-    rawBody: string,
+    rawBody: string | Buffer,
     secret: string,
   ): string {
     const hmac = crypto.createHmac("sha512", secret);
-    hmac.update(`${timestamp}\n${deliveryId}\n${rawBody}`);
+    hmac.update(`${timestamp}\n${deliveryId}\n`);
+    hmac.update(rawBody);
     return `${WebhookSecurity.DELIVERY_SIGNATURE_PREFIX}${hmac.digest("hex")}`;
   }
 
@@ -224,6 +225,19 @@ export class WebhookSecurity {
     }
 
     return { isValid: true };
+  }
+
+  /**
+   * Let a delivery id that `verifyWebhook` consumed be used again, for a request that
+   * was then refused with nothing done. Sending it again isn't a replay, and it would
+   * look like one to anyone who keeps the id across attempts.
+   */
+  async releaseDeliveryId(
+    webhookId: number,
+    deliveryId: string,
+  ): Promise<void> {
+    const { releaseWebhookDelivery } = await import("./webhook-replay-store");
+    await releaseWebhookDelivery(webhookId, deliveryId);
   }
 
   /**

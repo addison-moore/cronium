@@ -3,10 +3,18 @@ import { NextResponse } from "next/server";
 import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { eventTooLong } from "./delivery-body";
+import { queueFullMessage } from "./webhook-errors";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
 import { failureWithStack } from "@/lib/pg-errors";
+
+/**
+ * How long a sender is told to wait when the delivery queue is full. A receiver that
+ * never answers gives room back about this often: five attempts end every 30 seconds,
+ * and an event takes up to three.
+ */
+const QUEUE_FULL_RETRY_AFTER_SECONDS = 60;
 
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
@@ -182,32 +190,65 @@ export class WebhookRouter {
         return NextResponse.json({ error: tooLong }, { status: 413 });
       }
 
-      // Store event, stamped with the owning tenant (the inbound webhook's
-      // owner) so downstream fan-out and reads stay tenant-scoped.
-      const result = await db
-        .insert(webhookEvents)
-        .values({
-          event: eventType,
-          payload: processedData,
-          userId: webhook.userId,
-          sourceWebhookId: webhook.id,
-          createdAt: new Date(),
-        })
-        .returning();
-
-      if (!result[0]) {
-        throw new Error("Failed to create webhook event");
-      }
-
-      const event = result[0];
-
-      // Fan out only within the inbound webhook's own tenant (HI-01).
-      await this.webhookManager.triggerEvent(
+      // Refused here for the same reason, and before anything is stored, because a
+      // sender told to come back may keep coming back. The room this claims counts from
+      // now, so simultaneous requests can't all take the last of it.
+      const prepared = await this.webhookManager.prepareEvent(
         deliveredEvent,
         processedData,
         webhook.userId,
         deliveredMetadata,
       );
+      if (prepared.refused) {
+        const error = queueFullMessage(prepared.refused);
+        // Nothing happened, so sending this again isn't a replay. Its id was consumed
+        // when its signature was checked, and would make that look like one.
+        const deliveryId = headers["x-webhook-delivery-id"];
+        if (deliveryId) {
+          await this.webhookSecurity.releaseDeliveryId(webhook.id, deliveryId);
+        }
+        await this.logWebhookRequest(webhook.id, {
+          success: false,
+          error,
+          duration: Date.now() - startTime,
+        });
+
+        return NextResponse.json(
+          { error },
+          {
+            status: 503,
+            headers: { "Retry-After": String(QUEUE_FULL_RETRY_AFTER_SECONDS) },
+          },
+        );
+      }
+
+      // Store event, stamped with the owning tenant (the inbound webhook's
+      // owner) so downstream fan-out and reads stay tenant-scoped.
+      let event: typeof webhookEvents.$inferSelect;
+      try {
+        const result = await db
+          .insert(webhookEvents)
+          .values({
+            event: eventType,
+            payload: processedData,
+            userId: webhook.userId,
+            sourceWebhookId: webhook.id,
+            createdAt: new Date(),
+          })
+          .returning();
+
+        if (!result[0]) {
+          throw new Error("Failed to create webhook event");
+        }
+
+        event = result[0];
+      } catch (error) {
+        prepared.cancel();
+        throw error;
+      }
+
+      // Fan out only within the inbound webhook's own tenant (HI-01).
+      await prepared.send();
 
       // Log successful request
       await this.logWebhookRequest(webhook.id, {

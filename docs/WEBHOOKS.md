@@ -176,11 +176,31 @@ An event can reach you more than once, so handle deliveries with the steps above
 
 **Automatic retries** follow a failed attempt, on the webhook's `retryConfig`. `maxRetries` counts every attempt including the first, so the default of 3 means up to three requests, the second about 1 second after the first fails and the third about 2 seconds after the second fails (`retryDelay`, multiplied by `backoffMultiplier` each time). These retries are held in memory, so a restart of the app loses any that are waiting.
 
-**Attempts run at most 5 at a time for one webhook**, and 10 at a time across one owner's webhooks. Anything beyond that waits in memory, retries included, so a receiver that stops answering falls behind without holding up other webhooks, and a restart loses what's waiting. A backlog goes out at about one request a second for each webhook, plus one for each new event, so a retry can come later than its `retryConfig` says.
+**Attempts run at most 5 at a time for one webhook**, and 10 at a time across one owner's webhooks. Anything beyond that waits in memory, retries included, so a receiver that stops answering falls behind without holding up other webhooks, and a restart loses what's waiting. A backlog goes out at about one request a second for each webhook, plus one for each new event, so a retry can come later than its `retryConfig` says. How much can wait is limited: see [When the queue is full](#when-the-queue-is-full).
 
 **A manual retry** is one call to `webhookSystem.retryDelivery`. It makes one attempt and reports what the receiver answered, and a failure isn't repeated. It works on any recorded delivery, including one that succeeded or one for an event the webhook no longer subscribes to, until the record is removed after `CRONIUM_WEBHOOK_RETENTION_DAYS` (30 days by default). It is refused if the webhook is disabled or the event isn't recorded under the webhook's owner. Each user can make 10 of these calls a minute, though calls made at the same moment can get past that limit.
 
 **An event past 8 MB is never sent, so it isn't retried.** Every attempt would send the same bytes, so another couldn't change anything. The queue records one failed attempt on each subscribed webhook, with no status and an `error` giving the length. `webhookSystem.test` and `webhookSystem.retryDelivery` refuse such an event with `PRECONDITION_FAILED`, and nothing is sent or recorded.
+
+## When the queue is full
+
+Deliveries wait in memory, and a receiver that stops answering falls behind while events keep arriving. So each Cronium process limits what it holds:
+
+| Held for                    | Limit  |
+| --------------------------- | ------ |
+| One webhook                 | 32 MB  |
+| All of one owner's webhooks | 64 MB  |
+| Everything in the process   | 256 MB |
+
+What counts is each event's delivery body in bytes, and for each delivery about 2 KB plus the length of the webhook's URL, secret and custom headers. An event going to several webhooks counts in full against each of them, but only once against the owner and the process, because they share one copy. A delivery counts from when its event is accepted until its last attempt ends, whether it's running or waiting. So one webhook can hold about 2,700 events of 10 KB, about 15,000 tiny ones, or 5 of the longest one inbound request can make.
+
+**An event that doesn't fit is refused, and whoever sent it is told.** The [inbound endpoint](#sending-to-cronium) answers `503` with `Retry-After: 60` and an `error` saying which limit it reached. Nothing is stored or sent, so it isn't in any webhook's history and there's nothing to retry from. The sender is the one holding the event, and sending it again later is all it takes. If it never does, that event is gone, which is why it's told.
+
+**Nothing already accepted makes way for it.** Whoever sent an event waiting in the queue has been told it was accepted, and can't be told otherwise, so it keeps its place, and that includes its automatic retries. They were counted when the event was accepted, and don't ask for room again.
+
+**An event still goes to the webhooks with room.** When at least one of the webhooks an event goes to has room, the request gets a `200` and the event goes to those. Refusing it would hold them up for as long as the other stayed behind, however long that is, and a webhook subscribed to `*` would hold up everything its owner sends. Each webhook without room gets a failed attempt in its history instead, with no status and an `error` saying why. No request was made for it, and no automatic retries follow. `webhookSystem.retryDelivery` sends it, like any other recorded delivery, once the deliveries ahead of it have gone out. So one receiver going down doesn't stop the same owner's other webhooks, until enough are down to reach the owner's limit, when their events are refused as well.
+
+`webhookSystem.test` and `webhookSystem.retryDelivery` don't use the queue, so these limits don't apply to them. The limits are for each process, so each replica has its own.
 
 ## Answering a delivery
 
@@ -213,5 +233,7 @@ Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its s
 | Who checks       | Your receiver, as above                               | Cronium: within 5 minutes, each id accepted once           |
 
 **A request's body can be up to 1 MB (1,048,576 bytes),** and a longer one gets a 413. The delivery can be longer than the request, because of the fields added and the escaping described under [Which events are sent](#which-events-are-sent): plain text made only of `"` comes out 6 times as long, and nothing a request can contain grows more than that. That still fits in a delivery, so what the endpoint accepts can go out. The exception is a webhook with stored `transformations` that copy fields. If that would take an event past 8 MB, the request gets a 413, and nothing is stored or sent.
+
+**A 503 means Cronium's delivery queue is full, and nothing happened.** See [When the queue is full](#when-the-queue-is-full). Send the same event again after the `Retry-After`. You can keep its `X-Webhook-Delivery-Id`, because a refused request doesn't use it up. Sign it again if more than 5 minutes have passed, since the signature covers the time. A sender's other requests can be refused for the same reason until the receivers behind this endpoint catch up, so keep events you've been told to send again rather than dropping them.
 
 **One Cronium can't receive from another: a delivery sent to an inbound endpoint gets a 401.** That is deliberate. A webhook has one secret for both directions, so accepting deliveries would let anyone holding a captured delivery and the endpoint's URL replay it into that webhook, and a webhook subscribed to `*` whose URL is an inbound endpoint could trigger itself. To forward events between instances, put a small relay between them that verifies the delivery and signs a new inbound request.
