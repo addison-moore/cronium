@@ -43,7 +43,7 @@ Any custom headers configured on the webhook are added last, and one with the sa
 
 ### Which events are sent
 
-An event from an inbound endpoint goes to each of the owner's active webhooks whose `events` list names it or contains `*`. A test event goes only to the webhook named in the call, whatever its `events` list says, and gets one attempt with no automatic retries.
+An event from an inbound endpoint goes to each of the owner's active webhooks whose `events` list names it or contains `*`. A test event goes only to the webhook named in the call, whatever its `events` list says, and gets one attempt with no automatic retries. A test on a disabled webhook is refused, and each user can make 10 test calls a minute.
 
 | Event            | Sent when                                                                                              | `data`                                                                                                                                                                                      | `metadata`                 |
 | ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
