@@ -25,6 +25,10 @@ import {
 import { resetDatabase, closePool } from "./helpers/db-reset";
 import { seedServer } from "./helpers/seed";
 
+// A project's testTimeout has no effect, and the default 5 seconds is too little for
+// resetDatabase on a busy machine.
+jest.setTimeout(30_000);
+
 const OWNER = "env-roundtrip-owner";
 const SECRET = "s3cret-value";
 
@@ -280,6 +284,32 @@ describe("a value too long for the old varchar(255) column", () => {
     const stored = persisted!.payload as { environment: { API_KEY: string } };
     expect(stored.environment.API_KEY.startsWith("crn.1.")).toBe(true);
     expect(JSON.stringify(persisted!.payload)).not.toContain(LONG);
+  });
+
+  // At the limit a job row holds about 1.33 MB of this, and the Jobs page lists 50.
+  it("stays out of a list of jobs, and nothing else does", async () => {
+    const event = await seedEvent();
+    await storage.createEnvVar({
+      eventId: event.id,
+      key: "API_KEY",
+      value: LONG,
+    });
+    const read = await storage.getEventWithRelations(event.id);
+    const { job } = await dispatchEventJob(read!, { triggeredBy: "manual" });
+
+    const full = (await jobService.getJob(job!.id))!;
+    const { environment, ...rest } = full.payload as {
+      environment: { API_KEY: string };
+    };
+    expect(environment.API_KEY.startsWith("crn.1.")).toBe(true);
+
+    const { jobs: listed, total } = await jobService.listJobs({
+      userId: OWNER,
+    });
+
+    expect(total).toBe(1);
+    expect(listed[0]).toEqual({ ...full, payload: rest });
+    expect(JSON.stringify(listed)).not.toContain("crn.1.");
   });
 
   it("reaches a job for a remote server whole", async () => {

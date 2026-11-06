@@ -24,6 +24,7 @@ import {
   inArray,
   sql,
   count,
+  getTableColumns,
 } from "drizzle-orm";
 
 /** Claim-lease duration; owners renew via heartbeat well inside this window
@@ -216,9 +217,17 @@ export class JobService {
       conditions.push(gte(jobsTable.completedAt, filter.completedAfter));
     }
 
-    // Build query
+    // A payload holds an encrypted copy of the event's variables, up to about 1.33 MB
+    // a job, which only delivery reads. At 50 jobs that made the Jobs page 67 MB, and
+    // sent all of it to the browser. A list has no use for it, so it stays in the
+    // database. getJob still returns it.
     const query = this.db
-      .select()
+      .select({
+        ...getTableColumns(jobsTable),
+        payload: sql`${jobsTable.payload} - 'environment'`.mapWith(
+          jobsTable.payload,
+        ),
+      })
       .from(jobsTable)
       .orderBy(desc(jobsTable.priority), desc(jobsTable.createdAt))
       .limit(limit)

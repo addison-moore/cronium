@@ -47,13 +47,22 @@ export const eventQuerySchema = z.object({
 // 2 MiB across its whole environment and arguments (a quarter of the default 8 MiB
 // stack). Past either, a job fails as it starts with "argument list too long", which
 // says nothing about the variable. So these refuse it at save, leaving room for the
-// longest key, the script itself and the variables Cronium adds.
+// longest key, the process's arguments and the variables Cronium adds.
 //
 // Saving replaces an event's variables one row at a time, so whatever the database
 // refuses costs the rows after it. Refusing here costs nothing.
 export const MAX_ENV_VAR_KEY_LENGTH = 255; // env_vars.key is varchar(255)
 export const MAX_ENV_VAR_VALUE_BYTES = 128_000;
 export const MAX_ENV_VARS_TOTAL_BYTES = 1_000_000;
+// The total above counts keys and values, and each variable also costs exec its `=`,
+// NUL and 8-byte pointer. Measured: 124,000 variables with 7-character keys are only
+// 868,000 bytes by that count, and exec refuses them. This keeps the overhead to 10 KB.
+// It's far more than an event needs, and well under the 21,845 rows of 3 parameters
+// that one INSERT can bind.
+export const MAX_ENV_VARS = 1_000;
+
+const VALUE_LIMIT = `${MAX_ENV_VAR_VALUE_BYTES / 1_000} KB`;
+const TOTAL_LIMIT = `${MAX_ENV_VARS_TOTAL_BYTES / 1_000_000} MB`;
 
 const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
 // Postgres can't store one in a key, and a process can't be given one in a value.
@@ -74,8 +83,7 @@ export const envVarSchema = z.object({
   value: z
     .string()
     .refine((value) => utf8Bytes(value) <= MAX_ENV_VAR_VALUE_BYTES, {
-      message:
-        "An environment variable value can be at most 128 KB. Linux won't start a script with a longer one",
+      message: `An environment variable value can be at most ${VALUE_LIMIT}. Linux won't start a script with a longer one`,
     })
     .refine(hasNoNul, {
       message: "An environment variable value can't contain a NUL character",
@@ -84,6 +92,9 @@ export const envVarSchema = z.object({
 
 export const envVarsSchema = z
   .array(envVarSchema)
+  .max(MAX_ENV_VARS, {
+    message: `An event can have at most ${MAX_ENV_VARS.toLocaleString("en-US")} environment variables`,
+  })
   .refine(
     (envVars) =>
       envVars.reduce(
@@ -91,8 +102,7 @@ export const envVarsSchema = z
         0,
       ) <= MAX_ENV_VARS_TOTAL_BYTES,
     {
-      message:
-        "An event's environment variables can be at most 1 MB in total. Linux won't start a script with more",
+      message: `An event's environment variables can be at most ${TOTAL_LIMIT} in total. Linux won't start a script with more`,
     },
   );
 
