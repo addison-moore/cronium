@@ -185,7 +185,7 @@ describe("executeToolAction — guards", () => {
     expect(result.stderr).toContain("Incomplete tool action configuration");
     expect(result.healthStatus?.status).toBe("failing");
     expect(auditLog.toolExecutionFailed).toHaveBeenCalledWith(
-      { userId: "user-1", toolId: 0 },
+      { userId: "user-1" },
       "unknown",
       "Incomplete tool action configuration",
     );

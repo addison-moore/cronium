@@ -11,6 +11,7 @@
 
 import { storage, type EventWithRelations } from "@/server/storage";
 import { db } from "@/server/db";
+import { pgErrorCode } from "@/lib/pg-errors";
 import {
   EventStatus,
   JobPriority,
@@ -82,13 +83,7 @@ function reportFailedWrite(what: string, eventId: number) {
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  // Drizzle wraps driver errors in DrizzleQueryError, so the Postgres code is on
-  // `cause`. Reading only `code` here made the overlap policy throw instead of skip.
-  const { code, cause } = (error ?? {}) as {
-    code?: string;
-    cause?: { code?: string };
-  };
-  return code === "23505" || cause?.code === "23505";
+  return pgErrorCode(error) === "23505";
 }
 
 /**
