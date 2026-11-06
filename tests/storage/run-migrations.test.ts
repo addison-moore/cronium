@@ -24,6 +24,7 @@ const APP_DIR = join(__dirname, "../../apps/cronium-app");
 const DRIZZLE_DIR = join(APP_DIR, "drizzle");
 const RUNNER = join(APP_DIR, "scripts/run-migrations.cjs");
 const REPEAT_TAG_SUFFIX = "_repeat_skipped_legacy_data_changes";
+const VALUE_TEXT_TAG_SUFFIX = "_env_var_value_text";
 
 interface JournalEntry {
   idx: number;
@@ -101,10 +102,13 @@ function pushSchema(url: string): void {
   run("npx", ["drizzle-kit", "push", "--config", "drizzle.config.ts"], url);
 }
 
-/** Applies the migrations before the repeat, as a database on them has. */
-async function migrateToJustBeforeTheRepeat(pool: Pool): Promise<void> {
+/** Applies the migrations before the one with this tag, as a database on them has. */
+async function migrateToJustBefore(
+  pool: Pool,
+  tagSuffix: string,
+): Promise<void> {
   const cut = journal.entries.findIndex((entry) =>
-    entry.tag.endsWith(REPEAT_TAG_SUFFIX),
+    entry.tag.endsWith(tagSuffix),
   );
   const folder = mkdtempSync(join(tmpdir(), "cronium-migrations-"));
   try {
@@ -187,6 +191,41 @@ async function fingerprint(pool: Pool) {
   };
 }
 
+async function seedEnvVars(pool: Pool): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (id, email, username) VALUES ('u1', 'u1@example.test', 'u1')`,
+  );
+  await pool.query(
+    `INSERT INTO events (user_id, name, type, content) VALUES ('u1', 'e1', 'BASH', 'echo hi')`,
+  );
+  await pool.query(
+    `INSERT INTO env_vars (event_id, key, value)
+     SELECT 1, 'KEY_' || n, 'crn.1.value-' || n FROM generate_series(1, 50) AS n`,
+  );
+}
+
+const envVarRows = async (pool: Pool) =>
+  (
+    await pool.query(
+      `SELECT id, xmin::text, key, value FROM env_vars ORDER BY id`,
+    )
+  ).rows;
+
+async function valueColumnType(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ data_type: string }>(
+    `SELECT data_type FROM information_schema.columns
+     WHERE table_name = 'env_vars' AND column_name = 'value'`,
+  );
+  return rows[0]!.data_type;
+}
+
+async function envVarsFileNode(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ node: string }>(
+    `SELECT pg_relation_filenode('env_vars')::text AS node`,
+  );
+  return rows[0]!.node;
+}
+
 const everyStamp = journal.entries.map((entry) => entry.when);
 
 afterAll(async () => {
@@ -234,7 +273,7 @@ describe("a database from the old push flow", () => {
 describe("a database already stamped past 0012 without running it", () => {
   it("has the skipped data changes made through the migrator", async () => {
     const { url, pool } = await createDatabase();
-    await migrateToJustBeforeTheRepeat(pool);
+    await migrateToJustBefore(pool, REPEAT_TAG_SUFFIX);
     // As a legacy database is after an earlier transition: the records say the data
     // changes happened, and the values and the setting are still there.
     await seedDeliveries(pool, [FROM_BEFORE_THE_FIX, WRITTEN_SINCE_THE_FIX]);
@@ -259,7 +298,7 @@ describe("a database already stamped past 0012 without running it", () => {
 describe("a database that ran 0012 and 0013", () => {
   it("has no row rewritten by the upgrade, and none on the boot after", async () => {
     const { url, pool } = await createDatabase();
-    await migrateToJustBeforeTheRepeat(pool);
+    await migrateToJustBefore(pool, REPEAT_TAG_SUFFIX);
     await seedDeliveries(pool, [SYSTEM_HEADERS, WRITTEN_SINCE_THE_FIX, {}]);
     await pool.query(
       `INSERT INTO system_settings (key, value) VALUES ('registrationEnabled', 'true')`,
@@ -279,6 +318,49 @@ describe("a database that ran 0012 and 0013", () => {
   });
 });
 
+describe("widening env_vars.value to text", () => {
+  // drizzle-kit has a path that answers a column type change on a table with rows by
+  // offering to truncate it, cascading. A Postgres change goes around that path today,
+  // so push applies it with no prompt. If an upgrade of drizzle-kit changes that, this
+  // is what notices: a boot has no one to answer the prompt, and the other answer loses
+  // every variable.
+  it("keeps the rows of a database from the old push flow", async () => {
+    const { url, pool } = await createDatabase();
+    pushSchema(url);
+    await pool.query(
+      `ALTER TABLE env_vars ALTER COLUMN value TYPE varchar(255)`,
+    );
+    await seedEnvVars(pool);
+    const before = await envVarRows(pool);
+    expect(before).toHaveLength(50);
+
+    const output = boot(url);
+
+    expect(output).toContain("Legacy schema detected");
+    expect(output).not.toMatch(/data.?loss/i);
+    expect(await valueColumnType(pool)).toBe("text");
+    expect(await envVarRows(pool)).toEqual(before);
+    expect(await stampedTimes(pool)).toEqual(everyStamp);
+  });
+
+  it("rewrites nothing on a database already on migrations", async () => {
+    const { url, pool } = await createDatabase();
+    await migrateToJustBefore(pool, VALUE_TEXT_TAG_SUFFIX);
+    await seedEnvVars(pool);
+    expect(await valueColumnType(pool)).toBe("character varying");
+    const before = await envVarRows(pool);
+    const fileNode = await envVarsFileNode(pool);
+
+    const output = boot(url);
+
+    expect(output).not.toContain("Legacy schema detected");
+    expect(await valueColumnType(pool)).toBe("text");
+    expect(await envVarRows(pool)).toEqual(before);
+    expect(await envVarsFileNode(pool)).toBe(fileNode);
+    expect(await stampedTimes(pool)).toEqual(everyStamp);
+  });
+});
+
 describe("an empty database", () => {
   it("installs from the migrator, and changes nothing on its second boot", async () => {
     const { url, pool } = await createDatabase();
@@ -287,6 +369,7 @@ describe("an empty database", () => {
 
     expect(output).not.toContain("Legacy schema detected");
     expect(await headersOf(pool)).toEqual([]);
+    expect(await valueColumnType(pool)).toBe("text");
     expect(await stampedTimes(pool)).toEqual(everyStamp);
 
     const before = await fingerprint(pool);

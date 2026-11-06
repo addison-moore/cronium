@@ -1,3 +1,4 @@
+import superjson from "superjson";
 import { EventType, RunLocation } from "@/shared/schema";
 import type { EventFormData } from "./event-form-schema";
 
@@ -82,3 +83,21 @@ export function buildEventPayload(data: EventFormData) {
 }
 
 export type EventPayload = ReturnType<typeof buildEventPayload>;
+
+/**
+ * How many bytes saving `input` sends, measured the way lib/trpc.ts's batch link writes
+ * the request: one call at index 0, through superjson, as JSON. Escaping is why this can
+ * be far more than the script's own length.
+ */
+export function saveRequestBytes(input: unknown): number {
+  return new Blob([JSON.stringify({ 0: superjson.serialize(input) })]).size;
+}
+
+/** Why a save of `bytes` can't go ahead, in terms of what the person is editing. */
+export function tooLongToSaveMessage(type: EventType, bytes: number): string {
+  // Rounded up, so one byte over never reads as exactly the limit.
+  const size = (Math.ceil((bytes / (1024 * 1024)) * 100) / 100).toFixed(2);
+  return isScriptEventType(type)
+    ? `This script is too long to save. With the rest of the event it comes to ${size} MB once sent, and the limit is 10 MB. Each line break or quote counts as 2 bytes.`
+    : `This event is too long to save. It comes to ${size} MB once sent, and the limit is 10 MB.`;
+}

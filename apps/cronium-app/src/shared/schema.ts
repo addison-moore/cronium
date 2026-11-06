@@ -330,7 +330,7 @@ export const envVars = pgTable("env_vars", {
     .references(() => events.id)
     .notNull(),
   key: varchar("key", { length: 255 }).notNull(),
-  value: varchar("value", { length: 255 }).notNull(),
+  value: text("value").notNull(),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),

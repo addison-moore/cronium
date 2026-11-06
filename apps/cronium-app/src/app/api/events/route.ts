@@ -15,6 +15,7 @@ import {
   validateIntervalSeconds,
 } from "@/lib/scheduling/schedule-math";
 import { canReadEnvVarValues } from "@/server/token-scopes";
+import { envVarsSchema } from "@/shared/schemas/events";
 import { z } from "zod";
 import {
   authenticateRestPrincipal,
@@ -25,6 +26,7 @@ import {
   resourceAccessHttpStatus,
 } from "@/server/security/resource-access";
 import { toEventApiDto, toEventListApiDto } from "@/server/security/api-dto";
+import { readEventSaveBody } from "@/lib/request-body";
 
 // Schema for validating new script input
 const createEventSchema = z
@@ -80,14 +82,7 @@ const createEventSchema = z
     timeoutValue: z.number().min(1),
     timeoutUnit: z.enum([TimeUnit.SECONDS, TimeUnit.MINUTES, TimeUnit.HOURS]),
     retries: z.number().min(0),
-    envVars: z
-      .array(
-        z.object({
-          key: z.string().min(1),
-          value: z.string(),
-        }),
-      )
-      .optional(),
+    envVars: envVarsSchema.optional(),
   })
   .strict()
   .refine(
@@ -195,7 +190,10 @@ export async function POST(request: NextRequest) {
       return restPrincipalErrorResponse(auth);
     }
 
-    const validationResult = createEventSchema.safeParse(await request.json());
+    const read = await readEventSaveBody(request);
+    if (!read.ok) return read.response;
+
+    const validationResult = createEventSchema.safeParse(read.body);
 
     if (!validationResult.success) {
       return NextResponse.json(

@@ -49,6 +49,16 @@ function hasConfiguredHeaders(stored: unknown): boolean {
   return Object.keys(stored).length > 0;
 }
 
+/** What to tell the caller about one attempt, including when it left no record. */
+function attemptMessage(
+  outcome: string,
+  attempt: { recorded?: false },
+): string {
+  return attempt.recorded === false
+    ? `${outcome}. It couldn't be recorded, so it won't show in the webhook's history.`
+    : outcome;
+}
+
 /**
  * Run a webhook operation, giving its refusal the API's code for one, with its
  * message. withErrorHandling would otherwise make that a server error, whose
@@ -423,14 +433,15 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the retry isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
+          const outcome = attempt.success
+            ? "Webhook delivery retry succeeded"
+            : `Webhook delivery retry failed: ${
+                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attempt.success
-              ? "Webhook delivery retry succeeded"
-              : `Webhook delivery retry failed: ${
-                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-                }`,
+            message: attemptMessage(outcome, attempt),
           };
         },
         {
@@ -441,9 +452,13 @@ export const webhookSystemRouter = createTRPCRouter({
       );
     }),
 
-  // Test webhook
+  // Send a test event to this webhook and report what the receiver did
   test: protectedProcedure
     .use(withTiming)
+    // Each call makes an outbound request and waits for it, outside the queue's
+    // limit on how many run at once, and writes two rows. This stops a client in a
+    // loop. Calls made at the same moment can get past it, as on retryDelivery.
+    .use(withRateLimit(10, 60000))
     .input(
       z.object({
         webhookId: z.number(),
@@ -469,25 +484,34 @@ export const webhookSystemRouter = createTRPCRouter({
             throw notFoundError("Webhook");
           }
 
-          // Trigger test event within the caller's own tenant.
-          await webhookManager.triggerEvent(
-            "webhook.test",
-            {
-              test: true,
-              timestamp: new Date().toISOString(),
-              ...input.testData,
-            },
-            webhook.userId,
-            {
-              webhookId: input.webhookId,
-              triggeredBy: ctx.session.user.id,
-            },
+          const attempt = await withRefusalsMapped(() =>
+            webhookManager.sendTestEvent(
+              webhook,
+              {
+                test: true,
+                timestamp: new Date().toISOString(),
+                ...input.testData,
+              },
+              {
+                webhookId: input.webhookId,
+                triggeredBy: ctx.session.user.id,
+              },
+            ),
           );
 
-          return mutationResponse(
-            { webhookId: input.webhookId },
-            "Test webhook sent",
-          );
+          // Not mutationResponse, whose `success` is always true. A receiver
+          // refusing the test isn't an error in this request, but it isn't a
+          // success either, and the attempt's details are worth keeping.
+          const outcome = attempt.success
+            ? "Test webhook delivered"
+            : `Test webhook failed: ${
+                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+              }`;
+          return {
+            success: attempt.success,
+            data: attempt,
+            message: attemptMessage(outcome, attempt),
+          };
         },
         {
           component: "webhookSystemRouter",
