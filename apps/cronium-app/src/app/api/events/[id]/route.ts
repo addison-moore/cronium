@@ -23,6 +23,7 @@ import { canReadEnvVarValues } from "@/server/token-scopes";
 import { scheduler } from "@/lib/scheduler";
 import { touchesEventSchedule } from "@/lib/scheduling/materialize";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import { readEventSaveBody } from "@/lib/request-body";
 
 // GET a specific script
 export async function GET(
@@ -124,14 +125,17 @@ export async function PATCH(
 
     await assertEventCapability(eventId, userId, "edit");
 
-    const requestBody: unknown = await request.json();
+    const read = await readEventSaveBody(request);
+    if (!read.ok) return read.response;
+
+    const requestBody = read.body;
     if (
       typeof requestBody !== "object" ||
       requestBody === null ||
       Array.isArray(requestBody)
     ) {
       return NextResponse.json(
-        { error: "Invalid request body" },
+        { error: "Request body must be a JSON object under 10 MB" },
         { status: 400 },
       );
     }
@@ -232,32 +236,16 @@ export async function PATCH(
     const filteredAllowedFields = Object.fromEntries(
       Object.entries(allowedFields).filter(([, value]) => value !== undefined),
     ) as Partial<InsertEvent>;
-    await storage.updateScript(eventId, {
-      ...filteredAllowedFields,
-      ...(startTime !== undefined && {
-        startTime: startTime ? new Date(startTime) : null,
-      }),
-    });
-
-    // If env vars are provided, handle them
-    if (envVars !== undefined) {
-      // Delete existing env vars
-      await storage.deleteEnvVarsByEventId(eventId);
-
-      // Add new env vars
-      for (const envVar of envVars) {
-        await storage.createEnvVar({
-          eventId,
-          key: envVar.key,
-          value: envVar.value,
-        });
-      }
-    }
-
-    // Handle multiple server selection for remote events
-    if (selectedServerIds !== undefined) {
-      await storage.setEventServers(eventId, selectedServerIds, userId);
-    }
+    await storage.updateScript(
+      eventId,
+      {
+        ...filteredAllowedFields,
+        ...(startTime !== undefined && {
+          startTime: startTime ? new Date(startTime) : null,
+        }),
+      },
+      { envVars, serverIds: selectedServerIds, userId },
+    );
 
     // Without this, pausing over REST kept firing and a new schedule never applied.
     if (touchesEventSchedule(parsed.data)) {

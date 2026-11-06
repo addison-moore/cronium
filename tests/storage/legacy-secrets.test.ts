@@ -744,7 +744,6 @@ describe("the read paths afterwards", () => {
       webhookId: id,
       success: true,
       duration: 0,
-      retryCount: 0,
     });
     try {
       await manager.triggerEvent("order.created", { order: 1 }, OWNER);

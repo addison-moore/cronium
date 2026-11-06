@@ -20,6 +20,12 @@ const nextConfig = {
       "lucide-react",
       "@/components/ui/*",
     ],
+    // Next cuts a body off at this length before a route sees it, without saying so, and
+    // the route gets JSON that ends early. The routes that take long bodies refuse anything
+    // past MAX_REQUEST_BODY_BYTES (10 MB, shared/request-limits.ts), which they can only do
+    // if a longer body still reaches them longer than that. Next drops the whole read that
+    // crosses this line, up to 64 KB, so it has to sit at least that far above the limit.
+    proxyClientMaxBodySize: "11mb",
   },
   env: {
     PUBLIC_APP_URL: env.PUBLIC_APP_URL,

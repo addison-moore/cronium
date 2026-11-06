@@ -1,5 +1,3 @@
-import { quotedForLog } from "@/lib/security/audit-entry";
-
 /**
  * Reading a failed query's error. Drizzle wraps the driver's error in
  * DrizzleQueryError, so the details are on `cause`: a check of `error.code` never
@@ -11,6 +9,8 @@ import { quotedForLog } from "@/lib/security/audit-entry";
  * well as a stack that starts with the message. So a catch block logs
  * describeFailure or failureWithStack, never the error or its `.message`.
  */
+import { quotedForLog } from "@/lib/security/audit-entry";
+
 export interface DriverError {
   /** A SQLSTATE if Postgres answered, or a Node code such as ECONNREFUSED. */
   code?: string;

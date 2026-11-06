@@ -11,6 +11,7 @@ import {
 } from "@/lib/api-auth";
 import { RateLimitService } from "@/lib/rate-limit-service";
 import { describeFailure } from "@/lib/pg-errors";
+import { readBodyWithin } from "@/lib/request-body";
 import { resourceAccessHttpStatus } from "@/server/security/resource-access";
 
 // The limiter keys on user id + path, and tRPC's `events.execute` uses the same
@@ -39,35 +40,6 @@ function parseResourceId(raw: string): number | null {
   if (!/^[1-9]\d*$/.test(raw)) return null;
   const id = Number(raw);
   return id <= MAX_POSTGRES_INT ? id : null;
-}
-
-/**
- * The request body as text, or null once it passes `limit` bytes. Stops reading as
- * soon as it knows, rather than taking in the rest first. The declared length can't
- * be the only check, because a chunked request doesn't declare one.
- */
-async function readBodyWithin(
-  request: NextRequest,
-  limit: number,
-): Promise<string | null> {
-  if (Number(request.headers.get("content-length")) > limit) return null;
-  if (!request.body) return "";
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes += value.byteLength;
-    if (bytes > limit) {
-      // Not awaited: the answer doesn't depend on how the stream shuts down.
-      void reader.cancel().catch(() => undefined);
-      return null;
-    }
-    chunks.push(value);
-  }
-  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 function refuse(body: object, status: number, headers?: HeadersInit) {

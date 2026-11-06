@@ -4,6 +4,7 @@
  * logged: the buffer never holds more than fits, and one bad value can't cost a
  * row its other fields.
  */
+import { pgStorableText } from "@/lib/pg-text";
 import { redactSecrets, redactText } from "@/lib/tools/redact";
 import type { AuditContext, AuditLogEntry } from "./audit-logger";
 
@@ -21,10 +22,9 @@ const MAX_QUOTED_CHARS = 500;
  */
 export const MAX_AUDIT_ENTRY_CHARS = 16_000;
 
-/** Postgres stores neither a NUL byte nor, in jsonb, a lone surrogate. */
 function storableText(value: string, limit: number): string {
   const kept = value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
-  return kept.replaceAll("\u0000", "").replace(/\p{Cs}/gu, "\uFFFD");
+  return pgStorableText(kept);
 }
 
 function storableValue(

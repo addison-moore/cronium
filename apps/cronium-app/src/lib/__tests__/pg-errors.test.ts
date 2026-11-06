@@ -96,6 +96,26 @@ describe("driverError", () => {
 });
 
 describe("describeFailure", () => {
+  const cause = Object.assign(new Error("value too long"), { code: "22001" });
+
+  it("gives the driver's code and message, without the query's values", () => {
+    const wrapped = new DrizzleQueryError(
+      "insert into t values ($1)",
+      ["a secret value"],
+      cause,
+    );
+
+    // The premise: Drizzle's own message holds them.
+    expect(wrapped.message).toContain("a secret value");
+    expect(describeFailure(wrapped)).toBe("22001: value too long");
+  });
+
+  it("describes an error with no code by its name", () => {
+    expect(describeFailure(new TypeError("cannot encode"))).toBe(
+      "TypeError: cannot encode",
+    );
+  });
+
   it("is the SQLSTATE and the driver's message, and nothing of the wrapper's", () => {
     expect(describeFailure(failedQuery(postgresError("duplicate key")))).toBe(
       "23505: duplicate key",
