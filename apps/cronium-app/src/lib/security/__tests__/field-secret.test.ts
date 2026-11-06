@@ -11,6 +11,8 @@ import {
   decryptMfaSecret,
   isLegacyCiphertextUnderKey,
   looksLikeLegacyCiphertext,
+  readLegacyValue,
+  readsAsLegacyCiphertext,
 } from "@/lib/security/field-secret";
 import { __resetSecretVaultForTests } from "@/lib/security/secret-vault";
 
@@ -171,6 +173,86 @@ describe("field-secret record-bound migration (2.1)", () => {
       expect(decryptServerSecret("plainkey", "sshKey", "user-1")).toBe(
         "plainkey",
       );
+    });
+
+    describe("telling what a value holds", () => {
+      afterEach(() => {
+        delete process.env.ENCRYPTION_KEYS_RETIRED;
+        __resetSecretVaultForTests();
+      });
+
+      function withRetired(keyHex: string) {
+        process.env.ENCRYPTION_KEYS_RETIRED = JSON.stringify([keyHex]);
+        __resetSecretVaultForTests();
+      }
+
+      it("takes what doesn't have the shape for what it says it is", () => {
+        expect(readLegacyValue("plainkey")).toBe("plainkey");
+        expect(readLegacyValue(`${"A".repeat(60)}-`)).toBe(
+          `${"A".repeat(60)}-`,
+        );
+      });
+
+      it("opens what authenticates", () => {
+        expect(readLegacyValue(legacyEncrypt("an old ssh key"))).toBe(
+          "an old ssh key",
+        );
+      });
+
+      it("opens what authenticates under a retired key, which a read can't", () => {
+        const stored = legacyEncrypt("an old ssh key", OTHER_KEY);
+        expect(readLegacyValue(stored)).toBeNull();
+
+        withRetired(OTHER_KEY);
+
+        expect(readLegacyValue(stored)).toBe("an old ssh key");
+        expect(() => decryptServerSecret(stored, "sshKey", "user-1")).toThrow();
+      });
+
+      it("doesn't guess at what has the shape and doesn't open", () => {
+        expect(readLegacyValue("A".repeat(64))).toBeNull();
+        expect(
+          readLegacyValue(legacyEncrypt("x", OTHER_KEY).repeat(2)),
+        ).toBeNull();
+      });
+
+      it.each(["1", "ab", "abc", "abcd"])(
+        "finds that %j, which reads back as its ciphertext, is ciphertext",
+        (plaintext) => {
+          const stored = legacyEncrypt(plaintext);
+          expect(stored.length).toBeLessThan(50);
+          expect(decryptEnvVarValue(stored, 42, "API_KEY")).toBe(stored);
+
+          expect(readsAsLegacyCiphertext(stored)).toBe(true);
+        },
+      );
+
+      it("finds a value encrypted twice, whose read is its inner ciphertext", () => {
+        const inner = legacyEncrypt("an old value");
+        const read = decryptEnvVarValue(legacyEncrypt(inner), 42, "API_KEY");
+
+        expect(read).toBe(inner);
+        expect(readsAsLegacyCiphertext(read)).toBe(true);
+      });
+
+      it("finds ciphertext under a retired key too, and none under a key it doesn't hold", () => {
+        const stored = legacyEncrypt("1", OTHER_KEY);
+        expect(readsAsLegacyCiphertext(stored)).toBe(false);
+
+        withRetired(OTHER_KEY);
+
+        expect(readsAsLegacyCiphertext(stored)).toBe(true);
+      });
+
+      it.each([
+        ["an empty string", ""],
+        ["ordinary text", "plain value"],
+        ["base64 too short to hold an IV and a tag", "QUJD"],
+        ["base64 of the right length that isn't ciphertext", "A".repeat(44)],
+        ["a long one", "A".repeat(64)],
+      ])("doesn't take %s for ciphertext", (_name, value) => {
+        expect(readsAsLegacyCiphertext(value)).toBe(false);
+      });
     });
   });
 });
