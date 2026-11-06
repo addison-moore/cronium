@@ -963,13 +963,14 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
           <h2 className="mb-6 text-2xl font-bold">Encrypting Older Values</h2>
           <div className="space-y-6">
             <p>
-              Webhook secrets, webhook custom headers and user variables are
-              encrypted at rest since July 2026. A row saved before that stays
-              plaintext until that exact field is next written, so anyone with a
-              copy of the database can read it. Upgrading doesn&apos;t change
-              this and the app keeps working either way, so the{" "}
-              <code>cronium-worker</code> service logs a warning at boot while
-              such rows exist.
+              Values saved before encryption at rest stay as they were until
+              that exact field is next written. Webhook secrets and headers,
+              user variables, tool credentials and OAuth tokens can still be
+              plaintext. Server credentials, env vars, MFA secrets and sensitive
+              settings can be plaintext or an older kind of ciphertext, which a
+              key change orphans. Upgrading doesn&apos;t change this and the app
+              keeps working either way, so the <code>cronium-worker</code>{" "}
+              service logs a warning at boot while such rows exist.
             </p>
             <p>To encrypt them, take a database backup, then run:</p>
             <SimpleCodeBlock language="bash">
@@ -983,9 +984,10 @@ docker compose exec cronium-worker \\
             </SimpleCodeBlock>
             <ul className="text-muted-foreground list-disc space-y-2 pl-6">
               <li>
-                Nothing changes for senders, subscribers or scripts: signatures
-                use the same secret, deliveries send the same headers, and
-                variables return the same value.
+                Nothing changes for what reads these values: signatures, custom
+                headers, variables, env vars, SSH logins, authenticator apps and
+                tools all work as they did. Run this before changing{" "}
+                <code>ENCRYPTION_KEY</code>.
               </li>
               <li>
                 It&apos;s safe to repeat and to stop. A second run changes
@@ -1004,8 +1006,10 @@ docker compose exec cronium-worker \\
               <li>
                 It ends with <code>Legacy rows remaining: N</code>, and exits
                 non-zero if that isn&apos;t 0 or a row failed. A failed row is
-                named by id and column and left exactly as it was. Replace the
-                value it names, then run it again.
+                named by id and column and left exactly as it was. That includes
+                a value that looks like older ciphertext when no key opens it,
+                because it can&apos;t be told from plaintext. Replace the value
+                it names, then run it again.
               </li>
               <li>
                 Afterwards, rolling back to an image from before July 2026 needs
@@ -1017,13 +1021,18 @@ docker compose exec cronium-worker \\
               <AlertTitle>This doesn&apos;t erase the old values</AlertTitle>
               <AlertDescription>
                 Old versions of each row stay in the table files until you run{" "}
-                <code>VACUUM FULL webhooks, user_variables;</code>, which blocks
-                both tables while it runs. WAL and every backup taken before
-                this run still hold the plaintext. If any of those copies could
-                have been read by someone who shouldn&apos;t have, rotate the
-                credentials themselves: regenerate the webhook&apos;s secret,
-                replace its custom headers at the service that issued them, and
-                replace any secret held in a variable.
+                <code>
+                  VACUUM FULL webhooks, user_variables, servers, env_vars,
+                  users, system_settings, tool_credentials, oauth_tokens;
+                </code>
+                , which blocks those tables while it runs. WAL and every backup
+                taken before this run still hold the plaintext. If any of those
+                copies could have been read by someone who shouldn&apos;t have,
+                rotate the credentials themselves: regenerate the webhook&apos;s
+                secret, replace its custom headers at the service that issued
+                them, replace any secret held in a variable or env var, replace
+                server credentials, and reissue tool credentials and OAuth
+                tokens.
               </AlertDescription>
             </Alert>
             <p className="text-muted-foreground text-sm">

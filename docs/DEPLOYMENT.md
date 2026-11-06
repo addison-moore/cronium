@@ -222,9 +222,11 @@ docker compose up -d
   those variables to `0` in `.env` first. Re-running `install.sh` keeps your existing
   `.env` and does not add them for you. The tool audit log is the exception: nothing
   is deleted from it until you set a window.
-- **Webhooks and variables saved before July 2026 stay plaintext until you encrypt
-  them.** Upgrading doesn't do it for you. The worker logs a warning at boot if any
-  remain, and
+- **Secrets saved before encryption at rest stay as they were until you encrypt them.**
+  Webhook values, variables, tool credentials and OAuth tokens can still be plaintext.
+  Server credentials, env vars, MFA secrets and sensitive settings can be plaintext or
+  older ciphertext, which changing `ENCRYPTION_KEY` orphans. Upgrading doesn't do it for
+  you. The worker logs a warning at boot if any remain, and
   [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
   has the command.
 - **Since November 2026, container jobs need Docker's attach endpoint.** A job's script
@@ -237,6 +239,11 @@ docker compose up -d
   `failed to attach to container: unable to upgrade to tcp, received 403`, with whatever
   status your proxy answers, and its container is never started. Remote jobs don't use
   this endpoint.
+- **`docker compose pull` updates the images, not `docker-compose.yml`.** Re-running the
+  installer replaces the file and keeps the old one as `docker-compose.yml.bak`. Since
+  November 2026 the file gives the orchestrator and runtime only the variables it lists,
+  not all of `.env`, and gives the orchestrator 40 seconds to stop. With an older file, any
+  `.env` change still recreates both, and a remote job gets 10 seconds when they stop, not 30.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 - **Running jobs carry on.** See [Jobs during a restart](#jobs-during-a-restart).

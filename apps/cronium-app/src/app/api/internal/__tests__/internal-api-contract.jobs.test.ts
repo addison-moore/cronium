@@ -1092,3 +1092,75 @@ describe("PUT /api/internal/jobs/[jobId]/status", () => {
     await expectContract(res, fx.responses.serverError!);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The route check across an ENCRYPTION_KEY change
+// ---------------------------------------------------------------------------
+
+describe("PUT /api/internal/jobs/[jobId]/status with a token from before a key change", () => {
+  const fx = loadFixture("jobs-status");
+  const url = `/api/internal/jobs/${JOB_ID}/status`;
+  const body = { status: "running", timestamp: T0 };
+  const NEW_KEY = "c".repeat(64);
+
+  const report = (token: string) =>
+    statusPUT(
+      req(url, "PUT", body, {
+        "x-job-capability": token,
+        "x-orchestrator-id": ORCH_ID,
+      }),
+      jobParams,
+    );
+
+  function restartWith(active: string, retired?: string): void {
+    process.env.ENCRYPTION_KEY = active;
+    if (retired === undefined) delete process.env.ENCRYPTION_KEYS_RETIRED;
+    else process.env.ENCRYPTION_KEYS_RETIRED = retired;
+    __resetJobCapabilityKeyForTests();
+  }
+
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockJobService.getJob!.mockResolvedValue(claimedJob());
+    mockJobService.updateJobStatus!.mockResolvedValue({
+      ...claimedJob(),
+      status: "running",
+      startedAt: new Date(T0),
+    });
+  });
+  afterEach(() => {
+    warn.mockRestore();
+    restartWith(ENC_KEY);
+  });
+
+  it("is accepted while the old key is retired", async () => {
+    const token = capToken();
+    restartWith(NEW_KEY, JSON.stringify([ENC_KEY]));
+
+    await expectContract(await report(token), fx.responses.success!);
+    expect(mockJobService.updateJobStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("gets the uniform 403 once the old key has left the list", async () => {
+    const token = capToken();
+    restartWith(NEW_KEY);
+
+    await expectContract(await report(token), fx.responses.forbidden!);
+    expect(mockJobService.updateJobStatus).not.toHaveBeenCalled();
+  });
+
+  it("gets a 403, not a 500, when the list can't be read", async () => {
+    const token = capToken();
+    restartWith(NEW_KEY, "not json");
+
+    await expectContract(await report(token), fx.responses.forbidden!);
+    expect(mockJobService.updateJobStatus).not.toHaveBeenCalled();
+  });
+
+  it("leaves tokens under the active key working when the list can't be read", async () => {
+    restartWith(NEW_KEY, "not json");
+
+    await expectContract(await report(capToken()), fx.responses.success!);
+  });
+});

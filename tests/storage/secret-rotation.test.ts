@@ -793,13 +793,16 @@ describe("env var copies in jobs that haven't finished", () => {
       });
       const report = await run!;
 
-      // Neither moved nor failed, and none of that job's values were written.
+      // Neither moved nor failed, and none of that job's values were written. They can
+      // still be under the old key, so a run has to say there's more to do.
       expect(surface(report, JOBS)).toMatchObject({
         scanned: 2,
         reencrypted: 0,
-        skipped: 2,
+        skipped: 0,
+        changedDuringRun: 2,
         errors: 0,
       });
+      expect(report.remaining).toBe(2);
       expect(environmentOf(await storedJob(id)).TOKEN).toBe(newer);
 
       const again = await rotateAllSecrets();
@@ -925,13 +928,13 @@ describe("what an operator sees from the CLI", () => {
     expect(code).toBe(0);
     expect(output).toContain("Secret rotation (dry run) starting");
     expect(output).toContain(
-      "jobs.payload.environment: scanned=2 re-encrypted=1 skipped=0 legacy=1 errors=0",
+      "jobs.payload.environment: scanned=2 re-encrypted=1 skipped=0 legacy=1 changed-during-run=0 errors=0",
     );
     expect(output).toContain(
-      "system_settings.value: scanned=1 re-encrypted=0 skipped=0 legacy=1 errors=0",
+      "system_settings.value: scanned=1 re-encrypted=0 skipped=0 legacy=1 changed-during-run=0 errors=0",
     );
     expect(output).toContain(
-      "api_tokens.token: scanned=1 re-encrypted=0 skipped=0 legacy=1 errors=0",
+      "api_tokens.token: scanned=1 re-encrypted=0 skipped=0 legacy=1 changed-during-run=0 errors=0",
     );
     expect(output).toContain("Total to re-encrypt: 1; errors: 0");
 
@@ -951,7 +954,7 @@ describe("what an operator sees from the CLI", () => {
     expect(await storedJob(moved)).toEqual(before);
   });
 
-  it("keeps the save-it-again warning to the rows saving fixes", async () => {
+  it("keeps the orphan warning to the rows it's about, and points both at --encrypt-legacy", async () => {
     await seedSetting("smtpPassword", encryptionService.encrypt("smtp-canary"));
     await db.insert(envVars).values({
       eventId,
@@ -964,6 +967,10 @@ describe("what an operator sees from the CLI", () => {
 
     expect(output).toContain("WARNING: 1 legacy (pre-vault) secret value(s)");
     expect(output).toContain("WARNING: 1 sensitive setting(s)");
+    expect(output.match(/run this again with --encrypt-legacy/g)).toHaveLength(
+      2,
+    );
+    expect(output).not.toContain("admin settings");
   });
 
   it("cuts a long list short", async () => {

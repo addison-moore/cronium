@@ -8,8 +8,8 @@
  * docs/ENVIRONMENT_VARIABLES.md. See src/lib/security/secret-rotation.ts for the
  * safety model (idempotent, resumable).
  *
- * With --encrypt-legacy it instead encrypts webhook secrets, webhook headers and
- * user variables saved before encryption at rest. See
+ * With --encrypt-legacy it instead encrypts what's still stored the way it was before
+ * the vault: plaintext, and older ciphertext a key change would orphan. See
  * src/lib/security/legacy-secrets.ts.
  *
  * From a source checkout (in apps/cronium-app), or in the published image, which
@@ -22,9 +22,9 @@
  * Set them for this command only, never with export: Compose prefers the shell's value
  * over .env, so an exported key overrides what the runbook puts there.
  *
- * Exits 2 on a bad argument, and 1 if it couldn't run or a row failed. With
- * --encrypt-legacy, a real run also exits 1 if it leaves rows to do. Rotation doesn't:
- * what's left is in its report, and running it again finishes them.
+ * Exits 2 on a bad argument, and 1 if it couldn't run or a row failed. A real run also
+ * exits 1 if it leaves rows to do: with --encrypt-legacy any that still need it, and
+ * when rotating any that changed during the run, which running it again finishes.
  */
 import { driverError } from "@/lib/pg-errors";
 import { encryptLegacySecrets } from "@/lib/security/legacy-secrets";
@@ -42,11 +42,12 @@ async function rotate(dryRun: boolean): Promise<number> {
   const report = await rotateAllSecrets({ dryRun });
   for (const s of report.surfaces) {
     console.log(
-      `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} errors=${s.errors}`,
+      `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} changed-during-run=${s.changedDuringRun} errors=${s.errors}`,
     );
   }
+  const changed = report.totalChangedDuringRun;
   console.log(
-    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}; errors: ${report.totalErrors}`,
+    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}; errors: ${report.totalErrors}${changed > 0 ? `; changed during this run: ${changed}` : ""}`,
   );
   const withOwnAdvice = report.surfaces.filter(
     (s) => s.legacy > 0 && s.legacyAdvice,
@@ -57,12 +58,12 @@ async function rotate(dryRun: boolean): Promise<number> {
     withOwnAdvice.reduce((n, s) => n + s.legacy, 0);
   if (boundToKey > 0) {
     console.warn(
-      `\nWARNING: ${boundToKey} legacy (pre-vault) secret value(s) are still bound to the current ENCRYPTION_KEY and CANNOT be rotated by this driver. Rotating the key would ORPHAN them. Migrate them to vault envelopes first (they re-encrypt automatically when the owning record is next saved).`,
+      `\nWARNING: ${boundToKey} legacy (pre-vault) secret value(s) are still bound to the ENCRYPTION_KEY they were saved under and CANNOT be rotated by this driver. Rotating the key without moving them first would ORPHAN them. To move them into the vault, run this again with --encrypt-legacy.`,
     );
   }
   if (report.plaintextLegacy > 0) {
     console.warn(
-      `\nWARNING: ${report.plaintextLegacy} webhook or user-variable value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
+      `\nWARNING: ${report.plaintextLegacy} value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
     );
   }
   for (const s of withOwnAdvice) {
@@ -75,17 +76,22 @@ async function rotate(dryRun: boolean): Promise<number> {
       console.warn(`  …and ${names.length - MAX_LEGACY_NAMES} more`);
     }
   }
-  if (!dryRun && report.totalErrors === 0) {
+  if (changed > 0) {
+    console.warn(
+      `\n${changed} value(s) changed during this run and were left as they were saved. Run this again to finish them before removing the retired key.`,
+    );
+  }
+  if (!dryRun && report.totalErrors === 0 && changed === 0) {
     console.log(
       'Rotation pass complete. Re-run to confirm 0 re-encrypted, then follow the rest of "Key rotation" in docs/ENVIRONMENT_VARIABLES.md before removing the retired key.',
     );
   }
-  return report.totalErrors > 0 ? 1 : 0;
+  return report.totalErrors > 0 || changed > 0 ? 1 : 0;
 }
 
 async function encryptLegacy(dryRun: boolean): Promise<number> {
   console.log(
-    `Encrypting legacy plaintext values${dryRun ? " (dry run)" : ""}…`,
+    `Encrypting values from before the vault${dryRun ? " (dry run)" : ""}…`,
   );
 
   const report = await encryptLegacySecrets({ dryRun });
@@ -97,6 +103,11 @@ async function encryptLegacy(dryRun: boolean): Promise<number> {
   for (const f of report.failures) {
     console.error(
       `  FAILED, left unchanged: ${f.surface} id=${f.id} column=${f.column}: ${f.reason}`,
+    );
+  }
+  for (const v of report.readsAsCiphertext) {
+    console.warn(
+      `  NOTE: ${v.surface} id=${v.id} column=${v.column} reads as old ciphertext, not the value that was saved. This run doesn't change that. Set the value again to fix it.`,
     );
   }
   console.log(`Legacy rows remaining: ${report.remaining}`);
