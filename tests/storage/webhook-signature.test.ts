@@ -109,15 +109,17 @@ async function startReceiver(
   answer: (request: ReceivedRequest) => number | Promise<number> = () => 200,
 ) {
   const received: ReceivedRequest[] = [];
+  const statuses: number[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
       const request = { headers: req.headers, body: Buffer.concat(chunks) };
       received.push(request);
-      void Promise.resolve(answer(request)).then((status) =>
-        res.writeHead(status).end("from the receiver"),
-      );
+      void Promise.resolve(answer(request)).then((status) => {
+        statuses.push(status);
+        res.writeHead(status).end("from the receiver");
+      });
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -128,7 +130,7 @@ async function startReceiver(
       server.closeAllConnections();
     });
   });
-  return { url: `http://127.0.0.1:${port}/hook`, received };
+  return { url: `http://127.0.0.1:${port}/hook`, received, statuses };
 }
 
 /** Answers with each of `statuses` in turn, then 200s. */
@@ -265,6 +267,22 @@ describe("what existing receivers rely on", () => {
     expect(header(request, "content-type")).toBe("application/json");
   });
 
+  it("can't be handed the new signature as if it were X-Webhook-Signature", async () => {
+    const receiver = await startReceiver();
+    await recordedDelivery(receiver);
+    const request = receiver.received[0]!;
+
+    // The signed string sent as a body, with the new signature's digest in the old
+    // header. Under SHA-256 this would pass an existing receiver's check.
+    const signedString = `${header(request, "x-delivery-timestamp")}\n${header(
+      request,
+      "x-delivery-id",
+    )}\n${request.body.toString()}`;
+    expect(
+      header(request, "x-webhook-signature-v2").replace("sha512=", "sha256="),
+    ).not.toBe(sha256Of(signedString, SECRET));
+  });
+
   it("adds exactly two headers to them", async () => {
     const receiver = await startReceiver();
     await recordedDelivery(receiver);
@@ -300,7 +318,7 @@ describe("X-Webhook-Signature-V2", () => {
 
     expect(header(request, "x-webhook-signature-v2")).toBe(
       `sha512=${createHmac("sha512", SECRET)
-        .update(`${timestamp}.${header(request, "x-delivery-id")}.`)
+        .update(`${timestamp}\n${header(request, "x-delivery-id")}\n`)
         .update(request.body)
         .digest("hex")}`,
     );
@@ -337,6 +355,60 @@ describe("X-Webhook-Signature-V2", () => {
     expect(verifyDelivery(headers, body, "another-secret")).toBe(false);
   });
 
+  describe("a captured delivery, relabelled", () => {
+    /** The receiver from the docs, and one delivery it accepted. */
+    async function capturedDelivery() {
+      const receiver = await startReceiver((request) =>
+        verifyDelivery(request.headers, request.body, SECRET) ? 200 : 401,
+      );
+      await recordedDelivery(receiver, { note: "has.a.few.dots" });
+      expect(receiver.statuses).toEqual([200]);
+      const captured = receiver.received[0]!;
+      return { receiver, captured, text: captured.body.toString() };
+    }
+
+    const dotsIn = (text: string) =>
+      [...text.matchAll(/\./g)].map((match) => match.index);
+
+    it("is refused with the start of its body moved into the id, at every dot", async () => {
+      const { receiver, captured, text } = await capturedDelivery();
+      const id = header(captured, "x-delivery-id");
+      expect(dotsIn(text).length).toBeGreaterThan(0);
+
+      for (const dot of dotsIn(text)) {
+        const replay = await fetch(receiver.url, {
+          method: "POST",
+          headers: {
+            ...senderHeaders(captured),
+            "x-delivery-id": `${id}.${text.slice(0, dot)}`,
+          },
+          body: text.slice(dot + 1),
+        });
+        expect(replay.status).toBe(401);
+      }
+    });
+
+    it("is refused with its time split at the time's own dot", async () => {
+      const { receiver, captured, text } = await capturedDelivery();
+      const [whole, fraction] = header(captured, "x-delivery-timestamp").split(
+        ".",
+      ) as [string, string];
+      const id = header(captured, "x-delivery-id");
+
+      const replay = await fetch(receiver.url, {
+        method: "POST",
+        headers: {
+          ...senderHeaders(captured),
+          "x-delivery-timestamp": whole,
+          "x-delivery-id": fraction,
+        },
+        body: `${id}.${text}`,
+      });
+
+      expect(replay.status).toBe(401);
+    });
+  });
+
   it("stops being accepted once the attempt leaves the window, either way", async () => {
     const receiver = await startReceiver();
     await recordedDelivery(receiver);
@@ -361,8 +433,7 @@ describe("X-Webhook-Signature-V2", () => {
     const { delivery } = await recordedDelivery(receiver);
     const request = receiver.received[0]!;
 
-    // The scrub in migration 0015 keeps these names and no others, and the row's
-    // `attempted_at` already has the time.
+    // The scrub in migration 0015 keeps these names and no others.
     expect(Object.keys(delivery.headers as object).sort()).toEqual([
       "Content-Type",
       "X-Delivery-Id",

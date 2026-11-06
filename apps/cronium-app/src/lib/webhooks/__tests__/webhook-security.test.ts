@@ -224,7 +224,7 @@ describe("WebhookSecurity.generateDeliverySignature", () => {
   it("is an HMAC-SHA512 of the attempt's time and id and the body", () => {
     const expected = crypto
       .createHmac("sha512", SECRET)
-      .update(`${timestamp}.delivery-1.{"a":1}`)
+      .update(`${timestamp}\ndelivery-1\n{"a":1}`)
       .digest("hex");
     expect(signature).toBe(`sha512=${expected}`);
   });
@@ -237,6 +237,14 @@ describe("WebhookSecurity.generateDeliverySignature", () => {
   ])("changes with the %s", (_what, time, id, body, secret) => {
     expect(sec.generateDeliverySignature(time, id, body, secret)).not.toBe(
       signature,
+    );
+  });
+
+  it("doesn't let bytes move between the id and the body", () => {
+    expect(
+      sec.generateDeliverySignature(timestamp, "id.start", "rest", SECRET),
+    ).not.toBe(
+      sec.generateDeliverySignature(timestamp, "id", "start.rest", SECRET),
     );
   });
 

@@ -370,7 +370,9 @@ export class WebhookManager {
       // What the delivery record keeps. `headers` was decrypted just to make this
       // request (HI-09), and they are usually credentials, so only their names
       // survive; webhook_deliveries is not encrypted and is returned by the
-      // history API. The signatures stay out too, and `attempted_at` has the time.
+      // history API. The signatures and the attempt's time stay out too. That time
+      // is close to `attempted_at` less `duration`: the column is set when the attempt
+      // ends, up to 30 seconds after it starts.
       const recordedHeaders = {
         ...systemHeaders,
         ...Object.fromEntries(
