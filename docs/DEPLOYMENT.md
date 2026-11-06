@@ -151,6 +151,10 @@ jobs with `SSH_ISOLATION_REQUIRED`.
   to run without an explicit `ADMIN_PASSWORD`.
 - **Email**: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and
   `SMTP_FROM_EMAIL` to `.env` to enable outbound email.
+- **Google Sheets**: add `OAUTH_GOOGLE_CLIENT_ID` and
+  `OAUTH_GOOGLE_CLIENT_SECRET` to `.env`, and register
+  `{AUTH_URL}/api/oauth/callback` as the redirect URI with Google. See
+  [OAuth Tool Integrations](./ENVIRONMENT_VARIABLES.md#oauth-tool-integrations-optional).
 
 ## Building From Source
 

@@ -166,7 +166,16 @@ Analytics render only in production builds, so `pnpm dev` never sends events.
 
 OAuth apps used by tool integrations (currently Google Sheets). Register the
 redirect URI `{AUTH_URL}/api/oauth/callback` with the provider. Users then
-click "Connect" on the tool's credential card to authorize their account.
+click "Connect" on the tool's credential card to authorize their account, and
+the Tools page says how it went when the provider sends them back.
+
+Set these for the app and the worker, which runs tool actions and refreshes
+their tokens. Both Compose files pass them on from `.env`.
+
+Open Cronium at the address in `AUTH_URL` to connect an account. The flow is
+tied to the browser by a cookie on the address it starts from, and the provider
+always comes back to `AUTH_URL`, so starting anywhere else ends in "OAuth
+session could not be verified for this browser".
 
 | Variable                        | Description                                    | Type     | Default | Required |
 | ------------------------------- | ---------------------------------------------- | -------- | ------- | -------- |

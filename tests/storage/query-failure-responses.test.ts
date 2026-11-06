@@ -508,17 +508,13 @@ describe("the OAuth callback's redirect, which puts the text in a URL", () => {
     const url = new URL("http://localhost:5001/api/oauth/callback");
     url.searchParams.set("code", "the-code");
     url.searchParams.set("state", STATE);
-    // The route's schema refuses the null searchParams.get gives for an absent one,
-    // and sends the request to its outer catch, so these go in empty to get past it.
-    url.searchParams.set("error", "");
-    url.searchParams.set("error_description", "");
     const response = await oauthCallback(
       new NextRequest(url, {
         headers: { cookie: `cronium-oauth-nonce=${nonce}` },
       }),
     );
     const location = response.headers.get("location")!;
-    return { location, params: new URL(location).searchParams };
+    return { location, params: new URL(location, url).searchParams };
   }
 
   it("leaves the query out when claiming the state fails", async () => {
