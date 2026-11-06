@@ -815,8 +815,8 @@ describe("update", () => {
         message:
           "This event can't be saved while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
       });
+      // Since PR 29 this one call writes the fields, variables and servers.
       expect(storageMock.updateScript).not.toHaveBeenCalled();
-      expect(storageMock.setEventServers).not.toHaveBeenCalled();
     });
 
     it("names all of them when there are several", async () => {
