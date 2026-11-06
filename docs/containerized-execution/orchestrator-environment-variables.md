@@ -22,6 +22,11 @@ The mapping follows this pattern:
 - Struct path converted to uppercase with underscores
 - Example: `api.endpoint` → `CRONIUM_API_ENDPOINT`
 
+`docker-compose.example.yml` passes the orchestrator only the variables it lists, so one
+set in `.env` has to be listed there too. Common tuning settings already are. To use
+another, add its name with no value under the service's `environment`, and Compose
+passes it along from `.env`.
+
 ### Complete List of CRONIUM\_ Environment Variables
 
 #### Orchestrator Configuration

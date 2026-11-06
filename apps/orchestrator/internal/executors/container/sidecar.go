@@ -86,12 +86,11 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 			network.MustParsePort("8081/tcp"): struct{}{},
 		},
 		User: "1000:1000",
-		Labels: map[string]string{
-			"cronium.type":    "sidecar",
-			"cronium.job.id":  job.ID,
-			"cronium.service": "runtime-api",
-			"cronium.managed": "true",
-		},
+		Labels: func() map[string]string {
+			labels := sm.executor.managedLabels(job.ID, containerTypeSidecar)
+			labels["cronium.service"] = "runtime-api"
+			return labels
+		}(),
 		AttachStdout: true,
 		AttachStderr: true,
 	}
@@ -142,7 +141,7 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		Config:           containerConfig,
 		HostConfig:       hostConfig,
 		NetworkingConfig: networkConfig,
-		Name:             fmt.Sprintf("cronium-runtime-%s", job.ID),
+		Name:             sidecarContainerName(job.ID),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create runtime sidecar: %w", err)
@@ -374,17 +373,24 @@ func jobNetworkName(jobID string) string {
 	return fmt.Sprintf("cronium-job-%s", jobID)
 }
 
+// jobContainerName is the name of the container running a job's script.
+func jobContainerName(jobID string) string {
+	return fmt.Sprintf("cronium-job-%s", jobID)
+}
+
+// sidecarContainerName is the name of a job's runtime sidecar.
+func sidecarContainerName(jobID string) string {
+	return fmt.Sprintf("cronium-runtime-%s", jobID)
+}
+
 // CreateJobNetwork creates an isolated network for a job
 func (sm *SidecarManager) CreateJobNetwork(ctx context.Context, jobID string) (string, error) {
 	networkName := jobNetworkName(jobID)
 
 	// Create network with specific configuration
 	resp, err := sm.executor.dockerClient.NetworkCreate(ctx, networkName, client.NetworkCreateOptions{
-		Driver: "bridge",
-		Labels: map[string]string{
-			"cronium.job.id":  jobID,
-			"cronium.managed": "true",
-		},
+		Driver:   "bridge",
+		Labels:   sm.executor.managedLabels(jobID, ""),
 		Internal: sm.executor.config.Runtime.IsolateNetwork, // No external access if configured
 		Options: map[string]string{
 			"com.docker.network.bridge.enable_icc": "true", // Enable inter-container communication

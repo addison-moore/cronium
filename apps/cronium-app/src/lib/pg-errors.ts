@@ -159,3 +159,17 @@ export function failureWithStack(error: unknown): string {
     .filter(Boolean)
     .join("\n");
 }
+
+/**
+ * Why a job failed, for the log its owner reads. A connection lost under a query says
+ * so in the driver's words, which hold nothing of the query. Postgres's own can quote
+ * a value, and a wrapper with nothing under it is all query, so those get the fixed
+ * message.
+ */
+export function messageForJobLog(error: unknown): string {
+  const { message, severity } = driverError(error);
+  const nothingSafeToSay =
+    severity !== undefined || !message || message.includes(DRIZZLE_MESSAGE);
+  if (isQueryFailure(error) && nothingSafeToSay) return QUERY_FAILED_MESSAGE;
+  return message ?? String(error);
+}

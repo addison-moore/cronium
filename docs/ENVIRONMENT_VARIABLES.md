@@ -271,6 +271,16 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `JWT_SECRET`               | JWT secret for container auth                                                                  | `string` (32 chars) | -                                       | Yes      |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential (app verifies it on claim, heartbeat, health/metrics) | `string`            | -                                       | Yes      |
 
+Keep `ORCHESTRATOR_ID` the same across restarts, because job leases and containers belong
+to it. Jobs running when it changes are failed or re-queued when their leases run out, and
+their containers stay until removed by hand.
+
+`docker-compose.example.yml` gives the orchestrator and `cronium-runtime` only the
+variables it lists, not all of `.env`, so changing something only the app reads doesn't
+recreate them. The orchestrator's common tuning settings are listed there by name and
+are read from `.env` as usual. To set one that isn't listed, add its name to that
+service's `environment` the same way.
+
 #### Timeout Configuration
 
 | Variable                        | Description                         | Type     | Default | Required |
@@ -609,11 +619,6 @@ docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 #    no longer trusts the old key, so check it's gone: this should print nothing.
 docker compose up -d --no-deps cronium-app cronium-worker
 docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
-
-# 7. With docker-compose.example.yml the orchestrator and runtime also load .env, and
-#    until they restart their environment still holds the old key, though neither uses
-#    it. When no script is running, recreate them. This leaves the app and worker alone.
-docker compose up -d
 ```
 
 Keep the old key for as long as you keep a backup taken before the rotation. Those
@@ -686,11 +691,11 @@ those values may still be under the old key, so don't take it as the last one.
   has retries, it runs again from the start, even if its script had already finished.
   A script started after step 3 has a token signed with the new key, and step 6 doesn't
   affect it.
-- **Step 7, or a plain `docker compose up -d` in place of steps 3 and 6, recreates the
-  orchestrator** with `docker-compose.example.yml`, because all four services load
-  `.env`. A script running then ends the same way and leaves its containers behind, and
-  the app is down for about 17 seconds if it's recreated too, because Compose waits for
-  the orchestrator to stop first.
+- **The orchestrator and runtime aren't restarted.** They don't read either key, so a
+  plain `docker compose up -d` in steps 3 and 6 recreates the same two services. An older
+  `docker-compose.yml`, with `env_file` under `cronium-orchestrator`, still gives them all
+  of `.env`. There a plain `up -d` recreates all four, and the commands above leave the
+  old key in those two services' environment, where nothing uses it.
 - **A job still queued when the old key goes keeps working.** The driver moves the env
   var copies of every job that hasn't finished. If step 5 is skipped, a job holding a
   copy it would have reported fails with `Could not prepare this job to run` when the
@@ -764,17 +769,15 @@ docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
 #    copy of the database can read them. This removes them, and touches only finished jobs.
 docker compose exec postgres psql -U cronium -d cronium -c \
   "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
-
-# 7. As step 7 above: when no script is running, recreate the orchestrator and runtime,
-#    whose environment can still hold the old key.
-docker compose up -d
 ```
 
 This costs more downtime and some running work:
 
-- **The app answers nothing from step 3 until step 5 finishes.** That's roughly 15 ms a
-  row on top of the restart: 20,000 variables took 4 to 6 minutes in tests, and an install
-  with a few hundred secrets takes seconds.
+- **The app answers nothing from step 3 until step 5 finishes.** That's the driver's time
+  on top of the restart. On a Mac, with the published compose file and the real image, it
+  was about 7 seconds with a few hundred secrets and 12 with 20,000 variables, 6 of them
+  the driver's. On a heavily loaded machine the driver alone took 5.5 minutes for those
+  rows.
 - **A script running at step 3 loses its result,** the same way as one running at step 6
   of the usual steps.
 - **A job still queued at step 3 runs normally once the services are back,** because the
@@ -784,6 +787,11 @@ This costs more downtime and some running work:
 Rotating doesn't undo the leak. Anyone with the old key can still read a backup taken
 before the rotation, and could use forged tokens until step 3, so replace the passwords,
 SSH keys and API credentials your secrets hold too.
+
+An older `docker-compose.yml`, with `env_file` under `cronium-orchestrator`, leaves the old
+key in the environment of the orchestrator and runtime, though neither uses it. To clear
+it, finish with a plain `docker compose up -d`, which recreates only those two. Running
+container jobs carry on through that.
 
 ## Encrypting values saved before encryption at rest
 

@@ -191,6 +191,10 @@ services:
       dockerfile: apps/orchestrator/Dockerfile
     image: ghcr.io/addison-moore/cronium-orchestrator:${BUILD_VERSION:-latest}
     container_name: cronium-orchestrator
+    # It exits at once when only container jobs are running: they carry on, and the
+    # next orchestrator process picks them up. This is for what can't be left running
+    # (remote jobs, and jobs still starting), which get up to 30s, plus 5s to clean up.
+    stop_grace_period: 40s
     environment:
       CRONIUM_API_ENDPOINT: http://cronium-app:3000
       CRONIUM_API_TOKEN: ${CRONIUM_ORCHESTRATOR_KEY:?generate with openssl rand -base64 32}

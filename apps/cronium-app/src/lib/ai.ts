@@ -14,6 +14,7 @@ import {
   type AiModelOption,
   type AiProviderId,
 } from "@/shared/ai-providers";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Reasoning models (GPT-5.x etc.) spend completion tokens on reasoning before
 // emitting text, so leave generous headroom beyond the expected script length.
@@ -417,7 +418,7 @@ export async function generateScriptCode(
   } catch (error: unknown) {
     console.error(
       `Error generating code with ${config.provider} (${config.model}):`,
-      error,
+      failureWithStack(error),
     );
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to generate code: ${message}`);
@@ -557,7 +558,10 @@ export async function listAvailableModels(
         return { models, source: "provider", error: undefined };
       }
     } catch (error) {
-      console.error(`Failed to list models from ${provider}:`, error);
+      console.error(
+        `Failed to list models from ${provider}:`,
+        failureWithStack(error),
+      );
       const message = error instanceof Error ? error.message : String(error);
       fetchError = message.slice(0, 300);
     }

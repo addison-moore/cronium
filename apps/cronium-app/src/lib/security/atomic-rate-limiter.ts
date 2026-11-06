@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { describeFailure } from "@/lib/pg-errors";
 
 /**
  * Atomic, fail-closed rate limiter for authentication and other high-risk
@@ -51,7 +52,7 @@ function newClient(url: string): RedisClient {
   client.on("error", (error) => {
     console.error(
       "Atomic rate limiter Valkey connection error:",
-      error.message || String(error),
+      describeFailure(error),
     );
   });
   return client;
@@ -137,7 +138,7 @@ export async function consumeAtomicRateLimit(
     // Fail CLOSED: a missing limiter must not open the auth endpoint.
     console.error(
       "Atomic rate limiter unavailable — denying request (fail closed):",
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
     return {
       allowed: false,

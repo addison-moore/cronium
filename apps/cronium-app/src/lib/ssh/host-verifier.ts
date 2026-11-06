@@ -14,6 +14,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Host key policies. "accept-new" mirrors OpenSSH's
 // StrictHostKeyChecking=accept-new: unknown hosts are recorded on first
@@ -209,7 +210,7 @@ export function createHostVerifier(ctx: HostVerifierContext): Ssh2HostVerifier {
             // key was unknown, not mismatched) but surface the problem.
             console.error(
               `Failed to persist SSH host key for ${label}:`,
-              persistError,
+              failureWithStack(persistError),
             );
           }
         }
@@ -217,7 +218,10 @@ export function createHostVerifier(ctx: HostVerifierContext): Ssh2HostVerifier {
         verify(true);
       } catch (error) {
         // Fail closed: any unexpected error means we could not verify the host.
-        console.error(`SSH host key verification error for ${label}:`, error);
+        console.error(
+          `SSH host key verification error for ${label}:`,
+          failureWithStack(error),
+        );
         verify(false);
       }
     })();

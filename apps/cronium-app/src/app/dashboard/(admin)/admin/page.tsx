@@ -15,7 +15,7 @@ import {
   RolesManagement,
 } from "@/components/admin";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
+import { QUERY_OPTIONS, trpcErrorMessage } from "@/trpc/shared";
 import { toast } from "@cronium/ui";
 
 interface SystemSettings {
@@ -117,6 +117,16 @@ export default function AdminPage() {
         });
         void refetchSettings();
       },
+      onError: (error) => {
+        toast({
+          title: "Settings not saved",
+          description: trpcErrorMessage(
+            error,
+            "Failed to save the system settings",
+          ),
+          variant: "destructive",
+        });
+      },
     });
 
   const sendTestEmailMutation = trpc.admin.sendTestEmail.useMutation({
@@ -162,6 +172,13 @@ export default function AdminPage() {
       });
       void refetchUsers();
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: trpcErrorMessage(error, "Failed to update user"),
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleUserStatusMutation = trpc.admin.toggleUserStatus.useMutation({
@@ -176,19 +193,11 @@ export default function AdminPage() {
 
   const bulkUserOperationMutation = trpc.admin.bulkUserOperation.useMutation({
     onSuccess: (data) => {
-      const successCount = data.results.filter((r) => r.success).length;
-      const failureCount = data.results.filter((r) => !r.success).length;
-
-      if (failureCount === 0) {
+      // A user it refused is reported by removeUser, which has the reason.
+      if (data.results.every((r) => r.success)) {
         toast({
           title: "Success",
-          description: `Operation completed successfully on ${successCount} users`,
-        });
-      } else {
-        toast({
-          title: "Partial Success",
-          description: `${successCount} successful, ${failureCount} failed`,
-          variant: "destructive",
+          description: `Operation completed successfully on ${data.results.length} users`,
         });
       }
       void refetchUsers();
@@ -274,26 +283,33 @@ export default function AdminPage() {
     });
   }
 
+  // UsersManagement awaits these and says what happened, so they have to wait
+  // for the server and reject when it refuses. `mutate` does neither.
   async function handleInviteUser(data: {
     email: string;
     role: UserRole;
   }): Promise<void> {
-    inviteUserMutation.mutate(data);
+    await inviteUserMutation.mutateAsync(data);
   }
 
-  async function handleDeleteUser(userId: string): Promise<void> {
-    // Using bulk operation for delete
-    bulkUserOperationMutation.mutate({
+  // The bulk operation answers 200 for a user it refused, with the reason in
+  // `results`. One call per click, so its callbacks can't multiply.
+  async function removeUser(userId: string): Promise<void> {
+    const { results } = await bulkUserOperationMutation.mutateAsync({
       userIds: [userId],
       operation: "delete",
     });
+    const refused = results.find((result) => !result.success);
+    if (refused) {
+      throw new Error(refused.error ?? "The server refused this operation");
+    }
   }
 
   async function handleUpdateUserStatus(
     userId: string,
     status: UserStatus,
   ): Promise<void> {
-    toggleUserStatusMutation.mutate({ id: userId, status });
+    await toggleUserStatusMutation.mutateAsync({ id: userId, status });
   }
 
   async function handleUpdateUserRole(
@@ -308,13 +324,9 @@ export default function AdminPage() {
   }
 
   async function handleApproveUser(userId: string): Promise<void> {
-    toggleUserStatusMutation.mutate({ id: userId, status: UserStatus.ACTIVE });
-  }
-
-  async function handleDenyUser(userId: string): Promise<void> {
-    bulkUserOperationMutation.mutate({
-      userIds: [userId],
-      operation: "delete",
+    await toggleUserStatusMutation.mutateAsync({
+      id: userId,
+      status: UserStatus.ACTIVE,
     });
   }
 
@@ -389,12 +401,12 @@ export default function AdminPage() {
               await refetchUsers();
             }}
             onInviteUser={handleInviteUser}
-            onDeleteUser={handleDeleteUser}
+            onDeleteUser={removeUser}
             onUpdateUserStatus={handleUpdateUserStatus}
             onUpdateUserRole={handleUpdateUserRole}
             onResendInvitation={handleResendInvitation}
             onApproveUser={handleApproveUser}
-            onDenyUser={handleDenyUser}
+            onDenyUser={removeUser}
           />
         </TabsContent>
 

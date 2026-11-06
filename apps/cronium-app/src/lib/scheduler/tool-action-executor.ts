@@ -26,6 +26,13 @@ import {
 } from "@/lib/tools/server-action-executor";
 import { ToolActionError, isFailureResult } from "@/lib/tools/action-result";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  failureWithStack,
+  isQueryFailure,
+  stackFrames,
+} from "@/lib/pg-errors";
 
 export interface ToolActionConfig {
   toolType: string;
@@ -209,10 +216,19 @@ export async function executeToolAction(
         }
         console.log(`[ToolAction] Credentials decrypted successfully`);
       } catch (err) {
-        console.error(`[ToolAction] Failed to decrypt credentials:`, err);
-        throw new Error(
-          `Failed to decrypt tool credentials: ${err instanceof Error ? err.message : "Unknown error"}`,
+        console.error(
+          `[ToolAction] Failed to decrypt credentials:`,
+          failureWithStack(err),
         );
+        // JSON.parse's message quotes what it couldn't parse, and here that's the
+        // stored credential or the decrypted one.
+        const reason =
+          err instanceof Error
+            ? err.name === "SyntaxError"
+              ? "they aren't valid JSON"
+              : err.message
+            : "Unknown error";
+        throw new Error(`Failed to decrypt tool credentials: ${reason}`);
       }
     } else {
       // Tool has unencrypted credentials
@@ -225,7 +241,7 @@ export async function executeToolAction(
         } catch (err) {
           console.error(
             `[ToolAction] Failed to parse unencrypted credentials:`,
-            err,
+            failureWithStack(err),
           );
           throw new Error(`Invalid credential format`);
         }
@@ -504,7 +520,7 @@ export async function executeToolAction(
       });
     } catch (logError) {
       console.warn(
-        `Failed to log tool action execution: ${logError instanceof Error ? logError.message : "Unknown error"}`,
+        `Failed to log tool action execution: ${describeFailure(logError)}`,
       );
     }
 
@@ -517,16 +533,20 @@ export async function executeToolAction(
       healthStatus,
     };
   } catch (error) {
-    const errorObj = error instanceof Error ? error : new Error(String(error));
+    // Everything below stores this or returns it, stack included, and redacting
+    // wouldn't catch a failed query's values. A database a SQL action connects to
+    // isn't this: that action reports its failure as text, which stays.
+    const errorObj = isQueryFailure(error)
+      ? new Error(QUERY_FAILED_MESSAGE)
+      : error instanceof Error
+        ? error
+        : new Error(String(error));
     const errorMessage = errorObj.message;
     // Provider errors can echo credentials (tokens, webhook URLs), so every
     // sink below gets redacted — free text via redactText, config via
     // redactSecrets like the rest of this file.
-    console.error(`[ToolAction] Execution failed:`, redactText(errorMessage));
-    console.error(
-      `[ToolAction] Error stack:`,
-      redactText(errorObj.stack ?? ""),
-    );
+    console.error(`[ToolAction] Execution failed:`, describeFailure(error));
+    console.error(`[ToolAction] Error stack:`, stackFrames(error));
     console.error(
       `[ToolAction] Config at failure:`,
       redactSecrets(toolActionConfig),
@@ -589,7 +609,7 @@ export async function executeToolAction(
       });
     } catch (logError) {
       console.warn(
-        `Failed to log tool action error: ${logError instanceof Error ? logError.message : "Unknown error"}`,
+        `Failed to log tool action error: ${describeFailure(logError)}`,
       );
     }
 

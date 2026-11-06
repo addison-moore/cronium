@@ -24,6 +24,7 @@ import {
 } from "@/lib/template-processor";
 import { executeHttpRequest } from "./http-executor";
 import type { Event } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface InProcessResult {
   stdout: string;
@@ -82,7 +83,7 @@ export async function executeHttpEvent(
   } catch (err) {
     console.warn(
       "[HttpEvent] Template context unavailable; using raw request values:",
-      err,
+      failureWithStack(err),
     );
   }
 

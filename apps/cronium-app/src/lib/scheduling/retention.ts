@@ -41,6 +41,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const TERMINAL_JOB_STATUSES: JobStatus[] = [
   JobStatus.COMPLETED,
@@ -449,9 +450,12 @@ export async function runRetention(
       }
     } catch (error) {
       failed.push(table);
-      // The whole error: Drizzle's message is only the failed SQL, and the reason
-      // is on its cause.
-      console.error(`[Retention] Failed to purge ${table}:`, error);
+      // Drizzle's message is only the failed SQL. The reason is on its cause, and
+      // that's what this prints.
+      console.error(
+        `[Retention] Failed to purge ${table}:`,
+        failureWithStack(error),
+      );
     }
   }
 

@@ -24,6 +24,7 @@ import {
   LeaseLossPolicy,
 } from "@/shared/schema";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import { type z } from "zod";
 import { createEventSchema } from "@/shared/schemas/events";
 
@@ -299,8 +300,7 @@ export function JsonImportModal({ isOpen, onClose }: JsonImportModalProps) {
       console.error("Error creating event from JSON:", error);
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "Failed to create event",
+        description: trpcErrorMessage(error, "Failed to create event"),
         variant: "destructive",
       });
     } finally {

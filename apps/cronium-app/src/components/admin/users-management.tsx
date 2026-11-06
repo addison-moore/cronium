@@ -26,6 +26,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { StandardizedTableLink } from "@cronium/ui";
 import { Pagination } from "@cronium/ui";
 import { usePersistentPagination } from "@/hooks/use-persistent-pagination";
+import { trpcErrorMessage } from "@/trpc/shared";
 import {
   Table,
   TableBody,
@@ -178,11 +179,9 @@ export function UsersManagement({
       inviteForm.reset();
       setIsInviteDialogOpen(false);
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send invitation";
       toast({
         title: "Error",
-        description: errorMessage,
+        description: trpcErrorMessage(error, "Failed to send invitation"),
         variant: "destructive",
       });
     } finally {
@@ -196,11 +195,9 @@ export function UsersManagement({
       setIsDeleteDialogOpen(false);
       setSelectedUserId(null);
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to delete user";
       toast({
         title: "Error",
-        description: errorMessage,
+        description: trpcErrorMessage(error, "Failed to delete user"),
         variant: "destructive",
       });
     }
@@ -231,11 +228,24 @@ export function UsersManagement({
         variant: "success",
       });
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to approve user";
       toast({
         title: "Error",
-        description: errorMessage,
+        description: trpcErrorMessage(error, "Failed to approve user"),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUpdateUserStatus = async (userId: string, status: UserStatus) => {
+    try {
+      await onUpdateUserStatus(userId, status);
+    } catch (error: unknown) {
+      toast({
+        title: "Error",
+        description: trpcErrorMessage(
+          error,
+          "Failed to update the user's status",
+        ),
         variant: "destructive",
       });
     }
@@ -250,11 +260,9 @@ export function UsersManagement({
         variant: "success",
       });
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to deny user";
       toast({
         title: "Error",
-        description: errorMessage,
+        description: trpcErrorMessage(error, "Failed to deny user"),
         variant: "destructive",
       });
     }
@@ -523,7 +531,10 @@ export function UsersManagement({
                         {user.status === UserStatus.ACTIVE ? (
                           <DropdownMenuItem
                             onClick={() =>
-                              onUpdateUserStatus(user.id, UserStatus.DISABLED)
+                              handleUpdateUserStatus(
+                                user.id,
+                                UserStatus.DISABLED,
+                              )
                             }
                             className="text-warning-text"
                           >
@@ -533,7 +544,7 @@ export function UsersManagement({
                         ) : user.status === UserStatus.DISABLED ? (
                           <DropdownMenuItem
                             onClick={() =>
-                              onUpdateUserStatus(user.id, UserStatus.ACTIVE)
+                              handleUpdateUserStatus(user.id, UserStatus.ACTIVE)
                             }
                             className="text-success"
                           >

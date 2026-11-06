@@ -6,6 +6,7 @@ import type {
   WorkflowWithRelations,
   WorkflowNodeWithEvent,
 } from "@/server/storage";
+import { describeFailure } from "@/lib/pg-errors";
 
 /**
  * Explicit secret-free projection of a user row for admin responses (security
@@ -89,7 +90,7 @@ function decryptedEnvVars(event: { id: number; envVars: EnvVar[] }): EnvVar[] {
       // could save back as the value. Usually means a retired key was removed.
       console.error(
         `Could not decrypt env var "${envVar.key}" of event ${event.id}:`,
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
       return { ...envVar, value: "" };
     }

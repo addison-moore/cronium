@@ -11,7 +11,7 @@
 
 import { storage, type EventWithRelations } from "@/server/storage";
 import { db } from "@/server/db";
-import { pgErrorCode } from "@/lib/pg-errors";
+import { describeFailure, pgErrorCode } from "@/lib/pg-errors";
 import {
   EventStatus,
   JobPriority,
@@ -77,7 +77,7 @@ function reportFailedWrite(what: string, eventId: number) {
   return (error: unknown): void => {
     console.error(
       `[Dispatch] Failed to ${what} for event ${eventId}:`,
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
   };
 }
@@ -118,7 +118,7 @@ async function checkMaxExecutions(
   } catch (error) {
     console.error(
       `[Dispatch] Failed to cancel schedule for auto-paused event ${event.id}:`,
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
   }
   return false;
@@ -264,7 +264,7 @@ export async function dispatchEventJob(
     } catch (error) {
       console.error(
         `[Dispatch] Failed to update execution bookkeeping for event ${event.id}:`,
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
     }
   }

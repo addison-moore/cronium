@@ -14,6 +14,7 @@
 import { db } from "@/server/db";
 import { jobTransitions, type JobTransition } from "@/shared/schema";
 import { asc, count, eq, isNull, lt, and } from "drizzle-orm";
+import { describeFailure } from "@/lib/pg-errors";
 
 export type TransitionHandler = (transition: JobTransition) => Promise<void>;
 
@@ -57,13 +58,13 @@ export async function consumeJobTransitions(
           // Leave unprocessed; retried on the next drain.
           console.error(
             `[Outbox] Handler failed for transition ${row.id} (job ${row.jobId}, → ${row.toStatus}); will retry:`,
-            error instanceof Error ? error.message : String(error),
+            describeFailure(error),
           );
           continue;
         }
         console.error(
           `[Outbox] Dropping poison transition ${row.id} (job ${row.jobId}, → ${row.toStatus}) after ${Math.round(ageMs / 60000)}min of failures:`,
-          error instanceof Error ? error.message : String(error),
+          describeFailure(error),
         );
       }
       await tx

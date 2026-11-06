@@ -1,6 +1,7 @@
 import { db } from "@server/db";
 import { roles, users } from "@shared/schema";
 import { isNull, sql } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Roles mirror the UserRole enum (matched case-insensitively by name).
 // Permissions here are only the insert-if-missing defaults — existing rows
@@ -85,7 +86,7 @@ async function seedRoles() {
 
     console.log("Role seeding completed successfully!");
   } catch (error) {
-    console.error("Error seeding roles:", error);
+    console.error("Error seeding roles:", failureWithStack(error));
     process.exit(1);
   }
 }

@@ -258,7 +258,13 @@ async function main() {
     await ensureSeedMarker();
     console.log("[SEED] Bootstrap seeding complete");
   } catch (err) {
-    console.error("[SEED] Bootstrap seeding failed", err);
+    // Not the error itself: pg's `detail` quotes the row it refused, which here is
+    // the admin's email and password hash.
+    console.error(
+      "[SEED] Bootstrap seeding failed:",
+      err.code ?? err.name,
+      err.message,
+    );
     process.exit(1);
   } finally {
     await pool.end();
