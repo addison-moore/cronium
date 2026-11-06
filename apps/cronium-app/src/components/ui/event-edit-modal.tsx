@@ -15,23 +15,13 @@ interface EventEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   eventId: number;
-  onEventUpdated?: () => void;
 }
 
 export function EventEditModal({
   isOpen,
   onClose,
   eventId,
-  onEventUpdated,
 }: EventEditModalProps) {
-  const handleEventUpdate = () => {
-    // Close modal and notify parent component
-    onClose();
-    if (onEventUpdated) {
-      onEventUpdated();
-    }
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -44,7 +34,7 @@ export function EventEditModal({
       {/* Inside the Modal so it mounts on each opening, which is what reads the event. */}
       <EventEditModalContent
         eventId={eventId}
-        onSaved={handleEventUpdate}
+        onSaved={onClose}
         onCancel={onClose}
       />
     </Modal>
