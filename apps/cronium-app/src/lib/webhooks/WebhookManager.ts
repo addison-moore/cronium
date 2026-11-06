@@ -15,6 +15,8 @@ import {
   ssrfHttpsAgent,
 } from "@/lib/ssrf-guard";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+import { describeFailure } from "@/lib/pg-errors";
+import { pgStorableText } from "@/lib/pg-text";
 import { webhookRetryConfigSchema } from "./retry-config-schema";
 
 // Cap the response body we buffer from a webhook target.
@@ -45,7 +47,10 @@ export interface WebhookPayload {
 export interface WebhookDeliveryResult {
   id: string;
   webhookId: number;
+  /** What the receiver did. Failing to record the attempt doesn't change it. */
   success: boolean;
+  /** Only there when the attempt's row couldn't be stored: no history shows it. */
+  recorded?: false;
   statusCode?: number;
   response?: string;
   error?: string;
@@ -353,6 +358,31 @@ export class WebhookManager {
   }
 
   /**
+   * Store an attempt and return its result, marked if the row wouldn't go in.
+   *
+   * The attempt is over by now, so a row that won't go in can't change what the
+   * receiver did. A 2xx stays a success and the queue doesn't send it again:
+   * that wouldn't get the row written, and the receiver would get an event it has
+   * already taken. No other row stands in for it, because a failed one would say
+   * the receiver didn't take it. The history has a gap, and the server log says
+   * what fell into it.
+   */
+  private async recordAttempt(
+    row: typeof webhookDeliveries.$inferInsert,
+    result: WebhookDeliveryResult,
+  ): Promise<WebhookDeliveryResult> {
+    try {
+      await db.insert(webhookDeliveries).values(row);
+      return result;
+    } catch (error) {
+      console.error(
+        `[Webhook] Delivery ${row.deliveryId} of event ${row.webhookEventId} to webhook ${row.webhookId} (${row.status}, status code ${row.statusCode ?? "none"}) wasn't recorded: ${describeFailure(error)}`,
+      );
+      return { ...result, recorded: false };
+    }
+  }
+
+  /**
    * Process webhook delivery (called by queue)
    */
   async processDelivery(
@@ -374,30 +404,35 @@ export class WebhookManager {
     } catch (guardError) {
       if (guardError instanceof SsrfBlockedError) {
         const duration = Date.now() - startTime;
-        await db.insert(webhookDeliveries).values({
+        const reason = pgStorableText(guardError.message);
+        const row = {
           webhookId,
           webhookEventId,
           deliveryId,
           status: "failed",
           statusCode: 0,
           response: null,
-          error: guardError.message,
+          error: reason,
           headers: {},
           duration,
           attemptedAt: new Date(),
-        });
-        return {
+        };
+        const result: WebhookDeliveryResult = {
           id: deliveryId,
           webhookId,
           success: false,
           statusCode: 0,
-          error: guardError.message,
+          error: reason,
           duration,
           retryCount: 0,
         };
+        return this.recordAttempt(row, result);
       }
       throw guardError;
     }
+
+    let row: typeof webhookDeliveries.$inferInsert;
+    let result: WebhookDeliveryResult;
 
     try {
       // Generate signature
@@ -458,14 +493,12 @@ export class WebhookManager {
         typeof response.data === "string"
           ? response.data
           : JSON.stringify(response.data);
-      const recordedResponse = responseText.substring(
-        0,
-        MAX_RECORDED_RESPONSE_CHARS,
+      const recordedResponse = pgStorableText(
+        responseText.substring(0, MAX_RECORDED_RESPONSE_CHARS),
       );
       const ok = response.status >= 200 && response.status < 300;
 
-      // Record delivery
-      await db.insert(webhookDeliveries).values({
+      row = {
         webhookId,
         webhookEventId,
         deliveryId,
@@ -475,9 +508,9 @@ export class WebhookManager {
         headers: recordedHeaders,
         duration,
         attemptedAt: new Date(),
-      });
+      };
 
-      return {
+      result = {
         id: deliveryId,
         webhookId,
         success: ok,
@@ -487,12 +520,14 @@ export class WebhookManager {
         retryCount: 0,
       };
     } catch (error) {
+      // The request couldn't be made or got no answer. Node quotes a header name
+      // it refuses, so this can hold anything the name does.
       const duration = Date.now() - startTime;
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = pgStorableText(
+        error instanceof Error ? error.message : "Unknown error",
+      );
 
-      // Record failed delivery
-      await db.insert(webhookDeliveries).values({
+      row = {
         webhookId,
         webhookEventId,
         deliveryId,
@@ -501,9 +536,9 @@ export class WebhookManager {
         headers: {},
         duration,
         attemptedAt: new Date(),
-      });
+      };
 
-      return {
+      result = {
         id: deliveryId,
         webhookId,
         success: false,
@@ -512,6 +547,9 @@ export class WebhookManager {
         retryCount: 0,
       };
     }
+
+    // Outside the try, whose catch means the request failed.
+    return this.recordAttempt(row, result);
   }
 
   /**

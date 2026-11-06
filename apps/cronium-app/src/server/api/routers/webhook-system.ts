@@ -446,14 +446,18 @@ export const webhookSystemRouter = createTRPCRouter({
           // Not mutationResponse, whose `success` is always true. A receiver
           // refusing the test isn't an error in this request, but it isn't a
           // success either, and the attempt's details are worth keeping.
+          const outcome = attempt.success
+            ? "Test webhook delivered"
+            : `Test webhook failed: ${
+                attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+              }`;
           return {
             success: attempt.success,
             data: attempt,
-            message: attempt.success
-              ? "Test webhook delivered"
-              : `Test webhook failed: ${
-                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
-                }`,
+            message:
+              attempt.recorded === false
+                ? `${outcome}. It couldn't be recorded, so it won't show in the webhook's history.`
+                : outcome,
           };
         },
         {

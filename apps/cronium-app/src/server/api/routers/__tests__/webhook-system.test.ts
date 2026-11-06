@@ -730,6 +730,36 @@ describe("webhookSystem.test", () => {
     });
   });
 
+  it("says so when a delivered test couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await testOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Test webhook delivered. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a refused test couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: false,
+      statusCode: 503,
+      recorded: false,
+    });
+
+    expect(await testOwned(unrecorded)).toEqual({
+      success: false,
+      data: unrecorded,
+      message:
+        "Test webhook failed: HTTP 503. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
   it("reports why when the attempt got no answer at all", async () => {
     const unreachable = attempt({
       success: false,
