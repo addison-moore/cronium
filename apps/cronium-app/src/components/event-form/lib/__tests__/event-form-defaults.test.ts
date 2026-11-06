@@ -104,6 +104,30 @@ describe("buildEventFormDefaults", () => {
     expect(defaults.startTime).toMatch(/^2026-03-0[56]T\d{2}:\d{2}$/);
   });
 
+  it("normalizes the lowercase values older rows can hold", () => {
+    const defaults = buildEventFormDefaults({
+      scheduleUnit: "hours" as TimeUnit,
+      timeoutUnit: "minutes" as TimeUnit,
+      runLocation: "remote" as RunLocation,
+    });
+    expect(defaults.scheduleUnit).toBe(TimeUnit.HOURS);
+    expect(defaults.timeoutUnit).toBe(TimeUnit.MINUTES);
+    expect(defaults.runLocation).toBe(RunLocation.REMOTE);
+    expect(defaults.runOnLocal).toBe(false);
+  });
+
+  it("falls back to the defaults for a value that isn't a known one", () => {
+    const defaults = buildEventFormDefaults({
+      scheduleUnit: "fortnights" as TimeUnit,
+      timeoutUnit: "fortnights" as TimeUnit,
+      runLocation: "moon" as RunLocation,
+    });
+    expect(defaults.scheduleUnit).toBe(TimeUnit.MINUTES);
+    expect(defaults.timeoutUnit).toBe(TimeUnit.SECONDS);
+    expect(defaults.runLocation).toBe(RunLocation.LOCAL);
+    expect(defaults.runOnLocal).toBe(true);
+  });
+
   it("never carries servers/env vars/tags into defaults (set later by effect)", () => {
     const defaults = buildEventFormDefaults({
       environmentVariables: [{ key: "A", value: "1" }],
@@ -157,6 +181,18 @@ describe("parseInitialEnvVars", () => {
   it("passes an array through unchanged", () => {
     const vars = [{ key: "K", value: "V" }];
     expect(parseInitialEnvVars(vars)).toEqual(vars);
+  });
+
+  it("keeps only the key and value of a row from the API", () => {
+    const row = {
+      id: 7,
+      eventId: 42,
+      key: "K",
+      value: "V",
+      createdAt: new Date("2026-01-02T03:04:05.000Z"),
+      updatedAt: new Date("2026-01-02T03:04:05.000Z"),
+    };
+    expect(parseInitialEnvVars([row])).toEqual([{ key: "K", value: "V" }]);
   });
 });
 

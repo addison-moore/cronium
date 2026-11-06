@@ -10,12 +10,25 @@ import {
   type Event,
 } from "@/shared/schema";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
+import { normalizeTimeUnit } from "@/lib/scheduling/schedule-math";
 import type { EventFormData } from "./event-form-schema";
 
 // Extended Event type that includes relation properties
 export interface EventFormInitialData extends Partial<Event> {
+  // What events.getById returns, so its result can be passed straight in. The
+  // form has to find these: it saves whatever rows it shows, and events.update
+  // takes `envVars: []` as deleting every variable the event has.
+  envVars?: Array<{ key: string; value: string }>;
+  // The same rows, as the event details page's view model names them.
   environmentVariables?: Array<{ key: string; value: string }>;
   servers?: Array<{ id: number; name: string }>;
+}
+
+/** The run location counterpart of `normalizeTimeUnit`. */
+function normalizeRunLocation(location: unknown): RunLocation | null {
+  if (typeof location !== "string") return null;
+  const normalized = location.trim().toUpperCase() as RunLocation;
+  return Object.values(RunLocation).includes(normalized) ? normalized : null;
 }
 
 /**
@@ -36,10 +49,16 @@ export function toDatetimeLocal(startTime: Date | string): string {
  * - `runOnLocal` is true unless the event is remote-only.
  * - `startTime` is converted to the `datetime-local` input format
  *   (`YYYY-MM-DDTHH:mm`, the browser's local time).
+ * - `scheduleUnit`, `timeoutUnit` and `runLocation` are normalized, because
+ *   rows from before the enum migration hold lowercase values. The form's
+ *   schema refuses those with no message, so the save would silently do nothing.
  */
 export function buildEventFormDefaults(
   initialData?: EventFormInitialData,
 ): EventFormData {
+  const runLocation =
+    normalizeRunLocation(initialData?.runLocation) ?? RunLocation.LOCAL;
+
   return {
     name: initialData?.name ?? "",
     description: initialData?.description ?? "",
@@ -49,7 +68,8 @@ export function buildEventFormDefaults(
     status: initialData?.status ?? EventStatus.DRAFT,
     triggerType: initialData?.triggerType ?? EventTriggerType.MANUAL,
     scheduleNumber: initialData?.scheduleNumber ?? 5,
-    scheduleUnit: initialData?.scheduleUnit ?? TimeUnit.MINUTES,
+    scheduleUnit:
+      normalizeTimeUnit(initialData?.scheduleUnit) ?? TimeUnit.MINUTES,
     startTime: initialData?.startTime
       ? toDatetimeLocal(initialData.startTime)
       : null,
@@ -60,10 +80,11 @@ export function buildEventFormDefaults(
     overlapPolicy: initialData?.overlapPolicy ?? OverlapPolicy.ALLOW,
     priority: initialData?.priority ?? 1,
     timeoutValue: initialData?.timeoutValue ?? 30,
-    timeoutUnit: initialData?.timeoutUnit ?? TimeUnit.SECONDS,
-    runLocation: initialData?.runLocation ?? RunLocation.LOCAL,
+    timeoutUnit:
+      normalizeTimeUnit(initialData?.timeoutUnit) ?? TimeUnit.SECONDS,
+    runLocation,
     // Local unless the event is remote-only
-    runOnLocal: initialData?.runLocation !== RunLocation.REMOTE,
+    runOnLocal: runLocation !== RunLocation.REMOTE,
     selectedServerIds: [],
     retries: initialData?.retries ?? 0,
     maxExecutions: initialData?.maxExecutions ?? 0,
@@ -111,7 +132,11 @@ export function parseInitialEnvVars(
     }
   }
   if (Array.isArray(value)) {
-    return value as Array<{ key: string; value: string }>;
+    // A row from the API also has an id, an event id and timestamps.
+    return (value as Array<{ key: string; value: string }>).map((envVar) => ({
+      key: envVar.key,
+      value: envVar.value,
+    }));
   }
   return null;
 }
