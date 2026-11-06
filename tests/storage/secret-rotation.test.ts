@@ -687,13 +687,34 @@ describe("API tokens from before hashing", () => {
     });
   });
 
-  it("stops the ones not hashed yet with the runbook's statement for a leaked key", async () => {
+  /** What "If the old key leaked" has someone run, in the order they run it. */
+  function leakPathCommands() {
     const runbook = readFileSync(
       path.resolve(__dirname, "../../docs/ENVIRONMENT_VARIABLES.md"),
       "utf8",
     );
-    const statement = /"(UPDATE api_tokens [^"]+)"/.exec(runbook)?.[1];
-    if (!statement) throw new Error("no such statement in the runbook");
+    const section = runbook.slice(runbook.indexOf("### If the old key leaked"));
+    const commands = /```bash\n([\s\S]*?)```/.exec(section)?.[1];
+    if (!commands)
+      throw new Error("no commands in that section of the runbook");
+    return commands;
+  }
+
+  it("has a leak rotation revoke them before the driver's first real pass", () => {
+    const commands = leakPathCommands();
+
+    const revoke = commands.indexOf('"UPDATE api_tokens ');
+    const firstRealPass = commands.search(/rotate-secrets\.cjs$/m);
+
+    expect(revoke).toBeGreaterThan(-1);
+    expect(firstRealPass).toBeGreaterThan(revoke);
+  });
+
+  it("stops the ones not hashed yet with the statement a leak rotation runs", async () => {
+    const statement = /"(UPDATE api_tokens [^"]+)"/.exec(
+      leakPathCommands(),
+    )?.[1];
+    if (!statement) throw new Error("no such statement in the leak path");
     const old = await seedOldToken("old", "raw-old");
     const { id: newer } = await storage.createApiToken({
       userId: OWNER,
@@ -708,8 +729,8 @@ describe("API tokens from before hashing", () => {
 
     const { rows } = await pool.query(statement);
 
-    // It names what it revoked, so someone can issue new ones.
-    expect(rows).toEqual([{ id: old, name: "old" }]);
+    // It names what it revoked and whose it was, so each owner can issue a new one.
+    expect(rows).toEqual([{ id: old, name: "old", user_id: OWNER }]);
     expect(await storedToken(alreadyRevoked)).toEqual(untouched);
 
     restartWith(KEY_NEW, [KEY_OLD]);
@@ -806,6 +827,21 @@ describe("API tokens from before hashing", () => {
       return Promise.all([firstRun!, secondRun!]);
     }
 
+    /**
+     * Nothing is left under the old key after any of these, so none of them counts as
+     * `changedDuringRun`, which would make the run exit non-zero to ask for another.
+     */
+    function expectMissSkipped(report: RotationReport) {
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 0,
+        skipped: 1,
+        changedDuringRun: 0,
+        errors: 0,
+      });
+      expect(report.totalChangedDuringRun).toBe(0);
+      expect(report.remaining).toBe(0);
+    }
+
     it("skips a token the lookup hashes first", async () => {
       // Still under the active key, so the lookup can open it too.
       const id = await seedOldToken("racing", "raw-racing");
@@ -817,11 +853,7 @@ describe("API tokens from before hashing", () => {
       );
 
       expect(auth).toMatchObject({ userId: OWNER, tokenId: id });
-      expect(surface(report, TOKENS)).toMatchObject({
-        hashed: 0,
-        skipped: 1,
-        errors: 0,
-      });
+      expectMissSkipped(report);
       expect((await storedToken(id)).token).toBe(hashApiToken("raw-racing"));
     });
 
@@ -863,11 +895,7 @@ describe("API tokens from before hashing", () => {
       });
       const report = await run!;
 
-      expect(surface(report, TOKENS)).toMatchObject({
-        hashed: 0,
-        skipped: 1,
-        errors: 0,
-      });
+      expectMissSkipped(report);
       expect(await authenticateApiToken("raw-newer")).toMatchObject({
         tokenId: id,
       });
@@ -889,11 +917,7 @@ describe("API tokens from before hashing", () => {
       });
       const report = await run!;
 
-      expect(surface(report, TOKENS)).toMatchObject({
-        hashed: 0,
-        skipped: 1,
-        errors: 0,
-      });
+      expectMissSkipped(report);
       expect((await storedToken(id)).status).toBe(TokenStatus.REVOKED);
       expect(await authenticateApiToken("raw-revoked-now")).toBeNull();
     });
@@ -910,11 +934,7 @@ describe("API tokens from before hashing", () => {
       });
       const report = await run!;
 
-      expect(surface(report, TOKENS)).toMatchObject({
-        hashed: 0,
-        skipped: 1,
-        errors: 0,
-      });
+      expectMissSkipped(report);
       expect(await allTokens()).toEqual([]);
     });
   });
@@ -1488,7 +1508,7 @@ describe("what an operator sees from the CLI", () => {
     const first = await runCli();
     expect(first.code).toBe(0);
     expect(first.output).toContain(
-      "api_tokens.token: scanned=1 hashed=1 skipped=0 legacy=0 errors=0",
+      "api_tokens.token: scanned=1 hashed=1 skipped=0 legacy=0 changed-during-run=0 errors=0",
     );
     expect(first.output).toContain(
       "Total re-encrypted: 0; hashed: 1; errors: 0",
@@ -1527,6 +1547,37 @@ describe("what an operator sees from the CLI", () => {
     expect(output).toContain("Total re-encrypted: 0; hashed: 1; errors: 0");
     const [row] = await db.select().from(envVars);
     expect(row!.value).toBe(value);
+  });
+
+  it("exits 0 when a token is hashed under it, with the line that says it's done", async () => {
+    const [token] = await db
+      .insert(apiTokens)
+      .values({
+        userId: OWNER,
+        name: "old bot",
+        token: encryptionService.encrypt("raw-token-canary"),
+      })
+      .returning({ id: apiTokens.id });
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    let run: ReturnType<typeof runCli> | undefined;
+    await withRowHeld("api_tokens", token!.id, async (client) => {
+      run = runCli();
+      await untilWritesAreBlocked("api_tokens");
+      await client.query(`UPDATE api_tokens SET token = $2 WHERE id = $1`, [
+        token!.id,
+        hashApiToken("raw-token-canary"),
+      ]);
+    });
+    const { code, output } = await run!;
+
+    expect(code).toBe(0);
+    expect(output).toContain(
+      "api_tokens.token: scanned=1 hashed=0 skipped=1 legacy=0 changed-during-run=0 errors=0",
+    );
+    expect(output).toContain("Total re-encrypted: 0; errors: 0");
+    expect(output).not.toContain("changed during this run");
+    expect(output).toContain("Rotation pass complete");
   });
 
   it("exits non-zero when a token can't be written, with nothing to read in the output", async () => {

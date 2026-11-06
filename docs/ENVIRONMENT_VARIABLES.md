@@ -635,17 +635,6 @@ row that changed is left as it was saved, and its values count as `changed-durin
 as re-encrypted or as errors. That run exits non-zero and says so on its total line, because
 those values may still be under the old key, so don't take it as the last one.
 
-An API token keeps its value when it's hashed. So if you're rotating because the old key
-may have leaked, anyone holding it and a copy of the database from before a token was
-hashed can still use that token after the rotation. This revokes the ones not hashed yet
-and names them, so you can issue new ones. Run it before the driver's first real pass,
-because after that they can't be told apart:
-
-```bash
-docker compose exec postgres psql -U cronium -d cronium -c \
-  "UPDATE api_tokens SET status = 'REVOKED', updated_at = now() WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$' RETURNING id, name;"
-```
-
 ### Before step 3
 
 - **It warns about values still bound to the key they were saved under.** Those are
@@ -661,11 +650,14 @@ docker compose exec postgres psql -U cronium -d cronium -c \
   which is how the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app
   can't read it and uses the ciphertext as the value, so an SMTP login fails with only a
   log line to show for it. Step 0 moves these too.
-- **It warns about API tokens.** Tokens from before hashing stay encrypted until they're
-  used, and the app can read them only with the active key. Unless the old key may have
-  leaked, as above, you don't need to use or replace them: step 4 hashes each one a key in
-  the ring can open, and the dry run's `hashed` count says how many. A hash needs no key,
-  so rolling back doesn't affect them.
+- **It counts API tokens as `hashed`, or warns about them.** Tokens from before hashing
+  stay encrypted until they're used, and the app can read them only with the active key.
+  **If the old key leaked, you do have to act on these, and the rest of this doesn't
+  apply:** step 4 of [If the old key leaked](#if-the-old-key-leaked) revokes them, which
+  only works before the driver's first real pass, and each owner has to issue a new one.
+  On the usual steps you don't need to use or replace them. Step 4 hashes each one a key
+  in the ring can open, and the dry run's `hashed` count says how many. A hash needs no
+  key, so rolling back doesn't affect them.
   Until step 4 reaches it, each one gets a 401 from step 3 on. To avoid that, run the
   driver once before step 2 with no keys on the command, as in step 4: with only the
   current key it has nothing else to move, so it only hashes them. The warning names any
@@ -765,32 +757,42 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 # 3. Stop the app and worker. From here nobody's token is accepted, forged or real.
 docker compose stop cronium-app cronium-worker
 
-# 4. Move the rows from a one-off worker container, which gets both keys for this one
+# 4. Revoke the API tokens from before hashing. A hash keeps a token's value, so step 5
+#    would keep each one working for anyone with the old key and a copy of the database,
+#    where a key change alone stops one nobody has used. Run this before step 5's first
+#    pass, because after that they can't be told apart. It names what it revokes, so each
+#    owner can issue a new one once the services are back.
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "UPDATE api_tokens SET status = 'REVOKED', updated_at = now() WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$' RETURNING id, name, user_id;"
+
+# 5. Move the rows from a one-off worker container, which gets both keys for this one
 #    command. Re-run until it prints "Total re-encrypted: 0; errors: 0".
 docker compose run --rm --no-deps -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]' \
   cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 
-# 5. Change these lines in .env and start the services. The printenv should print nothing.
+# 6. Change these lines in .env and start the services. The printenv should print nothing.
 #      ENCRYPTION_KEY=<new-hex-key>
 #      ENCRYPTION_KEYS_RETIRED=
 docker compose up -d --no-deps cronium-app cronium-worker
 docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
 
-# 6. Finished jobs keep their env var copies under the old key, so anyone holding it and a
+# 7. Finished jobs keep their env var copies under the old key, so anyone holding it and a
 #    copy of the database can read them. This removes them, and touches only finished jobs.
 docker compose exec postgres psql -U cronium -d cronium -c \
   "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
 
-# 7. As step 7 above: when no script is running, recreate the orchestrator and runtime,
+# 8. As step 7 above: when no script is running, recreate the orchestrator and runtime,
 #    whose environment can still hold the old key.
 docker compose up -d
 ```
 
 This costs more downtime and some running work:
 
-- **The app answers nothing from step 3 until step 5 finishes.** That's roughly 15 ms a
+- **The app answers nothing from step 3 until step 6 finishes.** That's roughly 15 ms a
   row on top of the restart: 20,000 variables took 4 to 6 minutes in tests, and an install
   with a few hundred secrets takes seconds.
+- **Each API token step 4 names stops working for good,** unlike on the usual steps, so
+  whatever uses it fails until its owner issues a new one.
 - **A script running at step 3 loses its result,** the same way as one running at step 6
   of the usual steps.
 - **A job still queued at step 3 runs normally once the services are back,** because the
@@ -799,7 +801,10 @@ This costs more downtime and some running work:
 
 Rotating doesn't undo the leak. Anyone with the old key can still read a backup taken
 before the rotation, and could use forged tokens until step 3, so replace the passwords,
-SSH keys and API credentials your secrets hold too.
+SSH keys and API credentials your secrets hold too. A token hashed before step 4 keeps
+working, and a copy of the database from before it was hashed gives it away to anyone with
+the old key. Nothing tells those from newer tokens, so if such a copy may have leaked as
+well, replace every API token.
 
 ## Encrypting values saved before encryption at rest
 
