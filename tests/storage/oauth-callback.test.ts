@@ -23,6 +23,7 @@ import { cacheService } from "@/lib/cache/cache-service";
 import { injectOAuthToken } from "@/lib/oauth/credential-bridge";
 import { createProviderFromEnv } from "@/lib/oauth/providers";
 import { TokenManager } from "@/lib/oauth/TokenManager";
+import { runRetention } from "@/lib/scheduling/retention";
 import { db } from "@/server/db";
 import { storage } from "@/server/storage";
 import { oauthStates, oauthTokens, toolCredentials } from "@/shared/schema";
@@ -782,5 +783,83 @@ describe("tokens once they're stored", () => {
     expect(revoke?.form.get("token")).toBe("the-access-token");
     expect(await tokenRows()).toEqual([]);
     await expect(manager().hasValidTokens(owner, toolId)).resolves.toBe(false);
+  });
+});
+
+describe("an attempt nobody finishes", () => {
+  const MINUTE = 60_000;
+
+  /** Puts an attempt past its expiry, as waiting out its 10 minutes would. */
+  const expire = (state: string) =>
+    db
+      .update(oauthStates)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(oauthStates.state, state));
+
+  const storedStates = async () =>
+    (await stateRows()).map(({ state }) => state);
+
+  beforeEach(() => {
+    jest.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  it("goes on the worker's next pass when abandoned at the consent screen", async () => {
+    const abandoned = await startFlow();
+    const inTime = await startFlow();
+    await expire(abandoned.state);
+
+    await runRetention();
+
+    expect(await storedStates()).toEqual([inTime.state]);
+  });
+
+  it("goes after a late return too, which the callback refuses and leaves behind", async () => {
+    const { state, nonce } = await startFlow();
+    await expire(state);
+    const { params } = await callback({ code: "the-code", state }, { nonce });
+    expect(params.get("details")).toBe(
+      "This connection attempt has expired or was already used",
+    );
+    expect(await storedStates()).toEqual([state]);
+
+    await runRetention();
+
+    expect(await storedStates()).toEqual([]);
+  });
+
+  it("lasts the 10 minutes it was given, and no longer", async () => {
+    await startFlow();
+
+    await runRetention({ now: new Date(Date.now() + 9 * MINUTE) });
+    expect(await stateRows()).toHaveLength(1);
+
+    await runRetention({ now: new Date(Date.now() + 11 * MINUTE) });
+    expect(await stateRows()).toEqual([]);
+  });
+
+  it("isn't touched while it's in time, and can still finish after a pass", async () => {
+    const { state, nonce } = await startFlow();
+
+    await runRetention();
+
+    expect(await storedStates()).toEqual([state]);
+    const { params } = await callback({ code: "the-code", state }, { nonce });
+    expect(params.get("oauth")).toBe("success");
+    expect(await tokenRows()).toHaveLength(1);
+  });
+
+  it("gets the same words for a return after it has gone, and only loses the tool", async () => {
+    const { state, nonce } = await startFlow();
+    await expire(state);
+    await runRetention();
+
+    const { params } = await callback({ code: "the-code", state }, { nonce });
+
+    // OAuthResultAlert says "expired or was already used" for this code too. With the
+    // row gone nothing names the tool, so the page opens without it selected.
+    expect(params.get("error")).toBe("invalid_state");
+    expect(params.get("tool")).toBeNull();
+    expect(exchanges()).toEqual([]);
+    expect(await tokenRows()).toEqual([]);
   });
 });

@@ -123,18 +123,24 @@ describe("retentionWindows", () => {
 
 describe("runRetention", () => {
   const environment = process.env;
+  // oauth_states, whose rows say themselves when they expire, so no window covers it.
+  const PURGES_WITH_NO_WINDOW = 1;
+
+  beforeEach(() => {
+    mockTransaction.mockResolvedValue(0);
+  });
 
   afterEach(() => {
     process.env = environment;
     mockTransaction.mockReset();
   });
 
-  it("touches no table when every window is 0", async () => {
+  it("touches no table with a window when every window is 0", async () => {
     process.env = { ...environment, ...ALL_ZERO };
 
     const result = await runRetention();
 
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockTransaction).toHaveBeenCalledTimes(PURGES_WITH_NO_WINDOW);
     expect(result.backlog).toBe(false);
     expect(result.failed).toEqual([]);
   });
@@ -152,7 +158,7 @@ describe("runRetention", () => {
       },
     });
 
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockTransaction).toHaveBeenCalledTimes(PURGES_WITH_NO_WINDOW);
     expect(result.failed).toEqual([]);
   });
 });
