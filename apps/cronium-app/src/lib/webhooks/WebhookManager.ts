@@ -232,26 +232,12 @@ export class WebhookManager {
       return;
     }
 
-    const sourceWebhookId =
-      typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
-
-    // Create webhook event record, stamped with its owning tenant.
-    const result = await db
-      .insert(webhookEvents)
-      .values({
-        event,
-        payload: { data, metadata },
-        userId: ownerUserId,
-        sourceWebhookId,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    if (!result[0]) {
-      throw new Error("Failed to create webhook event");
-    }
-
-    const webhookEvent = result[0];
+    const webhookEvent = await this.recordEvent(
+      event,
+      data,
+      ownerUserId,
+      metadata,
+    );
 
     // Queue deliveries for each webhook
     const payload = deliveryPayload(webhookEvent, data, metadata);
@@ -286,6 +272,96 @@ export class WebhookManager {
         ...(retryConfig !== undefined && { retryConfig }),
       });
     }
+  }
+
+  /**
+   * Send a test event to this one webhook, whatever it subscribes to, and report
+   * what the receiver did.
+   *
+   * It doesn't fan out, so no other webhook gets anything. It makes one attempt
+   * and waits for it, so the outcome it returns is real. It stays out of the queue,
+   * which could only say the attempt was queued, and which would repeat a failure
+   * on its own schedule after the caller had moved on.
+   *
+   * The attempt is recorded like any other delivery, on a `webhook_events` row of
+   * its own in the form `triggerEvent` stores. So it shows in the webhook's history
+   * and stats, under `webhook.test`, and can be retried.
+   *
+   * @throws WebhookPreconditionError when the webhook is disabled. Nothing is sent
+   * or recorded then. A failed attempt isn't thrown: it comes back with
+   * `success: false`, recorded like any other.
+   */
+  async sendTestEvent(
+    webhook: typeof webhooks.$inferSelect,
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown>,
+  ): Promise<WebhookDeliveryResult> {
+    // Disabled means nothing goes to this URL, as with `triggerEvent`.
+    if (!webhook.active) {
+      throw new WebhookPreconditionError("Webhook is disabled");
+    }
+
+    // Decrypted before anything is recorded: a secret that can't be read means
+    // there was no attempt.
+    const { decryptWebhookSecret, decryptWebhookHeaders } =
+      await import("./webhook-secret");
+    const secret = decryptWebhookSecret(
+      webhook.secret,
+      webhook.key,
+      webhook.userId,
+    );
+    const headers = decryptWebhookHeaders(
+      webhook.headers,
+      webhook.key,
+      webhook.userId,
+    );
+
+    const event = await this.recordEvent(
+      "webhook.test",
+      data,
+      webhook.userId,
+      metadata,
+    );
+
+    return this.processDelivery(
+      webhook.id,
+      event.id,
+      webhook.url,
+      secret,
+      headers,
+      deliveryPayload(event, data, metadata),
+    );
+  }
+
+  /**
+   * Store an event that's about to be delivered, stamped with its owning tenant.
+   * Its `payload` is the part of a delivery body that the row's columns don't hold.
+   */
+  private async recordEvent(
+    event: string,
+    data: Record<string, unknown>,
+    ownerUserId: string,
+    metadata?: Record<string, unknown>,
+  ) {
+    const sourceWebhookId =
+      typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
+
+    const result = await db
+      .insert(webhookEvents)
+      .values({
+        event,
+        payload: { data, metadata },
+        userId: ownerUserId,
+        sourceWebhookId,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    if (!result[0]) {
+      throw new Error("Failed to create webhook event");
+    }
+
+    return result[0];
   }
 
   /**
