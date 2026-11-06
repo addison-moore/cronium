@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, withRateLimit } from "../trpc";
 import { normalizePagination } from "@/server/utils/db-patterns";
 import { withErrorHandling } from "@/server/utils/error-utils";
 import {
@@ -665,6 +665,10 @@ export const serversRouter = createTRPCRouter({
 
   // Test server connection (without saving)
   testConnection: protectedProcedure
+    // Any address, from any signed-in user, and nothing has to be saved first. This
+    // stops a client in a loop. Calls made at the same moment can get past it, because
+    // RateLimitService reads then writes.
+    .use(withRateLimit(10, 60000))
     .input(testServerConnectionSchema)
     .mutation(async ({ input }) => {
       try {

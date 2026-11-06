@@ -1,5 +1,6 @@
 import { env } from "./src/env.mjs";
 import crypto from "crypto";
+import { fileURLToPath } from "node:url";
 
 // Bundle analyzer configuration (optional)
 let withBundleAnalyzer = (config) => config;
@@ -71,6 +72,13 @@ const nextConfig = {
         // pg's native binding is an optional dependency we don't install; pg
         // falls back to pure JS. Stub it so the client trace doesn't warn.
         "pg-native": false,
+      };
+      // Server-only, and reached the same way. Several chunks import it, so it would
+      // otherwise count as shared and land in `commons`, which every page loads.
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        [fileURLToPath(new URL("./src/lib/resolve-host.ts", import.meta.url))]:
+          false,
       };
 
       // Only apply optimization in production

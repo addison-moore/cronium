@@ -21,7 +21,10 @@ const BATCH_SIZE = 1_000;
 // run in-process in the app).
 async function connect(credentials: SqlCredentials, timeoutMs: number) {
   const { Client } = await import("pg");
+  const { socketWithSearch } = await import("@/lib/resolve-host");
   const client = new Client({
+    // pg would look the host up with `dns.lookup`: see lib/resolve-host.ts.
+    stream: socketWithSearch,
     host: credentials.host,
     port: credentials.port ?? defaultPort("postgres"),
     database: credentials.database,

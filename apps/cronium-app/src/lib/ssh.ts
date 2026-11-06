@@ -5,8 +5,9 @@ import {
 } from "@/lib/ssh/pool-key";
 import { createHostVerifier } from "@/lib/ssh/host-verifier";
 import { Client } from "ssh2"; // Import Client from ssh2
-import type { ClientChannel } from "ssh2";
+import type { ClientChannel, ConnectConfig } from "ssh2";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import { connectWithSearch } from "@/lib/resolve-host";
 
 /**
  * SSH connection debug logging is gated behind CRONIUM_SSH_DEBUG because the
@@ -39,6 +40,29 @@ function serverIdFromScope(
   }
   return undefined;
 }
+
+/**
+ * `client.connect` with a socket of our own, because ssh2 otherwise looks the host up
+ * with `dns.lookup`, and a server's address is whatever its owner typed: see
+ * lib/resolve-host.ts.
+ *
+ * The socket has to exist before ssh2 sees it, and ssh2 throws on a key it can't parse
+ * before it listens for anything. So close it then, or its failure would be an `error`
+ * event with nobody listening, which ends the process.
+ */
+function connectOverOwnSocket(
+  client: Client,
+  config: ConnectConfig & { host: string; port: number },
+): void {
+  const sock = connectWithSearch(config.host, config.port);
+  try {
+    client.connect({ ...config, sock });
+  } catch (error) {
+    sock.destroy();
+    throw error;
+  }
+}
+
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
@@ -69,7 +93,7 @@ export class SSHService {
     // Clean up stale connections every 2 minutes
     setInterval(() => {
       this.cleanupStaleConnections();
-    }, 120000);
+    }, 120000).unref();
   }
 
   private cleanupStaleConnections(): void {
@@ -215,7 +239,7 @@ export class SSHService {
       const connectionTimeout = setTimeout(() => {
         ssh.end();
         reject(new Error(`Connection to ${host ?? ""} timed out.`));
-      }, 20000); // Use readyTimeout from connect options
+      }, 20000).unref(); // Use readyTimeout from connect options
 
       ssh.on("ready", () => {
         clearTimeout(connectionTimeout);
@@ -273,7 +297,7 @@ export class SSHService {
         console.log(`SSH connection to ${connectionKey ?? ""} closed.`);
         this.connectionPool.delete(connectionKey);
       });
-      ssh.connect({
+      connectOverOwnSocket(ssh, {
         host,
         username,
         ...(authType === "password"
@@ -344,7 +368,7 @@ export class SSHService {
       const connectionTimeout = setTimeout(() => {
         sshClient.end();
         reject(new Error(`Connection to ${host ?? ""} timed out.`));
-      }, 60000); // Use readyTimeout from connect options
+      }, 60000).unref(); // Use readyTimeout from connect options
 
       sshClient
         .on("ready", () => {
@@ -357,32 +381,32 @@ export class SSHService {
           clearTimeout(connectionTimeout);
           this.isConnected = false;
           reject(err);
-        })
-        .connect({
-          host,
-          username,
-          ...(authType === "password"
-            ? { password: authCredential }
-            : { privateKey: authCredential }),
-          port,
-          readyTimeout: 60000,
-          // Verify the server's host key (TOFU) before the credential is sent.
-          hostVerifier: createHostVerifier({ serverId, host }),
-          keepaliveInterval: 5000,
-          keepaliveCountMax: 10,
-          tryKeyboard: false,
-          algorithms: {
-            kex: [
-              "ecdh-sha2-nistp256",
-              "ecdh-sha2-nistp384",
-              "ecdh-sha2-nistp521",
-              "diffie-hellman-group14-sha256",
-            ],
-            cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr"],
-            serverHostKey: ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"],
-            hmac: ["hmac-sha2-256", "hmac-sha2-512"],
-          },
         });
+      connectOverOwnSocket(sshClient, {
+        host,
+        username,
+        ...(authType === "password"
+          ? { password: authCredential }
+          : { privateKey: authCredential }),
+        port,
+        readyTimeout: 60000,
+        // Verify the server's host key (TOFU) before the credential is sent.
+        hostVerifier: createHostVerifier({ serverId, host }),
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 10,
+        tryKeyboard: false,
+        algorithms: {
+          kex: [
+            "ecdh-sha2-nistp256",
+            "ecdh-sha2-nistp384",
+            "ecdh-sha2-nistp521",
+            "diffie-hellman-group14-sha256",
+          ],
+          cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr"],
+          serverHostKey: ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"],
+          hmac: ["hmac-sha2-256", "hmac-sha2-512"],
+        },
+      });
     });
   }
 
