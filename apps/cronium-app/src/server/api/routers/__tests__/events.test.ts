@@ -813,7 +813,7 @@ describe("update", () => {
       ).rejects.toMatchObject({
         code: "FORBIDDEN",
         message:
-          "This event can't be saved while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
+          "An archived server can't be used: retired-box. Restore it or choose another server, then try again.",
       });
       // Since PR 29 this one call writes the fields, variables and servers.
       expect(storageMock.updateScript).not.toHaveBeenCalled();
@@ -830,7 +830,7 @@ describe("update", () => {
         caller.events.update({ id: 1, selectedServerIds: [7, 8] }),
       ).rejects.toMatchObject({
         message:
-          "This event can't be saved while it's linked to archived servers: retired-one, retired-two. Restore them or remove them from the event, then try again.",
+          "Archived servers can't be used: retired-one, retired-two. Restore them or choose other servers, then try again.",
       });
     });
 

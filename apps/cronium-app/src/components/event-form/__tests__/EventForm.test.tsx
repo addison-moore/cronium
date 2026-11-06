@@ -1045,7 +1045,7 @@ describe("EventForm", () => {
     it("sends an untouched archived server as it stands and shows the server's refusal", async () => {
       jest.spyOn(console, "error").mockImplementation(() => undefined);
       const reason =
-        "This event can't be saved while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.";
+        "An archived server can't be used: retired-box. Restore it or choose another server, then try again.";
       mockUpdateMutateAsync.mockRejectedValueOnce(new Error(reason));
       const user = renderEditing(eventOn([retiredBox]));
       await screen.findByRole("checkbox", {

@@ -117,7 +117,7 @@ describe("events.update with an archived server still selected", () => {
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
       message:
-        "This event can't be saved while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
+        "An archived server can't be used: retired-box. Restore it or choose another server, then try again.",
     });
 
     expect(await eventRow(eventId)).toMatchObject({
@@ -143,10 +143,10 @@ describe("events.update with an archived server still selected", () => {
 
     expect(error).toMatchObject({ code: "FORBIDDEN" });
     const { message } = error as Error;
-    expect(message).toContain("linked to archived servers: ");
+    expect(message).toContain("Archived servers can't be used: ");
     expect(message).toContain("retired-one");
     expect(message).toContain("retired-two");
-    expect(message).toContain("Restore them or remove them from the event");
+    expect(message).toContain("Restore them or choose other servers");
     expect(message).not.toContain("live-box");
   });
 

@@ -61,6 +61,18 @@ function deny(resourceName: string): never {
   });
 }
 
+/** Only for servers the caller already has rights to, because it names them. */
+function denyArchivedServers(names: readonly string[]): never {
+  const list = names.join(", ");
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message:
+      names.length === 1
+        ? `An archived server can't be used: ${list}. Restore it or choose another server, then try again.`
+        : `Archived servers can't be used: ${list}. Restore them or choose other servers, then try again.`,
+  });
+}
+
 function notFound(resourceName: string): never {
   throw new TRPCError({
     code: "NOT_FOUND",
@@ -116,11 +128,7 @@ export async function assertServerCapabilities(
   serverIds: readonly number[],
   userId: string,
   capability: ResourceCapability,
-  options: {
-    allowArchived?: boolean;
-    /** Says why, in place of the generic refusal, when one is archived. */
-    archivedMessage?: (names: string[]) => string;
-  } = {},
+  options: { allowArchived?: boolean } = {},
 ): Promise<void> {
   const ids = [...new Set(serverIds)];
   if (ids.length === 0) return;
@@ -136,22 +144,15 @@ export async function assertServerCapabilities(
     .from(servers)
     .where(inArray(servers.id, ids));
 
+  // First, so a server the caller has no rights to is never named.
   if (!allRequestedResourcesHaveCapability(ids, rows, userId, capability)) {
     deny("server relationship");
   }
-  if (options.allowArchived) return;
 
   const archived = rows.filter((server) => server.isArchived);
-  if (archived.length === 0) return;
-  // Only past the check above, so this can't say anything about a server the
-  // caller has no access to, or that a server exists at all.
-  if (options.archivedMessage) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: options.archivedMessage(archived.map((server) => server.name)),
-    });
+  if (!options.allowArchived && archived.length > 0) {
+    denyArchivedServers(archived.map((server) => server.name));
   }
-  deny("server relationship");
 }
 
 export async function assertEventRelations(
@@ -280,21 +281,7 @@ export async function assertProposedEventServers(
   selectedServerIds: readonly number[] | undefined,
 ): Promise<void> {
   const ids = eventServerRelationshipIds(serverId, selectedServerIds);
-  await assertServerCapabilities(ids, userId, "use-secret", {
-    archivedMessage: (names) => archivedServersMessage("saved", names),
-  });
-}
-
-/** Names the servers, so it's only for someone who owns all of them. */
-export function archivedServersMessage(
-  action: "saved" | "forked",
-  names: readonly string[],
-): string {
-  const [what, it] =
-    names.length === 1
-      ? ["an archived server", "it"]
-      : ["archived servers", "them"];
-  return `This event can't be ${action} while it's linked to ${what}: ${names.join(", ")}. Restore ${it} or remove ${it} from the event, then try again.`;
+  await assertServerCapabilities(ids, userId, "use-secret");
 }
 
 export function eventServerRelationshipIds(
