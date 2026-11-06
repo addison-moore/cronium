@@ -171,6 +171,24 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 
 // runContainer handles the execution phase of the container
 func (e *Executor) runContainer(ctx context.Context, containerID string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming) {
+	// Attach to stdin before starting, as `docker run -i` does, because that is how the
+	// script gets in (see buildCommand). The connection stays open until the job ends.
+	attached, err := e.dockerClient.ContainerAttach(ctx, containerID, client.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  true,
+	})
+	if err != nil {
+		e.sendError(updates, fmt.Errorf("failed to attach to container: %w", err), true)
+		e.updateExecutionError(ctx, executionID, err)
+		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+			Status:  types.JobStatusFailed,
+			Message: "Failed to attach to container",
+		})
+		return
+	}
+	stdin := &attached.HijackedResponse
+	defer stdin.Close()
+
 	// Start the container
 	if _, err := e.dockerClient.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to start container: %w", err), true)
@@ -181,6 +199,21 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 		})
 		return
 	}
+
+	// Deliver the script without holding up log streaming, because a write can block
+	// until the container reads it. If delivery fails, the bootstrap's size check is what
+	// ends the job. Closing the connection releases a write still blocked at the end.
+	delivered := make(chan struct{})
+	go func() {
+		defer close(delivered)
+		if err := deliverScript(ctx, stdin, scriptSource(job.Execution.Script)); err != nil {
+			e.log.WithError(err).WithField("jobID", job.ID).Warn("Script delivery failed")
+		}
+	}()
+	defer func() {
+		stdin.Close()
+		<-delivered
+	}()
 
 	// Create a WaitGroup for log streaming
 	var logWg sync.WaitGroup
