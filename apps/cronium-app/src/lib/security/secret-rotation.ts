@@ -61,7 +61,7 @@ import {
 } from "@/lib/webhooks/webhook-secret";
 import {
   credentialEncryption,
-  type EncryptedData,
+  parseEncryptedData,
 } from "@/lib/security/credential-encryption";
 
 export interface SurfaceResult {
@@ -108,21 +108,6 @@ function vaultNeedsReencrypt(
     isSecretEnvelope(value) &&
     getSecretVault().needsReencryption(value)
   );
-}
-
-function parseEncrypted(
-  stored: string | null | undefined,
-): EncryptedData | null {
-  if (!stored) return null;
-  try {
-    const o = JSON.parse(stored) as Partial<EncryptedData>;
-    if (o?.encrypted && o.iv && o.authTag && o.keyDerivation) {
-      return o as EncryptedData;
-    }
-  } catch {
-    // Not JSON → legacy plaintext, nothing to rotate.
-  }
-  return null;
 }
 
 async function rotateServers(dryRun: boolean): Promise<SurfaceResult> {
@@ -421,7 +406,7 @@ async function rotateToolCredentials(dryRun: boolean): Promise<SurfaceResult> {
     .from(toolCredentials);
   for (const row of rows) {
     r.scanned++;
-    const enc = row.encrypted ? parseEncrypted(row.credentials) : null;
+    const enc = row.encrypted ? parseEncryptedData(row.credentials) : null;
     if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
       r.skipped++;
       continue;
@@ -470,7 +455,7 @@ async function rotateOauthTokens(dryRun: boolean): Promise<SurfaceResult> {
     const set: Record<string, unknown> = {};
     for (const col of ["accessToken", "refreshToken"] as const) {
       const stored = row[col];
-      const enc = parseEncrypted(stored);
+      const enc = parseEncryptedData(stored);
       r.scanned++;
       if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
         r.skipped++;

@@ -10,13 +10,20 @@
  * Rows go in through raw SQL because every write path in the app encrypts now.
  */
 import { spawn } from "node:child_process";
-import { createHmac, randomUUID } from "node:crypto";
+import {
+  createCipheriv,
+  createHmac,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
+import { credentialEncryption } from "@/lib/security/credential-encryption";
 import {
+  countLegacyPlaintextRows,
   encryptLegacySecrets,
   legacySecretsBootWarning,
   LegacySecretsRefusedError,
@@ -26,6 +33,7 @@ import { rotateAllSecrets } from "@/lib/security/secret-rotation";
 import {
   __resetSecretVaultForTests,
   getSecretVault,
+  isSecretEnvelope,
   type SecretBinding,
 } from "@/lib/security/secret-vault";
 import {
@@ -33,14 +41,15 @@ import {
   decryptWebhookSecret,
   encryptWebhookHeaders,
   encryptWebhookSecret,
+  isLegacyWebhookHeaders,
 } from "@/lib/webhooks/webhook-secret";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { WebhookRouter } from "@/lib/webhooks/WebhookRouter";
 import { db, pool } from "@/server/db";
 import { storage } from "@/server/storage";
-import { webhookDeliveries } from "@/shared/schema";
+import { webhookDeliveries, webhooks } from "@/shared/schema";
 import { closePool, resetDatabase } from "./helpers/db-reset";
-import { seedUser } from "./helpers/seed";
+import { seedEvent, seedServer, seedUser } from "./helpers/seed";
 
 // Deliveries go to a real HTTP server on loopback, which the SSRF guard would
 // otherwise refuse. Everything after the guard is the real delivery path.
@@ -72,6 +81,15 @@ function useKeys(active: string | undefined, retired?: string[]) {
   if (retired) process.env.ENCRYPTION_KEYS_RETIRED = JSON.stringify(retired);
   else delete process.env.ENCRYPTION_KEYS_RETIRED;
   __resetSecretVaultForTests();
+  // This one only reads the key when it's imported, or when told to.
+  if (active && active.length >= 32) {
+    const quiet = [
+      jest.spyOn(console, "log").mockImplementation(() => undefined),
+      jest.spyOn(console, "warn").mockImplementation(() => undefined),
+    ];
+    credentialEncryption.initialize(active);
+    quiet.forEach((spy) => spy.mockRestore());
+  }
 }
 
 let keyCounter = 0;
@@ -127,6 +145,119 @@ const seedAppWebhook = () =>
     headers: HEADERS,
     active: true,
   });
+
+const OLD_VALUE = "old-secret-value-canary";
+
+/**
+ * AES-256-GCM the way `encryptionService` wrote it before the vault. Spelled out here
+ * because nothing in the app writes this any more, and the format can't change.
+ */
+function oldCiphertext(keyHex: string, plaintext = OLD_VALUE): string {
+  const iv = randomBytes(16);
+  const cipher = createCipheriv("aes-256-gcm", Buffer.from(keyHex, "hex"), iv);
+  cipher.setAAD(Buffer.from("cronium-server-encryption"));
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  return Buffer.concat([iv, ciphertext, cipher.getAuthTag()]).toString(
+    "base64",
+  );
+}
+
+/** A tool credential or OAuth token, encrypted under this key. */
+function credentialCiphertext(keyHex: string): string {
+  useKeys(keyHex);
+  return JSON.stringify(credentialEncryption.encrypt(OLD_VALUE));
+}
+
+async function seedToolCredential(
+  credentials: string,
+  { encrypted = true, updatedAt = "2026-01-02T03:04:05Z" } = {},
+): Promise<number> {
+  const { rows } = await pool.query<{ id: number }>(
+    `INSERT INTO tool_credentials (user_id, name, type, credentials, encrypted, updated_at)
+     VALUES ($1, 'old tool', 'slack', $2, $3, $4) RETURNING id`,
+    [OWNER, credentials, encrypted, updatedAt],
+  );
+  return rows[0]!.id;
+}
+
+async function seedOauthTokens(
+  accessToken: string,
+  refreshToken: string | null,
+): Promise<void> {
+  const toolId = await seedToolCredential("{}", { encrypted: false });
+  await pool.query(
+    `INSERT INTO oauth_tokens (user_id, tool_id, provider_id, access_token, refresh_token)
+     VALUES ($1, $2, 'slack', $3, $4)`,
+    [OWNER, toolId, accessToken, refreshToken],
+  );
+}
+
+async function seedEnvVar(value: string): Promise<void> {
+  const eventId = await seedEvent(OWNER);
+  await pool.query(
+    `INSERT INTO env_vars (event_id, key, value) VALUES ($1, 'OLD_ENV', $2)`,
+    [eventId, value],
+  );
+}
+
+const seedSetting = (key: string, value: string) =>
+  pool.query(`INSERT INTO system_settings (key, value) VALUES ($1, $2)`, [
+    key,
+    value,
+  ]);
+
+const seedApiToken = (token: string) =>
+  pool.query(
+    `INSERT INTO api_tokens (user_id, name, token) VALUES ($1, 'old', $2)`,
+    [OWNER, token],
+  );
+
+/** Everywhere an old database can hold something to check the key against. */
+const OLD_CIPHERTEXT: [string, (keyHex: string) => Promise<unknown>][] = [
+  [
+    "tool_credentials.credentials",
+    (key) => seedToolCredential(credentialCiphertext(key)),
+  ],
+  [
+    "oauth_tokens.access_token",
+    (key) => seedOauthTokens(credentialCiphertext(key), null),
+  ],
+  [
+    "oauth_tokens.refresh_token",
+    (key) => seedOauthTokens("plaintext-token", credentialCiphertext(key)),
+  ],
+  [
+    "servers.ssh_key",
+    (key) => seedServer(OWNER, { sshKey: oldCiphertext(key) }),
+  ],
+  [
+    "servers.password",
+    (key) => seedServer(OWNER, { password: oldCiphertext(key) }),
+  ],
+  ["env_vars.value", (key) => seedEnvVar(oldCiphertext(key))],
+  [
+    "users.mfa_secret",
+    (key) =>
+      pool.query(`UPDATE users SET mfa_secret = $1 WHERE id = $2`, [
+        oldCiphertext(key),
+        OWNER,
+      ]),
+  ],
+  [
+    "system_settings.value",
+    (key) => seedSetting("smtpPassword", oldCiphertext(key)),
+  ],
+  ["api_tokens.token", (key) => seedApiToken(oldCiphertext(key))],
+];
+
+/** The vault's id for a key, which an envelope carries as its third part. */
+const keyIdOf = (keyHex: string) => {
+  useKeys(keyHex);
+  return getSecretVault().keyIds()[0]!.keyId;
+};
 
 interface StoredWebhook {
   id: number;
@@ -1111,6 +1242,198 @@ describe("the key", () => {
   });
 });
 
+describe("the key, on a database with no envelopes", () => {
+  describe.each(OLD_CIPHERTEXT)("holding only %s", (source, seed) => {
+    it("refuses a key that can't read it, and writes nothing", async () => {
+      await seed(KEY_A);
+      await seedWebhook();
+      await seedVariable();
+      const before = await allVersions();
+      useKeys(KEY_B);
+
+      const refused = await encryptLegacySecrets().catch((e: Error) => e);
+
+      expect(refused).toBeInstanceOf(LegacySecretsRefusedError);
+      expect((refused as Error).message).toContain(`${source} (1)`);
+      await expect(encryptLegacySecrets({ dryRun: true })).rejects.toThrow(
+        LegacySecretsRefusedError,
+      );
+      expect(await allVersions()).toBe(before);
+    });
+
+    it("goes ahead with the key that wrote it", async () => {
+      await seed(KEY_A);
+      const { id } = await seedWebhook();
+      await seedVariable();
+      useKeys(KEY_A);
+
+      const report = await encryptLegacySecrets();
+
+      expect(report.totalEncrypted).toBe(2);
+      expect(report.remaining).toBe(0);
+      const { secret } = await storedWebhook(id);
+      expect(secret.split(".")[2]).toBe(keyIdOf(KEY_A));
+    });
+
+    it("goes ahead when that key is retired, encrypting under the active one", async () => {
+      await seed(KEY_A);
+      const { id } = await seedWebhook();
+      useKeys(KEY_B, [KEY_A]);
+
+      const report = await encryptLegacySecrets();
+
+      expect(report.totalEncrypted).toBe(1);
+      const { secret } = await storedWebhook(id);
+      expect(secret.split(".")[2]).toBe(keyIdOf(KEY_B));
+    });
+  });
+
+  it("doesn't take a value that merely comes back from a read as proof", async () => {
+    // A read returns all of these under any key at all, so none says the key fits.
+    await seedServer(OWNER);
+    await seedEnvVar("short-plaintext");
+    await seedToolCredential(JSON.stringify({ token: "plain" }), {
+      encrypted: false,
+    });
+    await seedOauthTokens("plaintext-token", "plaintext-refresh");
+    await seedApiToken("plaintext-api-token");
+    await seedSetting("smtpPassword", "short-plaintext");
+    // This one is the only real evidence, and it's against.
+    await seedServer(OWNER, { password: oldCiphertext(KEY_A) });
+    const { id } = await seedWebhook();
+    useKeys(KEY_B);
+
+    await expect(encryptLegacySecrets()).rejects.toThrow(
+      LegacySecretsRefusedError,
+    );
+    expect((await storedWebhook(id)).secret).toBe(SECRET);
+  });
+
+  it("goes ahead when nothing is encrypted, because there's nothing to check", async () => {
+    await seedServer(OWNER);
+    await seedEnvVar("short-plaintext");
+    await seedToolCredential(JSON.stringify({ token: "plain" }), {
+      encrypted: false,
+    });
+    await seedOauthTokens("plaintext-token", "plaintext-refresh");
+    const { id } = await seedWebhook();
+    useKeys(KEY_B);
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.totalEncrypted).toBe(1);
+    expect((await storedWebhook(id)).secret.split(".")[2]).toBe(keyIdOf(KEY_B));
+  });
+
+  it("doesn't mistake what only resembles ciphertext for it", async () => {
+    // A hashed API token and a setting the app stores in the clear have the shape,
+    // and a credential row that says it isn't encrypted is read as plain JSON.
+    await seedApiToken("ab".repeat(32));
+    await seedSetting("someOtherSetting", "A".repeat(64));
+    await seedToolCredential(credentialCiphertext(KEY_A), {
+      encrypted: false,
+    });
+    const { id } = await seedWebhook();
+    useKeys(KEY_B);
+
+    await encryptLegacySecrets();
+
+    expect((await storedWebhook(id)).secret.startsWith("crn.1.")).toBe(true);
+  });
+
+  it("refuses a long plaintext that looks like ciphertext, until the app saves something", async () => {
+    await seedEnvVar("A".repeat(64));
+    const { id } = await seedWebhook();
+    useKeys(KEY_A);
+
+    await expect(encryptLegacySecrets()).rejects.toThrow(
+      /env_vars\.value \(1\)/,
+    );
+    expect((await storedWebhook(id)).secret).toBe(SECRET);
+
+    // What the docs say to do. The app's key is now on record, so the next run can
+    // check against it.
+    await seedAppWebhook();
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    expect((await storedWebhook(id)).secret.startsWith("crn.1.")).toBe(true);
+  });
+
+  it.each([
+    [
+      "a readable credential, with older ciphertext it can't read",
+      () => seedToolCredential(credentialCiphertext(KEY_A)),
+      () => seedServer(OWNER, { password: oldCiphertext(KEY_B) }),
+    ],
+    [
+      "readable older ciphertext, with a credential it can't read",
+      () => seedServer(OWNER, { password: oldCiphertext(KEY_A) }),
+      () => seedToolCredential(credentialCiphertext(KEY_B)),
+    ],
+    [
+      "readable older ciphertext, with an envelope it can't read",
+      () => seedServer(OWNER, { password: oldCiphertext(KEY_A) }),
+      () => seedWebhook({ secret: "crn.1.deadbeef.AAAA.BBBB.CCCC" }),
+    ],
+  ])("goes ahead on one value that fits: %s", async (_name, fits, doesNot) => {
+    await doesNot();
+    await fits();
+    const { id } = await seedWebhook();
+    useKeys(KEY_A);
+
+    await encryptLegacySecrets();
+
+    expect((await storedWebhook(id)).secret.startsWith("crn.1.")).toBe(true);
+  });
+
+  it("checks the newest credentials, so a run of old ones under a lost key doesn't refuse", async () => {
+    const lost = credentialCiphertext(KEY_B);
+    for (let i = 0; i < 12; i++) await seedToolCredential(lost);
+    await seedToolCredential(credentialCiphertext(KEY_A), {
+      updatedAt: "2026-06-01T00:00:00Z",
+    });
+    const { id } = await seedWebhook();
+    useKeys(KEY_A);
+
+    await encryptLegacySecrets();
+
+    expect((await storedWebhook(id)).secret.startsWith("crn.1.")).toBe(true);
+  });
+
+  it("counts by column when it refuses, and quotes nothing", async () => {
+    const credential = credentialCiphertext(KEY_A);
+    const ciphertext = oldCiphertext(KEY_A);
+    await seedToolCredential(credential);
+    await seedServer(OWNER, {
+      sshKey: ciphertext,
+      password: oldCiphertext(KEY_A),
+    });
+    await seedEnvVar(oldCiphertext(KEY_A));
+    await seedWebhook({ secret: `crn.1.${SECRET}.AAAA.BBBB.CCCC` });
+    useKeys(KEY_B);
+
+    const refused = await encryptLegacySecrets().catch((e: Error) => e.message);
+
+    expect(refused).toContain("webhooks.secret (1)");
+    expect(refused).toContain("tool_credentials.credentials (1)");
+    expect(refused).toContain("servers.ssh_key (1)");
+    expect(refused).toContain("servers.password (1)");
+    expect(refused).toContain("env_vars.value (1)");
+    expect(refused).toContain("Nothing was changed");
+    for (const value of [
+      SECRET,
+      OLD_VALUE,
+      ciphertext,
+      (JSON.parse(credential) as { encrypted: string }).encrypted,
+      KEY_A,
+      KEY_B,
+    ]) {
+      expect(refused).not.toContain(value);
+    }
+  });
+});
+
 describe("alongside key rotation", () => {
   it("counts plaintext headers as legacy and leaves them, instead of skipping them unseen", async () => {
     const { id } = await seedWebhook();
@@ -1175,6 +1498,163 @@ describe("the worker's boot warning", () => {
     await encryptLegacySecrets();
 
     expect(await legacySecretsBootWarning()).toBeNull();
+  });
+
+  it("needs no usable key, and decrypts nothing", async () => {
+    useKeys(KEY_A);
+    await seedAppWebhook();
+    await seedWebhook();
+    const decrypt = jest.spyOn(credentialEncryption, "decrypt");
+
+    useKeys(KEY_B); // a run would refuse this one
+    expect(await legacySecretsBootWarning()).toContain("1 webhook");
+    useKeys(undefined); // and any decryption would throw on this
+    expect(await legacySecretsBootWarning()).toContain("1 webhook");
+
+    expect(decrypt).not.toHaveBeenCalled();
+    decrypt.mockRestore();
+  });
+
+  it("doesn't call a row plaintext if encrypting it wouldn't help, though a run still reports it", async () => {
+    await seedAppWebhook();
+    const envelope = await seedWebhook({
+      secret: "crn.1.deadbeef.AAAA.BBBB.CCCC",
+      headersJson: null,
+    });
+    const array = await seedWebhook({ secret: "", headersJson: '["x"]' });
+    const variable = await seedVariable({ value: "crn.nope" });
+
+    expect(await legacySecretsBootWarning()).toBeNull();
+
+    const { failures, remaining } = await encryptLegacySecrets({
+      dryRun: true,
+    });
+    expect(remaining).toBe(3);
+    expect(failures.map((f) => [f.surface, f.id])).toEqual([
+      ["webhooks", envelope.id],
+      ["webhooks", array.id],
+      ["user_variables", variable.id],
+    ]);
+  });
+
+  it("counts plaintext sitting next to a value that fails, and a run names that row", async () => {
+    await seedAppWebhook();
+    const { id } = await seedWebhook({ headersJson: '["x"]' });
+
+    expect(await countLegacyPlaintextRows()).toBe(1);
+
+    const { failures } = await encryptLegacySecrets();
+    expect(failures.map((f) => f.id)).toEqual([id]);
+    expect((await storedWebhook(id)).secret).toBe(SECRET);
+    expect(await countLegacyPlaintextRows()).toBe(1);
+  });
+
+  it("counts a row once, whichever of its columns hold plaintext", async () => {
+    await seedWebhook();
+    await seedWebhook({ headersJson: JSON.stringify(JSON.stringify(HEADERS)) });
+    await seedWebhook({ headersJson: null });
+    await seedWebhook({ secret: "" });
+    await seedWebhook({
+      secret: "",
+      headersJson: JSON.stringify(JSON.stringify(HEADERS)),
+    });
+
+    expect(await countLegacyPlaintextRows()).toBe(5);
+  });
+
+  it("agrees with what a dry run would encrypt, and with a real run", async () => {
+    await seedAppWebhook();
+    await seedWebhook();
+    await seedWebhook({ headersJson: null });
+    await seedWebhook({ secret: "" });
+    await seedWebhook({ headersJson: JSON.stringify(JSON.stringify(HEADERS)) });
+    await seedWebhook({ secret: "", headersJson: "{}" });
+    await seedVariable();
+    await seedVariable({ value: "" });
+
+    const dryRun = await encryptLegacySecrets({ dryRun: true });
+    expect(dryRun.failures).toEqual([]);
+    expect(dryRun.totalEncrypted).toBe(5);
+    expect(await countLegacyPlaintextRows()).toBe(5);
+
+    const realRun = await encryptLegacySecrets();
+    expect(realRun.totalEncrypted).toBe(5);
+    expect(await countLegacyPlaintextRows()).toBe(0);
+  });
+
+  // Each row says what a run would read for that stored JSON, and so whether the
+  // count has to include it. Rows go through the same Drizzle mapping a run uses,
+  // which is what turns a JSON string holding an object into an object.
+  it.each<[string, string | null, boolean]>([
+    ["a plain object", '{"Authorization":"Bearer x"}', true],
+    ["SQL NULL", null, false],
+    ["JSON null", "null", false],
+    ["an empty object", "{}", false],
+    ["an encrypted wrapper", '{"__enc":"crn.1.a.b.c.d"}', false],
+    ["an encrypted wrapper with more keys", '{"__enc":"crn.x","Y":"z"}', false],
+    ["a wrapper that isn't encrypted", '{"__enc":"plain"}', true],
+    ["a wrapper holding a number", '{"__enc":5}', true],
+    ["a wrapper holding null", '{"__enc":null}', true],
+    ["an empty array", "[]", false],
+    ["an array", '["Authorization: Bearer x"]', false],
+    ["a string", '"Bearer x"', false],
+    ["a number", "5", false],
+    ["zero", "0", false],
+    ["true", "true", false],
+    ["false", "false", false],
+    ["an object in a string", JSON.stringify('{"A":"b"}'), true],
+    ["a wrapper in a string", JSON.stringify('{"__enc":"crn.1.a"}'), false],
+    ["a plain wrapper in a string", JSON.stringify('{"__enc":"x"}'), true],
+    ["an empty object in a string", JSON.stringify("{}"), false],
+    ["an array in a string", JSON.stringify('["x"]'), false],
+    ["null in a string", JSON.stringify("null"), false],
+    ["a number in a string", JSON.stringify("5"), false],
+    ["a string in a string", JSON.stringify('"x"'), false],
+    ["broken JSON in a string", JSON.stringify('{"A":'), false],
+  ])(
+    "counts headers stored as %s the way a run reads them",
+    async (_name, json, plaintext) => {
+      await seedWebhook({ secret: "", headersJson: json });
+
+      const [row] = await db
+        .select({ headers: webhooks.headers })
+        .from(webhooks);
+
+      expect(isLegacyWebhookHeaders(row!.headers)).toBe(plaintext);
+      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+    },
+  );
+
+  describe.each<[string, boolean]>([
+    ["plaintext", true],
+    ["", false],
+    ["crn.", false],
+    ["crn.1.a.b.c.d", false],
+    ["crn.nope", false],
+    ["crn", true],
+    ["crnx1", true],
+    ["CRN.1.a.b.c.d", true],
+    [" crn.1.a.b.c.d", true],
+    ["xcrn.1.a", true],
+    ["%", true],
+    ["_", true],
+    ["line one\ncrn.1.a", true],
+  ])("given the value %j", (value, plaintext) => {
+    beforeEach(() => {
+      expect(!!value && !isSecretEnvelope(value)).toBe(plaintext);
+    });
+
+    it("counts a webhook secret the way a run reads it", async () => {
+      await seedWebhook({ secret: value, headersJson: null });
+
+      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+    });
+
+    it("counts a variable the way a run reads it", async () => {
+      await seedVariable({ value });
+
+      expect(await countLegacyPlaintextRows()).toBe(plaintext ? 1 : 0);
+    });
   });
 });
 
@@ -1258,6 +1738,43 @@ describe("the CLI", () => {
     expect(code).toBe(1);
     expect(output).toContain("Nothing was changed");
     expect((await storedWebhook(plaintext.id)).secret).toBe(SECRET);
+  });
+
+  it("stops on an old database under the wrong key, then runs under the right one", async () => {
+    const ciphertext = oldCiphertext(KEY_A);
+    const credential = credentialCiphertext(KEY_A);
+    await seedServer(OWNER, { password: ciphertext });
+    await seedToolCredential(credential);
+    const webhook = await seedWebhook();
+    await seedVariable();
+    const before = await allVersions();
+    useKeys(KEY_B);
+
+    const wrong = await runCli("--encrypt-legacy");
+
+    expect(wrong.code).toBe(1);
+    expect(wrong.output).toContain("Nothing was changed");
+    expect(wrong.output).toContain("servers.password (1)");
+    expect(wrong.output).toContain("tool_credentials.credentials (1)");
+    expect(wrong.output).not.toContain("Legacy rows remaining");
+    for (const value of [
+      ...CANARIES,
+      ciphertext,
+      (JSON.parse(credential) as { encrypted: string }).encrypted,
+      KEY_A,
+      KEY_B,
+    ]) {
+      expect(wrong.output).not.toContain(value);
+    }
+    expect(await allVersions()).toBe(before);
+
+    useKeys(KEY_A);
+    const right = await runCli("--encrypt-legacy");
+
+    expect(right.code).toBe(0);
+    expect(right.output).toContain("Legacy rows remaining: 0");
+    const row = await storedWebhook(webhook.id);
+    expect(decryptWebhookSecret(row.secret, webhook.key, OWNER)).toBe(SECRET);
   });
 
   it("refuses an unknown argument rather than running without it", async () => {

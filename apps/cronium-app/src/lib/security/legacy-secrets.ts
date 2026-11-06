@@ -26,7 +26,17 @@
 import { asc, and, eq, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { userVariables, webhooks } from "@/shared/schema";
+import { SENSITIVE_SYSTEM_SETTINGS } from "@/lib/encryption-service";
 import { driverError } from "@/lib/pg-errors";
+import {
+  credentialEncryption,
+  type EncryptedData,
+  parseEncryptedData,
+} from "@/lib/security/credential-encryption";
+import {
+  isLegacyCiphertextUnderKey,
+  looksLikeLegacyCiphertext,
+} from "@/lib/security/field-secret";
 import {
   getSecretVault,
   isSecretEnvelope,
@@ -303,39 +313,123 @@ async function upgradeUserVariables(
   return result;
 }
 
+// A failed attempt costs an scrypt for each key in the ring, so these are capped per
+// column, newest first. Legacy ciphertext is cheap to try, and only capped to bound
+// what's loaded.
+const CREDENTIAL_SAMPLE = 10;
+const LEGACY_CIPHERTEXT_SAMPLE = 1000;
+
+function credentialDecrypts(encrypted: EncryptedData): boolean {
+  try {
+    credentialEncryption.decrypt(encrypted);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Encrypting under a key the app doesn't have would lock it out of these rows, and
  * unlike a failed read, nothing would show until someone needed one. A database
- * restored next to a freshly generated `.env` gets here easily. So if the database
- * holds envelopes and this keyring has none of their keys, stop before writing.
- * With no envelopes anywhere there is nothing to compare against, which is why the
- * docs say to back up first.
+ * restored next to a freshly generated `.env` gets here easily, and the older the
+ * database, the likelier it is to hold no envelopes at all. So this looks at
+ * everything already encrypted that can be checked, and stops before writing if
+ * some of it exists and none of it fits this keyring.
+ *
+ * Two things count in its favour: an envelope naming one of its keys, and ciphertext
+ * that passes its GCM tag. One is enough, so a row under a key lost long ago doesn't
+ * hold up the rest. A read can't tell us this, because the read paths guess by shape
+ * and pass anything else through. With nothing encrypted anywhere there is nothing to
+ * compare against, which is why the docs say to back up first.
  */
 async function assertKeyringFitsDatabase(): Promise<void> {
-  const keyring = getSecretVault()
-    .keyIds()
-    .map((entry) => entry.keyId);
+  const keyring = getSecretVault().keyIds();
 
-  const { rows } = await db.execute<{ key_id: string }>(sql`
-    SELECT DISTINCT split_part(stored, '.', 3) AS key_id
+  // Column names and counts for the refusal. Stored values never go in here, not even
+  // the key id in an envelope, because a plaintext can look like one.
+  const unreadable = new Map<string, number>();
+  const noteUnreadable = (source: string, count = 1) =>
+    unreadable.set(source, (unreadable.get(source) ?? 0) + count);
+
+  // Envelopes name their key, so these need no decryption.
+  const envelopes = await db.execute<{
+    source: string;
+    key_id: string;
+    count: number;
+  }>(sql`
+    SELECT source, split_part(stored, '.', 3) AS key_id, count(*)::int AS count
     FROM (
-      SELECT secret AS stored FROM webhooks
-      UNION ALL SELECT headers->>'__enc' FROM webhooks
-      UNION ALL SELECT value FROM user_variables
-      UNION ALL SELECT ssh_key FROM servers
-      UNION ALL SELECT password FROM servers
-      UNION ALL SELECT value FROM env_vars
-      UNION ALL SELECT value FROM system_settings
-      UNION ALL SELECT mfa_secret FROM users
+      SELECT 'webhooks.secret' AS source, secret AS stored FROM webhooks
+      UNION ALL SELECT 'webhooks.headers', headers->>'__enc' FROM webhooks
+      UNION ALL SELECT 'user_variables.value', value FROM user_variables
+      UNION ALL SELECT 'servers.ssh_key', ssh_key FROM servers
+      UNION ALL SELECT 'servers.password', password FROM servers
+      UNION ALL SELECT 'env_vars.value', value FROM env_vars
+      UNION ALL SELECT 'system_settings.value', value FROM system_settings
+      UNION ALL SELECT 'users.mfa_secret', mfa_secret FROM users
     ) AS all_stored
     WHERE stored LIKE 'crn.1.%'
+    GROUP BY 1, 2
   `);
-  if (rows.length === 0) return;
-  if (rows.some((row) => keyring.includes(row.key_id))) return;
+  for (const { source, key_id: keyId, count } of envelopes.rows) {
+    if (keyring.some((entry) => entry.keyId === keyId)) return;
+    noteUnreadable(source, count);
+  }
 
+  const credentials = await db.execute<{ source: string; stored: string }>(sql`
+    (SELECT 'tool_credentials.credentials' AS source, credentials AS stored
+       FROM tool_credentials WHERE encrypted AND credentials LIKE '{%'
+       ORDER BY updated_at DESC LIMIT ${CREDENTIAL_SAMPLE})
+    UNION ALL
+    (SELECT 'oauth_tokens.access_token', access_token
+       FROM oauth_tokens WHERE access_token LIKE '{%'
+       ORDER BY updated_at DESC LIMIT ${CREDENTIAL_SAMPLE})
+    UNION ALL
+    (SELECT 'oauth_tokens.refresh_token', refresh_token
+       FROM oauth_tokens WHERE refresh_token LIKE '{%'
+       ORDER BY updated_at DESC LIMIT ${CREDENTIAL_SAMPLE})
+  `);
+  for (const { source, stored } of credentials.rows) {
+    const encrypted = parseEncryptedData(stored);
+    if (!encrypted) continue; // plaintext, which proves nothing either way
+    if (credentialDecrypts(encrypted)) return;
+    noteUnreadable(source);
+  }
+
+  // Static-AAD ciphertext from before the vault. An API token that's been hashed is
+  // 64 hex characters, which has the same shape, so it's left out the way the app's
+  // own lookup leaves it out.
+  const legacy = await db.execute<{ source: string; stored: string }>(sql`
+    SELECT source, stored
+    FROM (
+      SELECT 'servers.ssh_key' AS source, ssh_key AS stored FROM servers
+      UNION ALL SELECT 'servers.password', password FROM servers
+      UNION ALL SELECT 'env_vars.value', value FROM env_vars
+      UNION ALL SELECT 'users.mfa_secret', mfa_secret FROM users
+      UNION ALL SELECT 'system_settings.value', value FROM system_settings
+        WHERE key IN ${[...SENSITIVE_SYSTEM_SETTINGS]}
+      UNION ALL SELECT 'api_tokens.token', token FROM api_tokens
+        WHERE token !~ '^[0-9a-f]{64}$'
+    ) AS all_stored
+    WHERE stored ~ '^[A-Za-z0-9+/=]{50,}$'
+    LIMIT ${LEGACY_CIPHERTEXT_SAMPLE}
+  `);
+  for (const { source, stored } of legacy.rows) {
+    if (!looksLikeLegacyCiphertext(stored)) continue;
+    if (keyring.some(({ key }) => isLegacyCiphertextUnderKey(stored, key))) {
+      return;
+    }
+    noteUnreadable(source);
+  }
+
+  if (unreadable.size === 0) return;
+
+  const found = [...unreadable]
+    .map(([source, count]) => `${source} (${String(count)})`)
+    .join(", ");
   throw new LegacySecretsRefusedError(
-    `This database holds encrypted values, but none of them use a key in this keyring (active key ${String(keyring[0])}). ` +
-      "ENCRYPTION_KEY is probably not the one the app runs with, and encrypting with it would lock the app out of these rows. Nothing was changed.",
+    `This database holds encrypted values, but this keyring (active key ${String(keyring[0]?.keyId)}) can't read any it checked: ${found}. ` +
+      "ENCRYPTION_KEY is probably not the one the app runs with, and encrypting with it would lock the app out of these rows. Nothing was changed. See docs/ENVIRONMENT_VARIABLES.md.",
   );
 }
 
@@ -375,15 +469,57 @@ export async function encryptLegacySecrets(
 }
 
 /**
- * A line for the worker's boot log when rows still need `--encrypt-legacy`, or null.
- * The worker only reports. Encrypting rewrites secrets with whatever key the process
- * has, and a dev worker points at a shared database, so an operator starts it.
+ * Rows holding a value `--encrypt-legacy` would encrypt, by the same rules as
+ * `isSecretEnvelope` and `isLegacyWebhookHeaders`. It decrypts nothing, so it's cheap
+ * enough for every boot and needs no key.
+ *
+ * A run's `remaining` also counts rows it can't read. Those aren't counted here,
+ * because they need fixing rather than encrypting: a value starting with `crn.` that
+ * doesn't decrypt, or headers that aren't an object. Plaintext next to one of those in
+ * the same row is counted, and a run names that row instead of encrypting it.
+ */
+export async function countLegacyPlaintextRows(): Promise<number> {
+  const plaintextSecret = sql`(secret <> '' AND secret NOT LIKE 'crn.%')`;
+  const { rows } = await db.execute<{ count: string }>(sql`
+    SELECT (
+      SELECT count(*) FROM webhooks
+      WHERE ${plaintextSecret}
+        OR (
+          jsonb_typeof(headers) = 'object'
+          AND headers <> '{}'::jsonb
+          AND (headers->>'__enc' LIKE 'crn.%') IS NOT TRUE
+        )
+    ) + (
+      SELECT count(*) FROM user_variables
+      WHERE value <> '' AND value NOT LIKE 'crn.%'
+    ) AS count
+  `);
+
+  // Headers stored as a JSON string read as whatever that string parses to, and SQL
+  // before Postgres 16 can't test that without an error on the ones that don't parse.
+  // So the few rows like that are read the way a run reads them, and asked the same
+  // question.
+  const stringHeaders = await db
+    .select({ headers: webhooks.headers })
+    .from(webhooks)
+    .where(sql`jsonb_typeof(headers) = 'string' AND NOT ${plaintextSecret}`);
+
+  return (
+    Number(rows[0]?.count ?? 0) +
+    stringHeaders.filter((row) => isLegacyWebhookHeaders(row.headers)).length
+  );
+}
+
+/**
+ * A line for the worker's boot log when rows hold plaintext, or null. The worker only
+ * reports. Encrypting rewrites secrets with whatever key the process has, and a dev
+ * worker points at a shared database, so an operator starts it.
  */
 export async function legacySecretsBootWarning(): Promise<string | null> {
-  const { remaining } = await encryptLegacySecrets({ dryRun: true });
-  if (remaining === 0) return null;
+  const count = await countLegacyPlaintextRows();
+  if (count === 0) return null;
   return (
-    `${String(remaining)} webhook or user-variable row(s) still hold plaintext from before encryption at rest. ` +
-    "To encrypt them, run: node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy (docs/ENVIRONMENT_VARIABLES.md)"
+    `${String(count)} webhook or user-variable row(s) still hold plaintext from before encryption at rest. ` +
+    "Run node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy to encrypt them. It names any row it can't encrypt. See docs/ENVIRONMENT_VARIABLES.md."
   );
 }

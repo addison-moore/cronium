@@ -2,7 +2,7 @@
  * At-rest secret maintenance CLI (security plan Phase 2.1).
  *
  * With no flag it rotates: it re-encrypts every at-rest secret from a retired key
- * onto the active key. Run it repeatedly until it reports 0 remaining; then drop
+ * onto the active key. Run it repeatedly until it reports 0 re-encrypted; then drop
  * <old> from ENCRYPTION_KEYS_RETIRED. See src/lib/security/secret-rotation.ts for
  * the safety model (idempotent, resumable, both keys in the ring throughout).
  *
@@ -18,8 +18,9 @@
  *
  * To rotate, also set ENCRYPTION_KEY=<new> ENCRYPTION_KEYS_RETIRED='["<old>"]'.
  *
- * Exits 0 when the pass finished clean, 1 when rows failed or remain, 2 on a bad
- * argument.
+ * Exits 2 on a bad argument, and 1 if it couldn't run or a row failed. With
+ * --encrypt-legacy, a real run also exits 1 if it leaves rows to do. Rotation doesn't:
+ * what's left is in its report, and running it again finishes them.
  */
 import { driverError } from "@/lib/pg-errors";
 import { encryptLegacySecrets } from "@/lib/security/legacy-secrets";
