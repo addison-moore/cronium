@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import {
   EventType,
   EventStatus,
@@ -18,6 +19,15 @@ export interface EventFormInitialData extends Partial<Event> {
 }
 
 /**
+ * A stored start time as a `datetime-local` input's value: the browser's local time, to
+ * the minute. The input has no zone of its own and `buildEventPayload` reads what it
+ * holds as local time, so writing anything else here moves the time on every save.
+ */
+export function toDatetimeLocal(startTime: Date | string): string {
+  return format(new Date(startTime), "yyyy-MM-dd'T'HH:mm");
+}
+
+/**
  * Resolve the form's default values from an (optional) existing event.
  * Pure: no React/tRPC imports.
  *
@@ -25,7 +35,7 @@ export interface EventFormInitialData extends Partial<Event> {
  *   expression (cron mode vs interval mode).
  * - `runOnLocal` is true unless the event is remote-only.
  * - `startTime` is converted to the `datetime-local` input format
- *   (`YYYY-MM-DDTHH:mm`, UTC).
+ *   (`YYYY-MM-DDTHH:mm`, the browser's local time).
  */
 export function buildEventFormDefaults(
   initialData?: EventFormInitialData,
@@ -41,7 +51,7 @@ export function buildEventFormDefaults(
     scheduleNumber: initialData?.scheduleNumber ?? 5,
     scheduleUnit: initialData?.scheduleUnit ?? TimeUnit.MINUTES,
     startTime: initialData?.startTime
-      ? new Date(initialData.startTime).toISOString().slice(0, 16)
+      ? toDatetimeLocal(initialData.startTime)
       : null,
     useCronScheduling: !!initialData?.customSchedule,
     customSchedule: initialData?.customSchedule ?? "",

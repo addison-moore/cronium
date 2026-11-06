@@ -211,6 +211,7 @@ export default function EventForm({
   );
 
   const timezoneOptions = buildTimezoneOptions();
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Derived state
   const isScriptType = isScriptEventType(type);
@@ -358,7 +359,7 @@ export default function EventForm({
         // Prepare form data for submission (pure construction in
         // lib/event-payload.ts: strips form-only fields, derives run
         // location, and normalizes schedule/content fields).
-        const formData = buildEventPayload(data);
+        const formData = buildEventPayload(data, initialData?.startTime);
 
         // Say so here rather than send 10 MB to be told the same thing. Beside the script
         // and scrolled to, because the submit button is a screen or more below it.
@@ -423,6 +424,7 @@ export default function EventForm({
       }
     },
     [
+      initialData?.startTime,
       isEditing,
       eventId,
       createEventMutation,
@@ -1001,8 +1003,9 @@ export default function EventForm({
                 )}
               />
               <p className="text-muted-foreground text-sm">
-                If specified, the event will start running from this time. Leave
-                empty to start immediately.
+                If specified, the event will start running from this time, in
+                your browser&apos;s timezone ({browserTimezone}). Leave empty to
+                start immediately.
               </p>
             </div>
 
