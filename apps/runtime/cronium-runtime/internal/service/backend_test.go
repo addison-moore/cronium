@@ -309,6 +309,68 @@ func TestBackendClient_GetVariable_ParsesPinnedFixtureShape(t *testing.T) {
 	}
 }
 
+// A 404 from this route is the app saying no variable has that key, which is an answer.
+// Anything else that goes wrong has to stay an error: a script that reads a counter as
+// unset starts it again from nothing, over the value it couldn't read.
+func TestBackendClient_GetVariable_NotFoundIsNoVariable(t *testing.T) {
+	notFound := testsupport.LoadFixture(t, "variables.json", "notFound", nil)
+
+	var mu sync.Mutex
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
+		notFound.Write(w)
+	}))
+	defer srv.Close()
+
+	c := service.NewBackendClient(backendConfig(srv.URL, 3), quietLogger())
+	v, err := c.GetVariable(capCtx(), testExecutionID, testUserID, "MY_KEY")
+	if err != nil {
+		t.Fatalf("GetVariable: %v, want no error for a variable that doesn't exist", err)
+	}
+	if v != nil {
+		t.Errorf("variable = %#v, want nil", v)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 1 {
+		t.Errorf("hits = %d, want 1 (a 404 is an answer, so it isn't retried)", hits)
+	}
+}
+
+func TestBackendClient_GetVariable_OtherFailuresAreErrors(t *testing.T) {
+	cases := []struct {
+		name     string
+		scenario string
+		want     string
+	}{
+		{"server error", "serverError", "Internal server error"},
+		{"expired capability", "unauthorized", "Missing job capability token"},
+		{"another user's variable", "forbiddenUserScope", "Capability token is not valid for this user"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			answer := testsupport.LoadFixture(t, "variables.json", tc.scenario, nil)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				answer.Write(w)
+			}))
+			defer srv.Close()
+
+			c := service.NewBackendClient(backendConfig(srv.URL, 0), quietLogger())
+			v, err := c.GetVariable(capCtx(), testExecutionID, testUserID, "MY_KEY")
+			if err == nil {
+				t.Fatalf("GetVariable returned %#v and no error", v)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestBackendClient_GetExecutionContext_ParsesPinnedFixtureShape(t *testing.T) {
 	success := testsupport.LoadFixture(t, "executions-context.json", "success", map[string]interface{}{
 		"executionId": testExecutionID,
