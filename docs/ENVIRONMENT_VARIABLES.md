@@ -575,8 +575,8 @@ docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 ```
 
 From a source checkout, the same flags go on
-`pnpm --filter @cronium/app rotate:secrets`, with the instance's `DATABASE_URL`,
-`ENCRYPTION_KEY`, `AUTH_URL` and `PUBLIC_APP_URL` set.
+`pnpm --filter @cronium/app rotate:secrets`, with the instance's `.env` loaded and
+its `DATABASE_URL` reachable from where you run it.
 
 Nothing changes for senders, subscribers or scripts: signatures still use the same
 secret, deliveries send the same headers, and `cronium.getVariable()` returns the
