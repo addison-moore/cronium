@@ -8,6 +8,7 @@ import {
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function GET(
   req: NextRequest,
@@ -49,7 +50,7 @@ export async function GET(
 
     return NextResponse.json(toServerApiDto(server));
   } catch (error) {
-    console.error("Error fetching server:", error);
+    console.error("Error fetching server:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to fetch server" },
       { status: 500 },
@@ -138,7 +139,7 @@ export async function PUT(
           );
         }
       } catch (error) {
-        console.error("SSH connection test error:", error);
+        console.error("SSH connection test error:", failureWithStack(error));
 
         // Provide a detailed error message
         const errorMessage =
@@ -183,7 +184,7 @@ export async function PUT(
 
     return NextResponse.json(toServerApiDto(updatedServer));
   } catch (error) {
-    console.error("Error updating server:", error);
+    console.error("Error updating server:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to update server" },
       { status: 500 },
@@ -231,7 +232,7 @@ export async function DELETE(
       { status: 200 },
     );
   } catch (error) {
-    console.error("Error deleting server:", error);
+    console.error("Error deleting server:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to delete server" },
       { status: 500 },

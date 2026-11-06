@@ -7,6 +7,7 @@ import { WorkflowTriggerType, EventStatus } from "@/shared/schema";
 import { startWorkflowRun } from "@/lib/scheduling/workflow-engine";
 import { RateLimitService } from "@/lib/rate-limit-service";
 import { hashWorkflowWebhookKey } from "@/lib/workflow-webhook-key";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Cap webhook payloads to keep untrusted input bounded
 const MAX_PAYLOAD_BYTES = 1024 * 1024; // 1 MB
@@ -116,7 +117,7 @@ export async function POST(
       .catch((error) => {
         console.error(
           `Error starting workflow ${workflow.id} via webhook:`,
-          error,
+          failureWithStack(error),
         );
       });
 
@@ -127,7 +128,10 @@ export async function POST(
     });
   } catch (error) {
     // Key deliberately omitted from the log (bearer credential, HI-12).
-    console.error("Failed to process workflow webhook:", error);
+    console.error(
+      "Failed to process workflow webhook:",
+      failureWithStack(error),
+    );
     return NextResponse.json(
       { success: false, message: "Failed to process webhook" },
       { status: 500 },
