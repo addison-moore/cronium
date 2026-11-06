@@ -103,6 +103,16 @@ the event form and the JSON import dialog say that a reverse proxy refused it, a
 callers of the REST API and `/api/mcp` get the proxy's own 413, which may not be
 JSON.
 
+Anything else in front of the app can also answer in its place. When that happens,
+the app names the status and says it isn't Cronium's answer, as in `Got HTTP 502,
+not Cronium's answer` while Cronium restarts behind a proxy. A sign-in proxy's
+redirect reads `Got a redirect, not Cronium's answer`, and signing in again in a
+new tab keeps what's in the form. A web application firewall needs an exception for
+`/api/trpc/` and the event routes of the REST API: at its default settings,
+ModSecurity with the OWASP Core Rule Set refuses ordinary scripts, such as one with
+`rm -rf /tmp/build` or `curl ... | bash` in it, with a 403, and any request over
+128 KB with a 400.
+
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
 origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list
