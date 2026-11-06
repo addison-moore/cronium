@@ -7,7 +7,7 @@ import {
   tooLongToSaveMessage,
 } from "../event-payload";
 import { eventFormSchema, type EventFormData } from "../event-form-schema";
-import { createEventSchema } from "@/shared/schemas/events";
+import { createEventSchema, updateEventSchema } from "@/shared/schemas/events";
 import {
   CatchupPolicy,
   EventStatus,
@@ -212,6 +212,31 @@ describe("buildEventPayload", () => {
         makeFormData({ type: EventType.TOOL_ACTION, toolActionConfig: null }),
       ).toolActionConfig,
     ).toBeUndefined();
+  });
+
+  it("sends the HTTP fields only for an HTTP request", () => {
+    const payload = buildEventPayload(
+      makeFormData({
+        type: EventType.BASH,
+        content: "true",
+        httpMethod: "POST",
+        httpUrl: "",
+        httpHeaders: [{ key: "X-Key", value: "v" }],
+        httpBody: '{"a":1}',
+      }),
+    );
+
+    expect(payload.httpMethod).toBeUndefined();
+    expect(payload.httpUrl).toBeUndefined();
+    expect(payload.httpBody).toBeUndefined();
+    expect(payload).not.toHaveProperty("httpHeaders");
+    // The server refuses an empty URL, and a Bash event has no use for one.
+    expect(updateEventSchema.safeParse({ id: 1, httpUrl: "" }).success).toBe(
+      false,
+    );
+    expect(updateEventSchema.safeParse({ id: 1, ...payload }).success).toBe(
+      true,
+    );
   });
 
   it("includes httpHeaders only for HTTP request events", () => {

@@ -275,6 +275,10 @@ const updateEvent = api.events.update.useMutation({
 });
 ```
 
+### Keeping a Cached Event Current
+
+A mutation doesn't have to update `events.getById` after writing to an event. The app's `QueryClient` (`src/lib/query-client.ts`) does it for every `events.update`, `events.activate`, `events.deactivate` and `events.resetCounter`, wherever it's called from. The edit forms start from that copy and a save sends all of it back, so a stale copy puts old values back on the server. A new procedure that writes to an event's row belongs in that file too.
+
 ## Authentication & Authorization
 
 ### Middleware Implementation

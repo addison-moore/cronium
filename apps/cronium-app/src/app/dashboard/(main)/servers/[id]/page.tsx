@@ -41,7 +41,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { ServerDetailsHeader } from "@/components/server-details/ServerDetailsHeader";
 import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
+import { QUERY_OPTIONS, trpcErrorMessage } from "@/trpc/shared";
 
 interface ServerDetailsPageProps {
   params: Promise<{ id: string }>;
@@ -107,6 +107,21 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
       // Reset manual check flag
       setIsManualCheck(false);
     },
+    onError: (error) => {
+      // Like success, only the button reports. The check on page load is refused
+      // on every view of a shared or archived server, which the page still shows.
+      if (isManualCheck) {
+        toast({
+          title: "Health Check Failed",
+          description: trpcErrorMessage(
+            error,
+            "Failed to check the server. Please try again.",
+          ),
+          variant: "destructive",
+        });
+      }
+      setIsManualCheck(false);
+    },
   });
 
   const deleteServerMutation = trpc.servers.delete.useMutation({
@@ -116,6 +131,16 @@ export default function ServerDetailsPage({ params }: ServerDetailsPageProps) {
         description: "The server has been successfully deleted.",
       });
       router.push("/dashboard/servers");
+    },
+    onError: (error) => {
+      toast({
+        title: "Deletion Failed",
+        description: trpcErrorMessage(
+          error,
+          "Failed to delete the server. Please try again.",
+        ),
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       setIsDeleteDialogOpen(false);

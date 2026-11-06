@@ -13,6 +13,7 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { TRPCClientError } from "@trpc/client";
 
 const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
@@ -940,6 +941,66 @@ describe("EventForm", () => {
     });
   });
 
+  describe("when the server refuses a save", () => {
+    const refusal = (message: string, zodError: unknown = null) =>
+      TRPCClientError.from({
+        error: {
+          message,
+          code: -32600,
+          data: { code: "BAD_REQUEST", httpStatus: 400, zodError },
+        },
+      });
+
+    async function saveRefused(error: unknown) {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      mockCreateMutateAsync.mockRejectedValue(error);
+      const user = userEvent.setup();
+      render(
+        <EventForm initialData={{ ...scheduledBashEvent, name: "Refused" }} />,
+      );
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+      await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    }
+
+    it("gives a validation failure's sentences, not its JSON", async () => {
+      await saveRefused(
+        refusal('[{"code":"too_big","path":["description"]}]', {
+          formErrors: [],
+          fieldErrors: {
+            description: ["Description must be less than 500 characters"],
+          },
+        }),
+      );
+
+      expect(mockToast).toHaveBeenCalledTimes(1);
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Description must be less than 500 characters",
+        variant: "destructive",
+      });
+    });
+
+    it("gives any other refusal as it stands", async () => {
+      await saveRefused(refusal("Event not found"));
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Event not found",
+        variant: "destructive",
+      });
+    });
+
+    it("still says something when the error has no message", async () => {
+      await saveRefused(refusal(""));
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Failed to create event. Please try again.",
+        variant: "destructive",
+      });
+    });
+  });
+
   describe("a server the event is linked to that the list leaves out", () => {
     const retiredBox = {
       id: 9,
@@ -1357,6 +1418,313 @@ describe("EventForm", () => {
       render(<EventForm initialData={scheduledBashEvent} />);
 
       expect(rowNames()).toEqual(["location-local", "server-6"]);
+    });
+  });
+
+  // Set through the REST API, MCP or a JSON import. The form itself only writes links.
+  describe("an active direct server", () => {
+    const otherBox = { id: 7, name: "other-box", address: "192.0.2.30" };
+    const thirdBox = { id: 8, name: "third-box", address: "192.0.2.40" };
+    const retiredBox = {
+      id: 9,
+      name: "retired-box",
+      address: "192.0.2.20",
+      isArchived: true,
+    };
+    const DIRECT_ROW = "sandbox (192.0.2.10)";
+    const OTHER_ROW = "other-box (192.0.2.30)";
+    const THIRD_ROW = "third-box (192.0.2.40)";
+    const LOCAL_ROW = "Local (Cronium host)";
+    const ARCHIVED_ROW = "retired-box (192.0.2.20) Archived";
+    const ARCHIVED_NOTICE =
+      /can't be saved or run while an archived server is ticked/;
+    const NO_LOCATION = "Select at least one execution location";
+
+    function directEvent(
+      runLocation: RunLocation,
+      overrides: Record<string, unknown> = {},
+    ) {
+      return {
+        id: 5,
+        name: "Nightly job",
+        type: EventType.BASH,
+        content: "echo hello",
+        runLocation,
+        serverId: sandbox.id,
+        server: sandbox,
+        servers: [],
+        ...overrides,
+      };
+    }
+
+    function renderEditing(initialData: ReturnType<typeof directEvent>) {
+      const view = render(
+        <EventForm initialData={initialData} isEditing eventId={5} />,
+      );
+      return { user: userEvent.setup(), rerender: view.rerender };
+    }
+
+    function ticked(name: string, checked: boolean) {
+      return screen.getByRole("checkbox", { name, checked });
+    }
+
+    async function saved(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole("button", { name: "Update Event" }));
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      return mockUpdateMutateAsync.mock.calls.at(-1)?.[0] as Record<
+        string,
+        unknown
+      >;
+    }
+
+    beforeEach(() => {
+      mockActiveServers = [sandbox, otherBox, thirdBox];
+    });
+
+    it.each([
+      [RunLocation.LOCAL_AND_REMOTE, true],
+      [RunLocation.REMOTE, false],
+    ])(
+      "keeps a %s event on it through an untouched save",
+      async (location, onLocal) => {
+        const { user } = renderEditing(directEvent(location));
+
+        expect(
+          await screen.findByRole("checkbox", {
+            name: DIRECT_ROW,
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(ticked(LOCAL_ROW, onLocal)).toBeInTheDocument();
+        expect(screen.queryByText(ARCHIVED_NOTICE)).not.toBeInTheDocument();
+
+        expect(await saved(user)).toEqual(
+          expect.objectContaining({
+            id: 5,
+            runLocation: location,
+            // The form only writes links, so this is where the direct server goes.
+            selectedServerIds: [sandbox.id],
+            serverId: null,
+          }),
+        );
+        expect(screen.queryByText(NO_LOCATION)).not.toBeInTheDocument();
+      },
+    );
+
+    it("does the same for an HTTP request", async () => {
+      const { user } = renderEditing(
+        directEvent(RunLocation.REMOTE, {
+          type: EventType.HTTP_REQUEST,
+          content: "",
+          httpMethod: "GET",
+          httpUrl: "https://example.test/ping",
+        }),
+      );
+      await screen.findByRole("checkbox", { name: DIRECT_ROW, checked: true });
+
+      expect(await saved(user)).toEqual(
+        expect.objectContaining({
+          runLocation: "REMOTE",
+          selectedServerIds: [sandbox.id],
+          serverId: null,
+        }),
+      );
+    });
+
+    it("gives it a row when the list didn't return it", async () => {
+      // One past the list's limit of 100.
+      mockActiveServers = [otherBox];
+      const { user } = renderEditing(directEvent(RunLocation.LOCAL_AND_REMOTE));
+
+      const row = await screen.findByRole("checkbox", {
+        name: DIRECT_ROW,
+        checked: true,
+      });
+      expect(row).toHaveAttribute("id", "server-6");
+
+      expect(await saved(user)).toEqual(
+        expect.objectContaining({
+          runLocation: "LOCAL_AND_REMOTE",
+          selectedServerIds: [sandbox.id],
+        }),
+      );
+    });
+
+    it("can be unticked, which makes a LOCAL_AND_REMOTE event local", async () => {
+      const { user } = renderEditing(directEvent(RunLocation.LOCAL_AND_REMOTE));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: DIRECT_ROW }),
+      );
+
+      expect(await saved(user)).toEqual(
+        expect.objectContaining({
+          runLocation: "LOCAL",
+          selectedServerIds: [],
+          serverId: null,
+        }),
+      );
+    });
+
+    it("asks for another location once a REMOTE event's only server is unticked", async () => {
+      const { user } = renderEditing(directEvent(RunLocation.REMOTE));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: DIRECT_ROW }),
+      );
+      await user.click(screen.getByRole("button", { name: "Update Event" }));
+
+      expect(await screen.findByText(NO_LOCATION)).toBeInTheDocument();
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("can be swapped for another server", async () => {
+      const { user } = renderEditing(directEvent(RunLocation.REMOTE));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: DIRECT_ROW }),
+      );
+      await user.click(screen.getByRole("checkbox", { name: OTHER_ROW }));
+
+      expect((await saved(user)).selectedServerIds).toEqual([otherBox.id]);
+    });
+
+    it("can be joined by another server", async () => {
+      const { user } = renderEditing(directEvent(RunLocation.REMOTE));
+      await screen.findByRole("checkbox", { name: DIRECT_ROW, checked: true });
+
+      await user.click(screen.getByRole("checkbox", { name: OTHER_ROW }));
+
+      expect((await saved(user)).selectedServerIds).toEqual([
+        sandbox.id,
+        otherBox.id,
+      ]);
+    });
+
+    it("stays unticked when the same event comes back as a new object", async () => {
+      // EventEditTab hands over a new object on every render, and every toast
+      // re-renders it. See __tests__/EventEditTab.test.tsx for that wiring.
+      const event = directEvent(RunLocation.LOCAL_AND_REMOTE);
+      const { user, rerender } = renderEditing(event);
+      const row = await screen.findByRole("checkbox", { name: DIRECT_ROW });
+      await user.click(row);
+
+      rerender(<EventForm initialData={{ ...event }} isEditing eventId={5} />);
+
+      expect(row).not.toBeChecked();
+    });
+
+    it("leaves a LOCAL event's leftover one out, because ticking it would add a server", async () => {
+      const { user } = renderEditing(directEvent(RunLocation.LOCAL));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: DIRECT_ROW,
+          checked: false,
+        }),
+      ).toBeInTheDocument();
+      expect(ticked(LOCAL_ROW, true)).toBeInTheDocument();
+
+      expect(await saved(user)).toEqual(
+        expect.objectContaining({
+          runLocation: "LOCAL",
+          selectedServerIds: [],
+          serverId: null,
+        }),
+      );
+    });
+
+    // Where a job really goes: tests/storage/event-save-direct-server.test.ts.
+    describe("alongside links", () => {
+      it("takes it over a lone link on a REMOTE event, where a run goes to it", async () => {
+        const { user } = renderEditing(
+          directEvent(RunLocation.REMOTE, { servers: [otherBox] }),
+        );
+
+        await screen.findByRole("checkbox", {
+          name: DIRECT_ROW,
+          checked: true,
+        });
+        expect(ticked(OTHER_ROW, false)).toBeInTheDocument();
+
+        expect(await saved(user)).toEqual(
+          expect.objectContaining({
+            runLocation: "REMOTE",
+            selectedServerIds: [sandbox.id],
+          }),
+        );
+      });
+
+      it.each([
+        [
+          "two links on a REMOTE event",
+          RunLocation.REMOTE,
+          [otherBox, thirdBox],
+          [OTHER_ROW, THIRD_ROW],
+        ],
+        [
+          "a link on a LOCAL_AND_REMOTE event",
+          RunLocation.LOCAL_AND_REMOTE,
+          [otherBox],
+          [OTHER_ROW],
+        ],
+      ])(
+        "leaves it out with %s, where a run skips it",
+        async (_label, location, servers, rows) => {
+          const { user } = renderEditing(directEvent(location, { servers }));
+
+          await screen.findByRole("checkbox", {
+            name: DIRECT_ROW,
+            checked: false,
+          });
+          for (const row of rows) {
+            expect(ticked(row, true)).toBeInTheDocument();
+          }
+
+          expect(await saved(user)).toEqual(
+            expect.objectContaining({
+              runLocation: location,
+              selectedServerIds: servers.map((server) => server.id),
+              serverId: null,
+            }),
+          );
+        },
+      );
+
+      it("keeps a server that's both the direct one and a link ticked, once", async () => {
+        const { user } = renderEditing(
+          directEvent(RunLocation.LOCAL_AND_REMOTE, { servers: [sandbox] }),
+        );
+
+        await screen.findByRole("checkbox", {
+          name: DIRECT_ROW,
+          checked: true,
+        });
+
+        expect((await saved(user)).selectedServerIds).toEqual([sandbox.id]);
+      });
+
+      it("keeps an archived link ticked beside it, because that link stops the event", async () => {
+        const { user } = renderEditing(
+          directEvent(RunLocation.REMOTE, { servers: [retiredBox] }),
+        );
+
+        await screen.findByRole("checkbox", {
+          name: DIRECT_ROW,
+          checked: true,
+        });
+        expect(ticked(ARCHIVED_ROW, true)).toBeInTheDocument();
+        expect(screen.getByText(ARCHIVED_NOTICE)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("checkbox", { name: ARCHIVED_ROW }));
+
+        expect(await saved(user)).toEqual(
+          expect.objectContaining({
+            runLocation: "REMOTE",
+            selectedServerIds: [sandbox.id],
+          }),
+        );
+      });
     });
   });
 });
