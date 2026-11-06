@@ -4,6 +4,7 @@ import {
   extractServerIds,
   linkedServers,
   parseInitialEnvVars,
+  parseInitialHttpHeaders,
   parseInitialTags,
 } from "../event-form-defaults";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
@@ -137,6 +138,32 @@ describe("buildEventFormDefaults", () => {
     expect(defaults.selectedServerIds).toEqual([]);
     expect(defaults.envVars).toEqual([]);
     expect(defaults.tags).toEqual([]);
+  });
+});
+
+describe("parseInitialHttpHeaders", () => {
+  it("keeps headers the form can hold", () => {
+    const headers = [{ key: "X-Key", value: "v" }];
+    expect(parseInitialHttpHeaders(headers)).toEqual(headers);
+  });
+
+  it("leaves out anything the form's schema would refuse", () => {
+    expect(
+      parseInitialHttpHeaders([
+        { key: "X-Key", value: "v" },
+        { key: "X-Number", value: 1 },
+        { value: "no key" },
+        null,
+        "X-String",
+      ]),
+    ).toEqual([{ key: "X-Key", value: "v" }]);
+  });
+
+  it("gives an empty list for anything that isn't a list", () => {
+    expect(parseInitialHttpHeaders(null)).toEqual([]);
+    expect(parseInitialHttpHeaders(undefined)).toEqual([]);
+    expect(parseInitialHttpHeaders({ "X-Key": "v" })).toEqual([]);
+    expect(parseInitialHttpHeaders("[]")).toEqual([]);
   });
 });
 

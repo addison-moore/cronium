@@ -42,7 +42,9 @@ export function deriveRunLocation(
  * - `content` is only sent for script events.
  * - `startTime` (a `datetime-local` string) becomes an ISO timestamp or null.
  * - `toolActionConfig` is JSON-stringified for tool-action events only.
- * - `httpHeaders` is only included for HTTP request events.
+ * - The HTTP fields are only sent for HTTP request events. The form holds them for
+ *   any event that has them, and the server refuses an empty URL whether or not the
+ *   event would ever use it.
  */
 export function buildEventPayload(data: EventFormData) {
   const isScriptType = isScriptEventType(data.type);
@@ -74,6 +76,9 @@ export function buildEventPayload(data: EventFormData) {
         : undefined,
     envVars: data.envVars, // Already an array
     tags: data.tags, // Already an array
+    httpMethod: isHttpRequest ? data.httpMethod : undefined,
+    httpUrl: isHttpRequest ? data.httpUrl : undefined,
+    httpBody: isHttpRequest ? data.httpBody : undefined,
     // Include httpHeaders as array if it's HTTP request
     ...(isHttpRequest &&
       data.httpHeaders && {
