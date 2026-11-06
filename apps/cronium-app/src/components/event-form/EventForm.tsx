@@ -41,17 +41,12 @@ import {
   OverlapPolicy,
   type Tool,
 } from "@/shared/schema";
-import type { ToolActionConfig } from "./ToolActionSection";
 import type { ServerData } from "@/components/event-list/types";
 import { eventFormSchema, type EventFormData } from "./lib/event-form-schema";
 import {
   buildEventFormDefaults,
   buildTimezoneOptions,
-  extractServerIds,
   linkedServers,
-  parseInitialEnvVars,
-  parseInitialHttpHeaders,
-  parseInitialTags,
   type EventFormInitialData,
   type EventFormServer,
 } from "./lib/event-form-defaults";
@@ -162,7 +157,13 @@ export interface EventFormProps {
   showFooter?: boolean;
 }
 
-export default function EventForm({
+export default function EventForm(props: EventFormProps) {
+  // One form per event: what's been typed belongs to the event it was typed for. Within
+  // an event, a change to what's stored only reaches the fields nobody has edited.
+  return <EventFormFields key={props.initialData?.id} {...props} />;
+}
+
+function EventFormFields({
   initialData,
   isEditing = false,
   eventId,
@@ -188,11 +189,24 @@ export default function EventForm({
     Record<number, boolean>
   >({});
 
+  const storedValues = buildEventFormDefaults(initialData);
+
   // Initialize form with React Hook Form
   const form = useForm<EventFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     resolver: zodResolver(eventFormSchema) as any,
-    defaultValues: buildEventFormDefaults(initialData),
+    // What's stored, compared by value. initialData is a new object after every
+    // refetch, because Date fields defeat React Query's structural sharing, and on
+    // every render of the Edit tab. When a stored value really has changed, a field
+    // nobody has edited takes it and an edited one keeps what was typed, so a save
+    // doesn't write the old value of something changed elsewhere. Anything that edits
+    // a field from outside its Controller needs shouldDirty to count as an edit.
+    values: storedValues,
+    resetOptions: {
+      keepDirtyValues: true,
+      keepErrors: true,
+      keepIsSubmitted: true,
+    },
   });
 
   const {
@@ -298,74 +312,30 @@ export default function EventForm({
     return () => document.removeEventListener("keydown", handleKeyPress);
   }, [form]);
 
-  // Initialize form data from initialData, once per event. The object itself can't
-  // be the dependency: EventEditTab builds a new one on every render, and every
-  // toast re-renders it, so each run put the saved tags, env vars and servers back
-  // over what had been edited. A refused save lost a new env var, and a toast
-  // closing re-ticked an archived server that had just been unticked. The event's
-  // type can't be either: changing it to or from HTTP Request did the same.
+  // The form can't use this config, so it shows none. There's no other sign of why.
   useEffect(() => {
-    if (initialData) {
-      // Parse and set tool action config. Stored value may be an object (newer
-      // events) or a (double-)encoded JSON string (older events); handle both.
-      if (initialData.toolActionConfig) {
-        const config = parseToolActionConfig(initialData.toolActionConfig);
-        if (config) {
-          setValue("toolActionConfig", config as ToolActionConfig);
-        } else {
-          console.error(
-            "Failed to parse tool action config:",
-            initialData.toolActionConfig,
-          );
-        }
-      }
-
-      // Parse and set tags
-      const tags = parseInitialTags(initialData.tags);
-      if (tags) {
-        setValue("tags", tags);
-      }
-
-      // Parse and set env vars
-      const envVars = parseInitialEnvVars(
-        initialData.environmentVariables ?? initialData.envVars,
-      );
-      if (envVars) {
-        setValue("envVars", envVars);
-      }
-
-      // Parse HTTP request data, whatever the event's type. One that used to be an
-      // HTTP request still has these, and they should be there if it's switched
-      // back. buildEventPayload only sends them for an HTTP request.
-      if (initialData.httpMethod) {
-        setValue("httpMethod", initialData.httpMethod);
-        setValue("httpUrl", initialData.httpUrl ?? "");
-        setValue(
-          "httpHeaders",
-          parseInitialHttpHeaders(initialData.httpHeaders),
-        );
-        setValue("httpBody", initialData.httpBody ?? "");
-      }
-
-      // Set server IDs. An archived server stays selected until someone unticks
-      // it, and so does a direct one a run goes to. Dropped here, a LOCAL_AND_REMOTE
-      // event with nothing else selected would turn LOCAL on any save
-      // (deriveRunLocation), quietly moving the script, and a REMOTE one would ask
-      // for a location it already has.
-      if (initialData.servers && Array.isArray(initialData.servers)) {
-        setValue(
-          "selectedServerIds",
-          extractServerIds(linkedServers(initialData)),
-        );
-      }
+    const config = initialData?.toolActionConfig;
+    if (config && !parseToolActionConfig(config)) {
+      console.error("Failed to parse tool action config:", config);
     }
-  }, [initialData?.id, setValue]);
+  }, [initialData?.toolActionConfig]);
+
+  // This is kept by position, so when a refetch changes the rows, the variable that
+  // lands on a shown row would otherwise appear in the clear.
+  const storedEnvVarKeys = JSON.stringify(
+    storedValues.envVars.map((envVar) => envVar.key),
+  );
+  useEffect(() => {
+    setPasswordVisibility({});
+  }, [storedEnvVarKeys]);
 
   // Update content when type changes
   useEffect(() => {
     if (!initialData?.content || initialData?.type !== type) {
       if (isScriptType) {
-        setValue("content", getDefaultScriptContent(type));
+        setValue("content", getDefaultScriptContent(type), {
+          shouldDirty: true,
+        });
       }
     }
     // Only when the type changes. With anything from initialData here, a refetch
@@ -376,9 +346,9 @@ export default function EventForm({
   // Force local execution for Tool Actions
   useEffect(() => {
     if (type === EventType.TOOL_ACTION) {
-      setValue("runLocation", RunLocation.LOCAL);
-      setValue("runOnLocal", true);
-      setValue("selectedServerIds", []);
+      setValue("runLocation", RunLocation.LOCAL, { shouldDirty: true });
+      setValue("runOnLocal", true, { shouldDirty: true });
+      setValue("selectedServerIds", [], { shouldDirty: true });
     }
   }, [type, setValue]);
 
@@ -680,7 +650,9 @@ export default function EventForm({
       {isScriptType && (
         <>
           <AIScriptAssistant
-            onApplyCode={(code) => setValue("content", code)}
+            onApplyCode={(code) =>
+              setValue("content", code, { shouldDirty: true })
+            }
             scriptType={type}
             currentCode={watch("content") ?? ""}
           />
@@ -704,7 +676,9 @@ export default function EventForm({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setValue("content", "")}
+                    onClick={() =>
+                      setValue("content", "", { shouldDirty: true })
+                    }
                     className="flex items-center gap-2"
                   >
                     <Trash2 className="h-4 w-4" />
