@@ -427,6 +427,28 @@ describe("getAll", () => {
   });
 });
 
+describe("saving env vars", () => {
+  // A save deletes the event's variables and then adds them back one at a time, so a
+  // row the database refuses used to cost every row after it.
+  it.each([
+    ["a value too long to deliver", { key: "A", value: "x".repeat(128_001) }],
+    ["a key the column can't hold", { key: "K".repeat(256), value: "v" }],
+    ["a NUL in a key, which Postgres can't store", { key: "A\0B", value: "v" }],
+  ])("refuses %s before touching the variables", async (_label, envVar) => {
+    const caller = callerWith(sessionFor());
+
+    await expect(
+      caller.events.update({
+        id: 1,
+        envVars: [{ key: "KEEP", value: "kept" }, envVar],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    expect(storageMock.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+    expect(storageMock.createEnvVar).not.toHaveBeenCalled();
+  });
+});
+
 describe("getById", () => {
   it("returns the full DTO for the owner", async () => {
     storageMock.getEventWithRelations.mockResolvedValue(
@@ -1328,6 +1350,136 @@ describe("fork", () => {
     // The owner's environment and server bindings never transfer.
     expect(storageMock.createEnvVar).not.toHaveBeenCalled();
     expect(storageMock.setEventServers).not.toHaveBeenCalled();
+  });
+
+  describe("when your event is linked to an archived server", () => {
+    function linkEvent(
+      servers: Array<{ id: number; name: string; isArchived: boolean }>,
+    ) {
+      dbState.servers = servers.map(({ id, isArchived }) => ({
+        id,
+        userId: OWNER,
+        shared: false,
+        isArchived,
+      }));
+      dbState.eventServers = servers.map(({ id }) => ({ serverId: id }));
+      storageMock.getEventWithRelations.mockResolvedValue(
+        eventWithRelations({ runLocation: RunLocation.REMOTE, servers }),
+      );
+    }
+
+    it("refuses with the server's name and writes nothing", async () => {
+      linkEvent([{ id: 7, name: "retired-box", isArchived: true }]);
+      const caller = callerWith(sessionFor());
+
+      await expect(caller.events.fork({ id: 1 })).rejects.toMatchObject({
+        code: "CONFLICT",
+        message:
+          "This event can't be forked while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
+      });
+      // Nothing else can be written without the row this creates.
+      expect(storageMock.createScript).not.toHaveBeenCalled();
+    });
+
+    it("refuses when any one of its servers is archived, and names only those", async () => {
+      linkEvent([
+        { id: 6, name: "live-box", isArchived: false },
+        { id: 7, name: "retired-one", isArchived: true },
+        { id: 8, name: "retired-two", isArchived: true },
+      ]);
+      const caller = callerWith(sessionFor());
+
+      const error = await caller.events
+        .fork({ id: 1 })
+        .catch((caught: unknown) => caught as Error);
+
+      expect(error).toMatchObject({ code: "CONFLICT" });
+      const { message } = error as Error;
+      expect(message).toContain(
+        "archived servers: retired-one, retired-two. Restore them or remove them",
+      );
+      expect(message).not.toContain("live-box");
+      expect(storageMock.createScript).not.toHaveBeenCalled();
+    });
+
+    it("refuses when the event's direct server is archived", async () => {
+      const server = { id: 7, name: "retired-box", isArchived: true };
+      dbState.events = [eventAccessRow({ serverId: server.id })];
+      dbState.servers = [
+        { id: server.id, userId: OWNER, shared: false, isArchived: true },
+      ];
+      storageMock.getEventWithRelations.mockResolvedValue(
+        eventWithRelations({ serverId: server.id, server }),
+      );
+      const caller = callerWith(sessionFor());
+
+      await expect(caller.events.fork({ id: 1 })).rejects.toMatchObject({
+        code: "CONFLICT",
+        message: expect.stringContaining("retired-box"),
+      });
+      expect(storageMock.createScript).not.toHaveBeenCalled();
+    });
+
+    it("names a server once when it is both the direct server and a link", async () => {
+      const server = { id: 7, name: "retired-box", isArchived: true };
+      linkEvent([server]);
+      storageMock.getEventWithRelations.mockResolvedValue(
+        eventWithRelations({ serverId: 7, server, servers: [server] }),
+      );
+      const caller = callerWith(sessionFor());
+
+      await expect(caller.events.fork({ id: 1 })).rejects.toMatchObject({
+        message: expect.stringContaining(
+          "an archived server: retired-box. Restore it",
+        ),
+      });
+    });
+
+    it("never names a server that isn't yours", async () => {
+      dbState.servers = [
+        { id: 7, userId: OTHER, shared: false, isArchived: true },
+      ];
+      dbState.eventServers = [{ serverId: 7 }];
+      storageMock.getEventWithRelations.mockResolvedValue(
+        eventWithRelations({
+          servers: [{ id: 7, name: "their-box", isArchived: true }],
+        }),
+      );
+      const caller = callerWith(sessionFor());
+
+      const error = await caller.events
+        .fork({ id: 1 })
+        .catch((caught: unknown) => caught as Error);
+
+      expect(error).toMatchObject({ code: "FORBIDDEN" });
+      expect((error as Error).message).not.toContain("their-box");
+    });
+  });
+
+  it("forks a shared template whose server is archived, without naming it", async () => {
+    dbState.events = [eventAccessRow({ userId: OTHER, shared: true })];
+    const server = { id: 9, name: "their-box", isArchived: true };
+    storageMock.getEventWithRelations
+      .mockResolvedValueOnce(
+        eventWithRelations({
+          userId: OTHER,
+          shared: true,
+          runLocation: RunLocation.REMOTE,
+          serverId: 9,
+          server,
+          servers: [server],
+        }),
+      )
+      .mockResolvedValueOnce(eventWithRelations({ id: 5 }));
+    const caller = callerWith(sessionFor());
+
+    const result = await caller.events.fork({ id: 1 });
+
+    expect(storageMock.createScript.mock.calls[0]?.[0]).toMatchObject({
+      runLocation: RunLocation.LOCAL,
+      serverId: null,
+    });
+    expect(JSON.stringify(result)).not.toContain("their-box");
   });
 
   it("denies forking another user's unshared event", async () => {
