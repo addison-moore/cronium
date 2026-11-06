@@ -3,6 +3,12 @@
  */
 
 import { db } from "@/server/db";
+import { driverError } from "@/lib/pg-errors";
+import {
+  quotedForLog,
+  serializeEntry,
+  storableEntry,
+} from "@/lib/security/audit-entry";
 import { toolAuditLogs } from "@/shared/schema";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 
@@ -37,14 +43,121 @@ export interface AuditLogEntry {
 }
 
 /**
+ * How many entries to hold while the database can't take them. Past this the
+ * oldest go to the server log instead. Oldest first, because an entry stuck for
+ * a reason nothing here recognises sits at the front, and this is what eventually
+ * clears it. A flush writes them all in one insert, and at 8 bind parameters each
+ * this is well under Postgres's limit of 65,535.
+ */
+export const MAX_PENDING_AUDIT_ENTRIES = 1000;
+
+type AuditRow = typeof toolAuditLogs.$inferInsert;
+
+function toRow(entry: AuditLogEntry, keepToolReference = true): AuditRow {
+  const { toolId } = entry.context;
+  // A deleted credential can't be referenced, so its id moves into the details.
+  const referencesTool =
+    keepToolReference && entry.action !== "credential.delete";
+
+  return {
+    userId: entry.context.userId,
+    toolId: referencesTool ? (toolId ?? null) : null,
+    action: entry.action,
+    actionDetails: {
+      ...entry.details,
+      additionalData: entry.context.additionalData,
+      ...(!referencesTool && toolId ? { toolId } : {}),
+    },
+    ipAddress: entry.context.ipAddress ?? null,
+    userAgent: entry.context.userAgent ?? null,
+    success: entry.success,
+    errorMessage: entry.errorMessage ?? null,
+  };
+}
+
+/**
+ * The row for an entry whose contents the database still won't store once they
+ * are cleaned: who did what and whether it worked.
+ */
+function toMinimalRow(entry: AuditLogEntry, rejection: unknown): AuditRow {
+  const { code, name } = driverError(rejection);
+  const { toolId } = entry.context;
+
+  return {
+    userId: entry.context.userId,
+    toolId: null,
+    action: entry.action,
+    actionDetails: {
+      detailsRejected: code ?? name,
+      ...(toolId ? { toolId } : {}),
+    },
+    success: entry.success,
+  };
+}
+
+/**
+ * SQLSTATEs that blame the database rather than what was sent to it: a lost
+ * connection, a read-only replica, a rolled back transaction, a table a pending
+ * migration hasn't created, exhausted resources, a held lock, a shutdown or cancel,
+ * a system error. 23505 belongs here because this table's only unique index is its
+ * primary key: a collision means a restore left the sequence behind, and each
+ * attempt moves it on.
+ */
+const DATABASE_FAULT = /^(08|25|40|42|53|55|57|58)|^23505$/;
+
+/**
+ * SQLSTATEs only the values in a minimal row can cause: one its column can't hold,
+ * a missing one, a failed check, one too big or too deep for Postgres.
+ */
+const ENTRY_FAULT = /^(22|54)|^(23502|23514)$/;
+
+/** Thrown while encoding the values, before anything reaches Postgres. */
+function isEncodingFailure(name: string | undefined): boolean {
+  return name === "TypeError" || name === "RangeError";
+}
+
+/** Says nothing about the entry, so writing less of it wouldn't help. */
+function isDatabaseFault(error: unknown): boolean {
+  const { code, name, severity } = driverError(error);
+  if (isEncodingFailure(name)) return false;
+  // No severity means Postgres never answered: a socket error, a timeout.
+  return !severity || DATABASE_FAULT.test(code ?? "");
+}
+
+/** Proof enough to drop an entry, which an unfamiliar error isn't. */
+function isEntryFault(error: unknown): boolean {
+  const { code, name } = driverError(error);
+  return isEncodingFailure(name) || ENTRY_FAULT.test(code ?? "");
+}
+
+/** Leaves out Drizzle's own message, which repeats every value in the batch. */
+function describeFailure(error: unknown): string {
+  const { code, message, name } = driverError(error);
+  return quotedForLog(`${String(code ?? name)}: ${String(message)}`);
+}
+
+/** Returns the error if the row didn't go in; a database fault is thrown. */
+async function insertUnlessRejected(row: AuditRow): Promise<unknown> {
+  try {
+    await db.insert(toolAuditLogs).values(row);
+    return undefined;
+  } catch (error) {
+    if (isDatabaseFault(error)) throw error;
+    return error;
+  }
+}
+
+/**
  * Audit logger for tracking security events
  */
 export class AuditLogger {
   private static instance: AuditLogger;
   private buffer: AuditLogEntry[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
-  private readonly maxBufferSize = 100;
+  private readonly flushThreshold = 100;
   private readonly flushIntervalMs = 5000; // 5 seconds
+  private retrying = false;
+  private earlyFlush: Promise<void> | null = null;
 
   private constructor() {
     // Start flush interval
@@ -63,11 +176,23 @@ export class AuditLogger {
    */
   async log(entry: AuditLogEntry): Promise<void> {
     // Add to buffer
-    this.buffer.push(entry);
+    this.buffer.push(storableEntry(entry));
+    this.dropOldestPastLimit();
 
-    // Flush if buffer is full
-    if (this.buffer.length >= this.maxBufferSize) {
-      await this.flush();
+    // Flush a full batch early, one flush at a time so a failure can't put entries
+    // back out of order. The caller doesn't wait: what it did has already happened,
+    // and a write could take one insert or several per entry. While flushes are
+    // failing the interval does the retrying instead of every new entry.
+    if (
+      this.buffer.length >= this.flushThreshold &&
+      !this.retrying &&
+      !this.earlyFlush
+    ) {
+      this.earlyFlush = this.flush()
+        .catch(console.error)
+        .finally(() => {
+          this.earlyFlush = null;
+        });
     }
   }
 
@@ -189,42 +314,102 @@ export class AuditLogger {
   /**
    * Flush buffered logs to database
    */
-  private async flush(): Promise<void> {
+  async flush(): Promise<void> {
+    // Failures are dealt with here, not thrown: the action being audited has
+    // already happened.
     if (this.buffer.length === 0) return;
 
-    const logsToInsert = [...this.buffer];
+    const pending = this.buffer;
     this.buffer = [];
 
     try {
-      // Convert entries to database format
-      const dbEntries = logsToInsert.map((entry) => ({
-        userId: entry.context.userId,
-        // Set toolId to null for delete actions to avoid foreign key violations
-        toolId:
-          entry.action === "credential.delete"
-            ? null
-            : (entry.context.toolId ?? null),
-        action: entry.action,
-        actionDetails: {
-          ...entry.details,
-          additionalData: entry.context.additionalData,
-          // Include toolId in details for delete actions
-          ...(entry.action === "credential.delete" && entry.context.toolId
-            ? { toolId: entry.context.toolId }
-            : {}),
-        },
-        ipAddress: entry.context.ipAddress ?? null,
-        userAgent: entry.context.userAgent ?? null,
-        success: entry.success,
-        errorMessage: entry.errorMessage ?? null,
-      }));
-
       // Batch insert
-      await db.insert(toolAuditLogs).values(dbEntries);
+      await db
+        .insert(toolAuditLogs)
+        .values(pending.map((entry) => toRow(entry)));
+      this.retrying = false;
+      return;
     } catch (error) {
-      console.error("Failed to flush audit logs:", error);
-      // Re-add to buffer for retry
-      this.buffer.unshift(...logsToInsert);
+      if (isDatabaseFault(error)) {
+        this.keepForRetry(pending, error);
+        return;
+      }
+    }
+
+    // A batch insert is all or nothing, so one rejected entry failed the lot.
+    // Alone, it can only cost itself.
+    for (const [index, entry] of pending.entries()) {
+      try {
+        await this.writeAlone(entry);
+      } catch (error) {
+        this.keepForRetry(pending.slice(index), error);
+        return;
+      }
+    }
+    this.retrying = false;
+  }
+
+  /**
+   * Write one entry, giving up only what the database rejects. This table is the
+   * record of who changed or used a credential, so a row missing a field beats
+   * no row, and whenever a row holds less than its entry the server log gets the
+   * rest. Any error short of a database fault goes down these steps, because the
+   * row that finally goes in is what proves the entry was the problem. Throws if
+   * the entry should be kept for another try.
+   */
+  private async writeAlone(entry: AuditLogEntry): Promise<void> {
+    const rejected = await insertUnlessRejected(toRow(entry));
+    if (!rejected) return;
+
+    // Usually a credential deleted since the entry was logged, which is
+    // ordinary. The row ends up as it would have if the flush had come first,
+    // when ON DELETE SET NULL clears the reference, but keeps the id.
+    const rejectedAgain = await insertUnlessRejected(toRow(entry, false));
+    if (!rejectedAgain) {
+      const toolId = quotedForLog(String(JSON.stringify(entry.context.toolId)));
+      console.warn(
+        `[AuditLog] Stored a ${entry.action} entry without its tool reference: tool id ${toolId} was rejected (${describeFailure(rejected)}).`,
+      );
+      return;
+    }
+
+    const rejectedOutright = await insertUnlessRejected(
+      toMinimalRow(entry, rejectedAgain),
+    );
+    if (!rejectedOutright) {
+      console.error(
+        `[AuditLog] Stored a ${entry.action} entry without its details, which were rejected (${describeFailure(rejectedAgain)}). Full entry: ${serializeEntry(entry)}`,
+      );
+      return;
+    }
+
+    // Not even who did what went in. Only the entry's own fault justifies losing
+    // it; otherwise the table isn't taking anything, so it waits with the rest.
+    if (!isEntryFault(rejectedOutright)) throw rejectedOutright as Error;
+
+    console.error(
+      `[AuditLog] DROPPED a ${entry.action} entry the database rejected (${describeFailure(rejectedOutright)}). Full entry: ${serializeEntry(entry)}`,
+    );
+  }
+
+  /** Put entries back at the front of the buffer, in their original order. */
+  private keepForRetry(entries: AuditLogEntry[], error: unknown): void {
+    this.buffer = [...entries, ...this.buffer];
+    this.retrying = true;
+    console.error(
+      `[AuditLog] Failed to flush, ${entries.length} kept for retry: ${describeFailure(error)}`,
+    );
+    this.dropOldestPastLimit();
+  }
+
+  private dropOldestPastLimit(): void {
+    const excess = this.buffer.length - MAX_PENDING_AUDIT_ENTRIES;
+    if (excess <= 0) return;
+
+    for (const entry of this.buffer.splice(0, excess)) {
+      console.error(
+        `[AuditLog] DROPPED a ${entry.action} entry: more than ${MAX_PENDING_AUDIT_ENTRIES} are waiting to be written. Full entry: ${serializeEntry(entry)}`,
+      );
     }
   }
 
@@ -252,6 +437,7 @@ export class AuditLogger {
    */
   async shutdown(): Promise<void> {
     this.stopFlushInterval();
+    await this.earlyFlush;
     await this.flush();
   }
 }
