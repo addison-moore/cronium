@@ -23,10 +23,10 @@ env:
 jobs:
   node:
     name: Lint, Typecheck & Test (Node)
-    # Pull requests stay on GitHub-hosted runners: this repo accepts PRs from
-    # forks, and a fork PR running on self-hosted would execute untrusted code
-    # on our own machine.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
+    # Always GitHub-hosted. On the self-hosted runner, pnpm/action-setup fails
+    # with "Cannot find module '../lib/cli.js'" from the npm in the runner's
+    # bundled Node 24, which stops this job before any project code runs.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -239,12 +239,24 @@ jobs:
           go test -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out | tail -n 1
 
+      # The helper binaries the runner embeds are generated, not tracked. The
+      # nohelpers tag compiles without them.
       - name: Vet & test runner
         working-directory: apps/runner/cronium-runner
         run: |
-          go vet ./...
-          go test -coverprofile=coverage.out -covermode=atomic ./...
+          go vet -tags nohelpers ./...
+          go test -tags nohelpers -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out | tail -n 1
+
+      # Build the way a release does, so a helper that does not compile or is missing
+      # from an embed list fails here, then test what actually gets embedded.
+      - name: Build runner with generated helpers
+        working-directory: apps/runner/cronium-runner
+        run: |
+          sh ./build-helpers.sh
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/runner
+          GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/runner
+          go test ./internal/helpers/ ./internal/executor/
 
       # The ratchet script needs node. GitHub-hosted runners have it on PATH,
       # the self-hosted runner (used for pushes) does not — set it up
@@ -265,6 +277,9 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v${{ env.GOVULNCHECK_VERSION }}
 
       - name: govulncheck (Go modules)
+        env:
+          # Only the runner reads this: its helper binaries are generated.
+          GOFLAGS: -tags=nohelpers
         run: |
           for m in apps/orchestrator apps/runtime/cronium-runtime apps/runner/cronium-runner; do
             echo "== govulncheck $m =="

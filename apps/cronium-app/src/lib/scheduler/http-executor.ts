@@ -60,10 +60,13 @@ export async function executeHttpRequest(
       headers: headerObj,
       timeout: 30000, // 30-second timeout
       // SSRF hardening: the guarded agents re-validate the resolved IP at
-      // connect time (defeats DNS rebinding); redirects are not followed so a
-      // 3xx can't bounce past the guard; response/request size is capped.
+      // connect time (defeats DNS rebinding); a proxy from the environment is
+      // ignored because it would resolve the host itself, out of the guard's
+      // sight; redirects are not followed so a 3xx can't bounce past the guard;
+      // response/request size is capped.
       httpAgent: ssrfHttpAgent,
       httpsAgent: ssrfHttpsAgent,
+      proxy: false,
       maxRedirects: 0,
       maxContentLength: MAX_RESPONSE_BYTES,
       maxBodyLength: MAX_RESPONSE_BYTES,

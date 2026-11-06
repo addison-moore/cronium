@@ -1,12 +1,13 @@
 package executor
 
 import (
-	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,6 +23,8 @@ type Executor struct {
 	log       *logrus.Logger
 	workDir   string
 	manifest  *types.Manifest
+	stdout    io.Writer
+	stderr    io.Writer
 	cleanupMu sync.Mutex
 	cleaned   bool
 }
@@ -29,8 +32,19 @@ type Executor struct {
 // New creates a new executor
 func New(log *logrus.Logger) *Executor {
 	return &Executor{
-		log: log,
+		log:    log,
+		stdout: os.Stdout,
+		stderr: os.Stderr,
 	}
+}
+
+// ScriptExitError is a script that ran and exited non-zero.
+type ScriptExitError struct {
+	Code int
+}
+
+func (e *ScriptExitError) Error() string {
+	return fmt.Sprintf("script exited with code %d", e.Code)
 }
 
 // Execute runs a payload
@@ -81,14 +95,24 @@ func (e *Executor) Execute(payloadPath string) error {
 
 	// Execute script
 	if err := e.executeScript(); err != nil {
+		var scriptExit *ScriptExitError
+		if errors.As(err, &scriptExit) {
+			return err
+		}
 		return fmt.Errorf("script execution failed: %w", err)
 	}
 
-	// Collect output data if in bundled mode
+	// In bundled mode nothing carries the script's output or condition back to
+	// the app, so report them rather than lose them silently.
 	if output, err := e.CollectHelperOutput(); err != nil {
 		e.log.WithError(err).Warn("Failed to collect helper output")
 	} else if output != nil {
-		e.log.WithField("output", output).Info("Collected helper output")
+		e.log.WithField("output", output).Warn("Collected helper output that could not reach the app")
+	}
+	if condition, err := e.CollectHelperCondition(); err != nil {
+		e.log.WithError(err).Warn("Failed to collect helper condition")
+	} else if condition != nil {
+		e.log.WithField("condition", *condition).Warn("Collected workflow condition that could not reach the app")
 	}
 
 	e.log.Info("Script execution completed successfully")
@@ -185,87 +209,56 @@ exec(open('%s').read())
 
 	cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_WORK_DIR=%s", e.workDir))
 
-	// Pass through helper-related environment variables if they exist
+	// Pass through helper-related environment variables if they exist. The
+	// script also gets the names a container uses for the runtime API.
 	if helperMode := os.Getenv("CRONIUM_HELPER_MODE"); helperMode != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_HELPER_MODE=%s", helperMode))
 	}
 	if apiEndpoint := os.Getenv("CRONIUM_API_ENDPOINT"); apiEndpoint != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_API_ENDPOINT=%s", apiEndpoint))
+		cmd.Env = append(cmd.Env,
+			fmt.Sprintf("CRONIUM_API_ENDPOINT=%s", apiEndpoint),
+			fmt.Sprintf("CRONIUM_RUNTIME_API=%s", apiEndpoint),
+		)
 	}
 	if apiToken := os.Getenv("CRONIUM_API_TOKEN"); apiToken != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken))
+		cmd.Env = append(cmd.Env,
+			fmt.Sprintf("CRONIUM_API_TOKEN=%s", apiToken),
+			fmt.Sprintf("CRONIUM_EXECUTION_TOKEN=%s", apiToken),
+		)
 	}
 
-	// Get stdout and stderr pipes
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to get stdout pipe: %w", err)
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to get stderr pipe: %w", err)
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start command: %w", err)
-	}
-
-	// Stream output
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		e.streamOutput(stdout, "stdout")
-	}()
-
-	go func() {
-		defer wg.Done()
-		e.streamOutput(stderr, "stderr")
-	}()
-
-	// Wait for output streaming to complete
-	wg.Wait()
-
-	// Wait for command to complete
-	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-			e.log.WithField("exit_code", exitCode).Error("Script exited with non-zero status")
-			return fmt.Errorf("script exited with code %d", exitCode)
+	// require('cronium') resolves through NODE_PATH, as it does in a container.
+	if e.manifest.Interpreter == types.ScriptTypeNode {
+		nodePath := filepath.Join(e.workDir, ".cronium")
+		if existing := os.Getenv("NODE_PATH"); existing != "" {
+			nodePath += string(os.PathListSeparator) + existing
 		}
-		return fmt.Errorf("failed to wait for command: %w", err)
+		cmd.Env = append(cmd.Env, fmt.Sprintf("NODE_PATH=%s", nodePath))
+	}
+
+	// The script's output is the job's output, byte for byte, so it reads the
+	// same as in a container.
+	cmd.Stdout = e.stdout
+	cmd.Stderr = e.stderr
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return &ScriptExitError{Code: exitCode(exitErr)}
+		}
+		return fmt.Errorf("failed to run script: %w", err)
 	}
 
 	return nil
 }
 
-// maxLogLineBytes bounds a single logged output line. Lines longer than this
-// abort line-scanning; the remainder of the stream is drained unlogged so the
-// child process can always finish writing.
-const maxLogLineBytes = 1024 * 1024
-
-// streamOutput reads from a reader and logs each line
-func (e *Executor) streamOutput(r io.Reader, stream string) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), maxLogLineBytes)
-	for scanner.Scan() {
-		line := scanner.Text()
-		e.log.WithField("stream", stream).Info(line)
+// exitCode returns a process's exit status, using the shell's 128+signal
+// convention for one killed by a signal.
+func exitCode(err *exec.ExitError) int {
+	if status, ok := err.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		return 128 + int(status.Signal())
 	}
-	if err := scanner.Err(); err != nil {
-		e.log.WithError(err).Errorf("Error reading %s stream", stream)
-		// BUG FIX: if scanning aborts (e.g. a single line longer than the
-		// buffer), the child keeps writing to the pipe. With no reader the
-		// pipe fills, the child blocks in write(2) forever, and cmd.Wait()
-		// never returns — the runner hung on any script that emitted a line
-		// longer than the scanner limit. Drain the rest of the stream (the
-		// drained bytes are intentionally not logged) so the process can
-		// exit and its status is still reported.
-		_, _ = io.Copy(io.Discard, r)
-	}
+	return err.ExitCode()
 }
 
 // setupSignalHandling sets up signal handlers for cleanup

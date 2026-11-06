@@ -72,7 +72,7 @@ export const FEATURES: Feature[] = [
     icon: "key",
     title: "API Access",
     description:
-      "Manage events, workflows, servers, and variables programmatically with API tokens.",
+      "Trigger runs from CI and manage events and servers with API tokens, or use MCP for the rest.",
     href: "/docs/api",
   },
   {

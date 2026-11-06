@@ -4,18 +4,10 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
-
-// embeddedHelpersAvailable reports whether the default embed.go build can
-// serve helper binaries for the current platform. Only linux/amd64 and
-// linux/arm64 binaries are embedded; on macOS GetHelperBinary fails by design
-// (the runner ships to Linux servers).
-func embeddedHelpersAvailable() bool {
-	return runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
-}
 
 func TestExtractHelperFilesWritesExecutables(t *testing.T) {
 	// Nested path: extractHelperFiles must create the directory.
@@ -70,18 +62,17 @@ func TestExtractHelperFilesDirCreationError(t *testing.T) {
 
 func TestGetHelperBinaryPlatformSelection(t *testing.T) {
 	data, err := GetHelperBinary("input")
-	if embeddedHelpersAvailable() {
+	if Embedded {
 		if err != nil {
-			t.Fatalf("expected embedded helper on %s/%s, got: %v", runtime.GOOS, runtime.GOARCH, err)
+			t.Fatalf("expected an embedded helper, got: %v", err)
 		}
 		if len(data) == 0 {
 			t.Fatal("embedded helper binary is empty")
 		}
 	} else {
-		// Documented limitation: only Linux helper binaries are embedded, so
-		// selection must fail cleanly on other hosts (e.g. darwin).
+		// A build without helpers fails cleanly rather than extracting nothing.
 		if err == nil {
-			t.Fatalf("expected error on %s/%s where no helpers are embedded", runtime.GOOS, runtime.GOARCH)
+			t.Fatal("expected an error from a build with no helpers embedded")
 		}
 		if !strings.Contains(err.Error(), "helper binary not found for platform") {
 			t.Errorf("error = %q, want platform-not-found message", err.Error())
@@ -99,11 +90,11 @@ func TestExtractAllHelpers(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "bin")
 	err := ExtractAllHelpers(dir)
 
-	if !embeddedHelpersAvailable() {
-		// On non-Linux hosts extraction must fail (nothing embedded); the
-		// Linux round-trip below runs in CI.
+	if !Embedded {
+		// Nothing to extract. CI runs the round trip below after generating the
+		// helpers, without the nohelpers tag.
 		if err == nil {
-			t.Fatalf("expected ExtractAllHelpers to fail on %s/%s", runtime.GOOS, runtime.GOARCH)
+			t.Fatal("expected ExtractAllHelpers to fail with no helpers embedded")
 		}
 		if !strings.Contains(err.Error(), "failed to extract") {
 			t.Errorf("error = %q, want extract failure", err.Error())
@@ -114,7 +105,7 @@ func TestExtractAllHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractAllHelpers failed: %v", err)
 	}
-	for _, name := range helperNames {
+	for _, name := range HelperNames {
 		path := filepath.Join(dir, "cronium."+name)
 		info, statErr := os.Stat(path)
 		if statErr != nil {
@@ -125,6 +116,44 @@ func TestExtractAllHelpers(t *testing.T) {
 		}
 		if info.Mode().Perm()&0o100 == 0 {
 			t.Errorf("helper %s is not executable (mode %v)", name, info.Mode())
+		}
+	}
+}
+
+// HelperNames, cmd/helpers and the go:embed lists have to agree. Only one embed
+// file compiles on any host, and none with -tags nohelpers, so read them as text
+// to catch a helper missing from either before a release build does.
+func TestHelperListsAgree(t *testing.T) {
+	entries, err := os.ReadDir("../../cmd/helpers")
+	if err != nil {
+		t.Fatalf("failed to list cmd/helpers: %v", err)
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, entry.Name())
+		}
+	}
+	sorted := slices.Sorted(slices.Values(HelperNames))
+	if !slices.Equal(dirs, sorted) {
+		t.Errorf("cmd/helpers = %v, HelperNames = %v", dirs, sorted)
+	}
+
+	for file, platform := range map[string]string{
+		"embed_linux_amd64.go": "linux_amd64",
+		"embed_linux_arm64.go": "linux_arm64",
+	} {
+		source, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		if got, want := strings.Count(string(source), "//go:embed "), len(HelperNames); got != want {
+			t.Errorf("%s embeds %d files, want %d", file, got, want)
+		}
+		for _, name := range HelperNames {
+			if !strings.Contains(string(source), "//go:embed binaries/"+platform+"_cronium."+name+"\n") {
+				t.Errorf("%s does not embed %s", file, name)
+			}
 		}
 	}
 }

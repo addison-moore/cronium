@@ -512,6 +512,7 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 3. **Consolidation**: Some variables serve similar purposes (e.g., `ENCRYPTION_KEY` and `ENCRYPTION_MASTER_KEY`) and should be consolidated
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
+6. **Proxies**: HTTP request events, outbound webhooks and user-supplied AI endpoints ignore `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` and always connect directly, because a proxy would resolve the target itself and bypass the SSRF guard. These features need direct outbound access from the app and worker.
 
 ## Key rotation (`ENCRYPTION_KEY`)
 

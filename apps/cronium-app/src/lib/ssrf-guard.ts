@@ -79,6 +79,8 @@ export const guardedLookup: net.LookupFunction = (
     });
 };
 
+// An axios caller must also pass `proxy: false`. Otherwise a proxy in the environment
+// takes the connection and resolves the target itself, so guardedLookup never runs.
 export const ssrfHttpAgent = new http.Agent({ lookup: guardedLookup });
 
 export const ssrfHttpsAgent = new https.Agent({ lookup: guardedLookup });
@@ -139,8 +141,8 @@ const MAX_GUARDED_FETCH_RESPONSE_BYTES = 20 * 1024 * 1024;
 
 /**
  * A `fetch` for SDKs that accept one. It goes through the guarded agents, so the
- * address is validated at connect time, and does not follow redirects. Responses are
- * buffered, so it does not suit a streaming API.
+ * address is validated at connect time, and does not follow redirects or use a proxy
+ * from the environment. Responses are buffered, so it does not suit a streaming API.
  */
 export const ssrfGuardedFetch: typeof fetch = async (input, init) => {
   const url = input instanceof Request ? input.url : input.toString();
@@ -154,6 +156,7 @@ export const ssrfGuardedFetch: typeof fetch = async (input, init) => {
     ...(init?.signal ? { signal: init.signal } : {}),
     httpAgent: ssrfHttpAgent,
     httpsAgent: ssrfHttpsAgent,
+    proxy: false,
     maxRedirects: 0,
     maxContentLength: MAX_GUARDED_FETCH_RESPONSE_BYTES,
     responseType: "arraybuffer",
