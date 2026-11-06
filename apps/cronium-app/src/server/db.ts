@@ -1,4 +1,6 @@
-import net from "node:net";
+// Not node:net. The tool plugins pull this file into the client build, whose webpack
+// stubs the bare name (next.config.mjs) but rejects the node: scheme outright.
+import net from "net";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool, type PoolClient } from "pg";
 import { env } from "@/env.mjs";
