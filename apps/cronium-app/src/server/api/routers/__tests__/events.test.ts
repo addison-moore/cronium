@@ -121,8 +121,7 @@ jest.mock("@/server/storage", () => ({
     createScript: jest.fn(),
     updateScript: jest.fn(),
     deleteScript: jest.fn(),
-    createEnvVar: jest.fn(),
-    deleteEnvVarsByEventId: jest.fn(),
+    replaceEventEnvVars: jest.fn(),
     setEventServers: jest.fn(),
     getLogsByEventId: jest.fn(),
     getWorkflowsUsingEvent: jest.fn(),
@@ -173,8 +172,7 @@ const storageMock = storage as unknown as {
   createScript: jest.Mock;
   updateScript: jest.Mock;
   deleteScript: jest.Mock;
-  createEnvVar: jest.Mock;
-  deleteEnvVarsByEventId: jest.Mock;
+  replaceEventEnvVars: jest.Mock;
   setEventServers: jest.Mock;
   getLogsByEventId: jest.Mock;
   getWorkflowsUsingEvent: jest.Mock;
@@ -290,8 +288,7 @@ beforeEach(() => {
   });
   storageMock.updateScript.mockResolvedValue(undefined);
   storageMock.deleteScript.mockResolvedValue(undefined);
-  storageMock.createEnvVar.mockResolvedValue({ id: 1 });
-  storageMock.deleteEnvVarsByEventId.mockResolvedValue(undefined);
+  storageMock.replaceEventEnvVars.mockResolvedValue(undefined);
   storageMock.setEventServers.mockResolvedValue(undefined);
   storageMock.getLogsByEventId.mockResolvedValue({ logs: [], total: 0 });
   storageMock.getWorkflowsUsingEvent.mockResolvedValue([]);
@@ -551,15 +548,12 @@ describe("create", () => {
         source: null,
         startTime: null,
       }),
+      // In the same call, so a failure can't leave an event without them.
+      { envVars: [{ key: "A", value: "1" }], serverIds: [] },
     );
     // Schedule materialization boundary: always invoked with the new id so an
     // event created directly as ACTIVE+SCHEDULE starts firing.
     expect(schedulerMock.updateScript).toHaveBeenCalledWith(5);
-    expect(storageMock.createEnvVar).toHaveBeenCalledWith({
-      eventId: 5,
-      key: "A",
-      value: "1",
-    });
     expect(storageMock.setEventServers).not.toHaveBeenCalled();
     expect(result).toMatchObject({ id: 5, secretFieldsRedacted: false });
   });
@@ -576,7 +570,28 @@ describe("create", () => {
       runLocation: RunLocation.REMOTE,
       selectedServerIds: [7],
     });
-    expect(storageMock.setEventServers).toHaveBeenCalledWith(5, [7], OWNER);
+    expect(storageMock.createScript).toHaveBeenCalledWith(expect.anything(), {
+      envVars: [],
+      serverIds: [7],
+    });
+  });
+
+  it("links no servers to a local event", async () => {
+    dbState.servers = [
+      { id: 7, userId: OWNER, shared: false, isArchived: false },
+    ];
+    const caller = callerWith(sessionFor());
+    await caller.events.create({
+      name: "Local Event",
+      type: EventType.BASH,
+      content: "echo hi",
+      runLocation: RunLocation.LOCAL,
+      selectedServerIds: [7],
+    });
+    expect(storageMock.createScript).toHaveBeenCalledWith(expect.anything(), {
+      envVars: [],
+      serverIds: [],
+    });
   });
 
   it("refuses to bind another user's server (shared grants no secret use)", async () => {
@@ -607,6 +622,7 @@ describe("create", () => {
       });
       expect(storageMock.createScript).toHaveBeenCalledWith(
         expect.objectContaining({ source: "mcp" }),
+        expect.anything(),
       );
     } finally {
       logSpy.mockRestore();
@@ -648,7 +664,7 @@ describe("update", () => {
       name: "Renamed",
     });
     expect(schedulerMock.updateScript).not.toHaveBeenCalled();
-    expect(storageMock.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+    expect(storageMock.replaceEventEnvVars).not.toHaveBeenCalled();
     expect(storageMock.setEventServers).not.toHaveBeenCalled();
     expect(result).toMatchObject({ id: 1 });
   });
@@ -696,29 +712,40 @@ describe("update", () => {
     expect(schedulerMock.updateScript).toHaveBeenCalledWith(1);
   });
 
-  it("replaces env vars by deleting the old set before inserting the new", async () => {
+  it("replaces env vars in one call", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({
       id: 1,
       envVars: [{ key: "B", value: "2" }],
     });
-    expect(storageMock.deleteEnvVarsByEventId).toHaveBeenCalledWith(1);
-    expect(storageMock.createEnvVar).toHaveBeenCalledWith({
-      eventId: 1,
-      key: "B",
-      value: "2",
-    });
-    const deleteOrder =
-      storageMock.deleteEnvVarsByEventId.mock.invocationCallOrder[0]!;
-    const createOrder = storageMock.createEnvVar.mock.invocationCallOrder[0]!;
-    expect(deleteOrder).toBeLessThan(createOrder);
+    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledTimes(1);
+    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledWith(1, [
+      { key: "B", value: "2" },
+    ]);
   });
 
   it("clears env vars when an empty array is sent", async () => {
     const caller = callerWith(sessionFor());
     await caller.events.update({ id: 1, envVars: [] });
-    expect(storageMock.deleteEnvVarsByEventId).toHaveBeenCalledWith(1);
-    expect(storageMock.createEnvVar).not.toHaveBeenCalled();
+    expect(storageMock.replaceEventEnvVars).toHaveBeenCalledWith(1, []);
+  });
+
+  it("stops at a failed env var save, leaving servers and schedule alone", async () => {
+    storageMock.replaceEventEnvVars.mockRejectedValue(new Error("save failed"));
+    const caller = callerWith(sessionFor());
+    await expect(
+      caller.events.update({
+        id: 1,
+        status: EventStatus.ACTIVE,
+        envVars: [{ key: "B", value: "2" }],
+        selectedServerIds: [],
+      }),
+    ).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to update event",
+    });
+    expect(storageMock.setEventServers).not.toHaveBeenCalled();
+    expect(schedulerMock.updateScript).not.toHaveBeenCalled();
   });
 
   it("clears server associations when an empty list is sent (falsy-length input)", async () => {
@@ -1180,13 +1207,8 @@ describe("fork", () => {
         httpUrl: "https://mine.example",
         userId: OWNER,
       }),
+      { envVars: [{ key: "A", value: "1" }], serverIds: [7] },
     );
-    expect(storageMock.createEnvVar).toHaveBeenCalledWith({
-      eventId: 5,
-      key: "A",
-      value: "1",
-    });
-    expect(storageMock.setEventServers).toHaveBeenCalledWith(5, [7], OWNER);
     expect(result).toMatchObject({ id: 5 });
   });
 
@@ -1220,10 +1242,9 @@ describe("fork", () => {
         shared: false,
         userId: OWNER,
       }),
+      // The owner's environment and server bindings never transfer.
+      { envVars: [], serverIds: [] },
     );
-    // The owner's environment and server bindings never transfer.
-    expect(storageMock.createEnvVar).not.toHaveBeenCalled();
-    expect(storageMock.setEventServers).not.toHaveBeenCalled();
   });
 
   it("denies forking another user's unshared event", async () => {

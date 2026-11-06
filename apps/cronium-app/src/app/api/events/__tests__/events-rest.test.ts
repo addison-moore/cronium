@@ -12,8 +12,7 @@ jest.mock("@/server/storage", () => ({
   storage: {
     createScript: jest.fn(),
     updateScript: jest.fn(),
-    createEnvVar: jest.fn(),
-    deleteEnvVarsByEventId: jest.fn(),
+    replaceEventEnvVars: jest.fn(),
     setEventServers: jest.fn(),
     getEvent: jest.fn(),
     getEventWithRelations: jest.fn(),
@@ -187,15 +186,11 @@ describe("POST /api/events", () => {
       expect(created().triggerType).toBe("MANUAL");
     });
 
-    it("materializes the schedule only after env vars and servers exist", async () => {
+    it("materializes the schedule only after the event, its env vars and servers exist", async () => {
       const order: string[] = [];
-      s.createEnvVar!.mockImplementation(() => {
-        order.push("env");
-        return Promise.resolve({});
-      });
-      s.setEventServers!.mockImplementation(() => {
-        order.push("servers");
-        return Promise.resolve();
+      s.createScript!.mockImplementation(() => {
+        order.push("event");
+        return Promise.resolve({ id: 1 });
       });
       (scheduler.updateScript as jest.Mock).mockImplementation(() => {
         order.push("schedule");
@@ -209,7 +204,29 @@ describe("POST /api/events", () => {
         selectedServerIds: [3],
       });
 
-      expect(order).toEqual(["env", "servers", "schedule"]);
+      expect(order).toEqual(["event", "schedule"]);
+      // In the same call, so a failure can't leave an event without them.
+      expect(s.createScript!.mock.calls[0]![1]).toEqual({
+        envVars: [{ key: "A", value: "1" }],
+        serverIds: [3],
+      });
+    });
+
+    it("answers 500 and schedules nothing when the event can't be created", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.createScript!.mockRejectedValueOnce(new Error("insert failed"));
+
+      const res = await post({
+        ...baseEvent,
+        scheduleNumber: 5,
+        envVars: [{ key: "A", value: "1" }],
+      });
+
+      expect(res.status).toBe(500);
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
     });
 
     it.each([
@@ -254,6 +271,62 @@ describe("PATCH /api/events/[id]", () => {
   it("does not re-anchor the schedule for an unrelated edit", async () => {
     await patch({ name: "renamed" });
     expect(scheduler.updateScript).not.toHaveBeenCalled();
+  });
+
+  describe("env vars", () => {
+    const envVars = [{ key: "B", value: "2" }];
+
+    it("replaces them in one call", async () => {
+      const res = await patch({ name: "renamed", envVars });
+
+      expect(res.status).toBe(200);
+      expect(s.replaceEventEnvVars).toHaveBeenCalledTimes(1);
+      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, envVars);
+    });
+
+    it("clears them when given an empty list", async () => {
+      await patch({ envVars: [] });
+      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, []);
+    });
+
+    it("leaves them alone when the body has none", async () => {
+      await patch({ name: "renamed" });
+      expect(s.replaceEventEnvVars).not.toHaveBeenCalled();
+    });
+
+    it("saves them with no other field, which an empty update would refuse", async () => {
+      const res = await patch({ envVars });
+
+      expect(res.status).toBe(200);
+      expect(s.updateScript).not.toHaveBeenCalled();
+      expect(s.replaceEventEnvVars).toHaveBeenCalledWith(1, envVars);
+    });
+
+    it("answers 500 and stops at a failed save, leaving servers and schedule alone", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.replaceEventEnvVars!.mockRejectedValueOnce(new Error("save failed"));
+
+      const res = await patch({
+        status: "PAUSED",
+        envVars,
+        selectedServerIds: [3],
+      });
+
+      expect(res.status).toBe(500);
+      expect(s.setEventServers).not.toHaveBeenCalled();
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
+  });
+
+  it("changes servers with no other field, which an empty update would refuse", async () => {
+    const res = await patch({ selectedServerIds: [3] });
+
+    expect(res.status).toBe(200);
+    expect(s.updateScript).not.toHaveBeenCalled();
+    expect(s.setEventServers).toHaveBeenCalledWith(1, [3], USER);
   });
 });
 

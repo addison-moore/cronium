@@ -234,26 +234,20 @@ export async function PATCH(
     const filteredAllowedFields = Object.fromEntries(
       Object.entries(allowedFields).filter(([, value]) => value !== undefined),
     ) as Partial<InsertEvent>;
-    await storage.updateScript(eventId, {
+    const fieldsToUpdate = {
       ...filteredAllowedFields,
       ...(startTime !== undefined && {
         startTime: startTime ? new Date(startTime) : null,
       }),
-    });
+    };
+    // A PATCH may change only the env vars or servers, and an empty update throws.
+    if (Object.keys(fieldsToUpdate).length > 0) {
+      await storage.updateScript(eventId, fieldsToUpdate);
+    }
 
     // If env vars are provided, handle them
     if (envVars !== undefined) {
-      // Delete existing env vars
-      await storage.deleteEnvVarsByEventId(eventId);
-
-      // Add new env vars
-      for (const envVar of envVars) {
-        await storage.createEnvVar({
-          eventId,
-          key: envVar.key,
-          value: envVar.value,
-        });
-      }
+      await storage.replaceEventEnvVars(eventId, envVars);
     }
 
     // Handle multiple server selection for remote events
