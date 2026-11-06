@@ -268,10 +268,8 @@ function EventFormFields({
   const serverGroups = serverGroupsData?.groups ?? [];
 
   // Fetch available tools
-  const { data: toolsData } = trpc.tools.getAll.useQuery(
-    {},
-    QUERY_OPTIONS.dynamic,
-  );
+  const { data: toolsData, isLoading: isLoadingTools } =
+    trpc.tools.getAll.useQuery({}, QUERY_OPTIONS.dynamic);
   const availableTools = (toolsData?.tools ?? []) as unknown as Tool[];
 
   // tRPC mutations
@@ -641,6 +639,7 @@ function EventFormFields({
               value={field.value ?? null}
               onChange={field.onChange}
               availableTools={availableTools}
+              isLoadingTools={isLoadingTools}
             />
           )}
         />

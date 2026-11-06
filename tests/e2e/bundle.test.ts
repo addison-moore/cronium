@@ -20,6 +20,18 @@ const MONACO_MARKERS = ["MonacoEnvironment", "editor.action.triggerSuggest"];
 const holdsMonaco = (source: string) =>
   MONACO_MARKERS.some((marker) => source.includes(marker));
 
+// From the plugins' own modules. The first is the registering code in their barrel, and
+// the other two are what a static import of one plugin would bring along, not the small
+// icons that event-type-icon imports from the same directories.
+const TOOL_PLUGIN_MARKERS = [
+  "__pluginsInitialized",
+  "slack-send-message",
+  "SsrfBlockedError",
+];
+
+const holdsToolPlugins = (source: string) =>
+  TOOL_PLUGIN_MARKERS.some((marker) => source.includes(marker));
+
 function filesUnder(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(dir, entry.name);
@@ -59,5 +71,24 @@ describe("Monaco in the production build", () => {
         .filter((file) => holdsMonaco(fs.readFileSync(file, "utf8")))
         .map(relative),
     ).toEqual([]);
+  });
+});
+
+describe("the tool plugins in the production build", () => {
+  it("are only in the Tools page and the chunk the event form imports", () => {
+    // Every page loads `commons`, and every event page the event form's chunk. A static
+    // import of the plugins, or the `commons` exclusion in next.config.mjs no longer
+    // working, puts them in one of those and fails this, with every test still passing
+    // otherwise. Two expected files also make this its own control.
+    const holding = chunks.filter((file) =>
+      holdsToolPlugins(fs.readFileSync(file, "utf8")),
+    );
+
+    expect(holding.map(relative).sort()).toEqual([
+      expect.stringMatching(
+        /^static\/chunks\/app\/dashboard\/\(tools\)\/tools\/page-/,
+      ),
+      expect.stringMatching(/^static\/chunks\/tool-plugins\./),
+    ]);
   });
 });
