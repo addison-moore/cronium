@@ -8,6 +8,7 @@ import {
 import { db } from "@/server/db";
 import { oauthStates } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Tool credential forms (where the Connect flow starts) live on the Tools page
 const RETURN_PATH = "/dashboard/tools";
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
       success.cookies.delete("cronium-oauth-nonce");
       return success;
     } catch (error) {
-      console.error("OAuth callback error:", error);
+      console.error("OAuth callback error:", failureWithStack(error));
 
       // Redirect to error page
       return NextResponse.redirect(
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("OAuth callback error:", error);
+    console.error("OAuth callback error:", failureWithStack(error));
 
     return NextResponse.redirect(
       new URL(`${RETURN_PATH}?error=oauth_callback_failed`, request.url),

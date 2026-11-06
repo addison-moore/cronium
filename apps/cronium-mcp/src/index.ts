@@ -58,12 +58,31 @@ function requestIds(msg: unknown): JsonRpcId[] {
   return Array.isArray(msg) ? msg.flatMap(one) : one(msg);
 }
 
+/** Whether a response body is a JSON-RPC message, as /api/mcp's own 413 is. */
+function isJsonRpc(body: string): boolean {
+  try {
+    return (
+      (JSON.parse(body) as { jsonrpc?: unknown } | null)?.jsonrpc === "2.0"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Human-actionable message for an HTTP-level (non-JSON-RPC) failure. */
 function httpFailureMessage(status: number, body: string): string {
   if (status === 401) {
     return (
       "Cronium rejected the API token (HTTP 401). Check CRONIUM_API_TOKEN — " +
       "create a token with the MCP scope under Settings → API Tokens (tokens expire)."
+    );
+  }
+  // Cronium never saw this one, so it isn't right to say Cronium returned it, and the
+  // proxy's own page, such as nginx's HTML, doesn't say what to do about it.
+  if (status === 413 && !isJsonRpc(body)) {
+    return (
+      "A reverse proxy in front of Cronium refused this request as too long (HTTP 413). " +
+      "It should allow up to 10 MB, as Cronium does. In nginx, that's client_max_body_size."
     );
   }
   const detail = body.slice(0, 300);

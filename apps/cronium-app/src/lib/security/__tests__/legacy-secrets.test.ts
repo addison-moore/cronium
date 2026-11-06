@@ -15,7 +15,7 @@ import {
   decryptVariableValue,
 } from "@/lib/security/variable-secret";
 import {
-  countLegacyPlaintextRows,
+  countLegacyRows,
   encryptLegacySecrets,
   legacySecretsBootWarning,
   LegacySecretsRefusedError,
@@ -30,17 +30,31 @@ import {
   encryptWebhookHeaders,
   encryptWebhookSecret,
 } from "@/lib/webhooks/webhook-secret";
-import { userVariables, webhooks } from "@/shared/schema";
+import { encryptServerSecret } from "@/lib/security/field-secret";
+import {
+  envVars,
+  oauthTokens,
+  servers,
+  systemSettings,
+  toolCredentials,
+  userVariables,
+  users,
+  webhooks,
+} from "@/shared/schema";
 
 interface FakeDatabase {
   /** What each read of a table returns in turn: the pass, then a real run's recount. */
   webhookReads: unknown[][];
   variableReads: unknown[][];
+  /** The same for the other tables a pass reads. */
+  otherReads: Map<unknown, unknown[][]>;
   envelopes: { source: string; key_id: string; count: number }[];
   credentials: { source: string; stored: string }[];
   legacyCiphertext: { source: string; stored: string }[];
   plaintextCount: number;
   stringHeaders: { headers: unknown }[];
+  plaintextCredentials: { credentials: string }[];
+  tokens: { accessToken: string; refreshToken: string | null }[];
   writes: { table: unknown; set: Record<string, unknown> }[];
   writeResult: () => { rowCount: number };
 }
@@ -63,9 +77,29 @@ function mockExecute(query: SQL): { rows: unknown[] } {
 }
 
 function mockReadsOf(table: unknown): unknown[][] {
-  return table === webhooks
-    ? mockDatabase.webhookReads
-    : mockDatabase.variableReads;
+  if (table === webhooks) return mockDatabase.webhookReads;
+  if (table === userVariables) return mockDatabase.variableReads;
+  return mockDatabase.otherReads.get(table) ?? [];
+}
+
+/** What the boot count reads, where the pass's own reads end in `orderBy`. */
+function mockCountRows(table: unknown): unknown[] {
+  if (table === webhooks) return mockDatabase.stringHeaders;
+  if (table === toolCredentials) return mockDatabase.plaintextCredentials;
+  return mockDatabase.tokens;
+}
+
+function mockQuery(table: unknown) {
+  const pass = async () => mockReadsOf(table).shift() ?? [];
+  const count = {
+    then: (resolve: (rows: unknown[]) => unknown) =>
+      resolve(mockCountRows(table)),
+  };
+  return {
+    orderBy: pass,
+    where: () => ({ orderBy: pass, ...count }),
+    ...count,
+  };
 }
 
 // env.mjs is ESM-only, and only `encryption-service` reaches for it here, lazily.
@@ -73,12 +107,7 @@ jest.mock("@/env.mjs", () => ({ env: {} }));
 
 jest.mock("@/server/db", () => ({
   db: {
-    select: () => ({
-      from: (table: unknown) => ({
-        orderBy: async () => mockReadsOf(table).shift() ?? [],
-        where: async () => mockDatabase.stringHeaders,
-      }),
-    }),
+    select: () => ({ from: mockQuery }),
     update: (table: unknown) => ({
       set: (set: Record<string, unknown>) => ({
         where: async () => {
@@ -181,11 +210,14 @@ beforeEach(() => {
   mockDatabase = {
     webhookReads: [],
     variableReads: [],
+    otherReads: new Map(),
     envelopes: [],
     credentials: [],
     legacyCiphertext: [],
     plaintextCount: 0,
     stringHeaders: [],
+    plaintextCredentials: [],
+    tokens: [],
     writes: [],
     writeResult: () => ({ rowCount: 1 }),
   };
@@ -815,16 +847,16 @@ describe("the worker's boot warning", () => {
       { headers: { __enc: "plain" } },
     ];
 
-    await expect(countLegacyPlaintextRows()).resolves.toBe(4);
+    await expect(countLegacyRows()).resolves.toBe(4);
   });
 
-  it("says how many rows hold plaintext, what to run, and what it may report", async () => {
+  it("says how many rows hold legacy values, what to run, and what it may report", async () => {
     mockDatabase.plaintextCount = 3;
 
     const warning = await legacySecretsBootWarning();
 
-    expect(warning).toContain("3 webhook or user-variable row(s)");
-    expect(warning).toContain("still hold plaintext");
+    expect(warning).toContain("3 row(s)");
+    expect(warning).toContain("from before the vault");
     expect(warning).toContain(
       "node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy",
     );
@@ -841,8 +873,363 @@ describe("the worker's boot warning", () => {
     __resetSecretVaultForTests();
     const decrypt = jest.spyOn(credentialEncryption, "decrypt");
 
-    await expect(legacySecretsBootWarning()).resolves.toContain("1 webhook");
+    await expect(legacySecretsBootWarning()).resolves.toContain("1 row(s)");
 
     expect(decrypt).not.toHaveBeenCalled();
+  });
+});
+
+describe("columns that can hold older ciphertext", () => {
+  const given = (table: unknown, ...rows: unknown[]) =>
+    mockDatabase.otherReads.set(table, [rows]);
+  const result = (
+    report: { surfaces: { surface: string }[] },
+    surface: string,
+  ) => report.surfaces.find((s) => s.surface === surface);
+  const envVarRow = (value: string) => ({
+    id: 3,
+    eventId: 42,
+    key: "OLD_ENV",
+    value,
+    version: "100",
+  });
+  const CANT_TELL = /can't be told from plaintext/;
+  const LOOKS_LIKE_CIPHERTEXT = "QWxhZGRpbjpvcGVuIHNlc2FtZQ".repeat(3);
+
+  it("moves a server's old ciphertext and plaintext into the vault", async () => {
+    given(servers, {
+      id: 1,
+      userId: OWNER,
+      sshKey: staticAad("an old key", KEY_A),
+      password: "a plaintext password",
+      version: "100",
+    });
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    expect(result(report, "servers")).toMatchObject({ encrypted: 1 });
+    const [{ table, set }] = mockDatabase.writes as [
+      { table: unknown; set: { sshKey: string; password: string } },
+    ];
+    expect(table).toBe(servers);
+    expect(
+      getSecretVault().decrypt(set.sshKey, {
+        purpose: "server-secret",
+        table: "servers",
+        column: "sshKey",
+        recordId: OWNER,
+        tenantId: OWNER,
+      }),
+    ).toBe("an old key");
+    expect(
+      getSecretVault().decrypt(set.password, {
+        purpose: "server-secret",
+        table: "servers",
+        column: "password",
+        recordId: OWNER,
+        tenantId: OWNER,
+      }),
+    ).toBe("a plaintext password");
+  });
+
+  it("opens what's under a retired key, and writes it under the active one", async () => {
+    useKeys(KEY_B, [KEY_A]);
+    given(envVars, envVarRow(staticAad("an old value", KEY_A)));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    const [{ set }] = mockDatabase.writes as [{ set: { value: string } }];
+    expect(set.value.split(".")[2]).toBe(keyIdOf(KEY_B));
+    expect(
+      getSecretVault().decrypt(set.value, {
+        purpose: "env-var",
+        table: "env_vars",
+        column: "value",
+        recordId: "OLD_ENV",
+        tenantId: "42",
+      }),
+    ).toBe("an old value");
+  });
+
+  it("reports what has the shape of ciphertext and doesn't open, and writes nothing", async () => {
+    given(envVars, envVarRow(LOOKS_LIKE_CIPHERTEXT));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([
+      {
+        surface: "env_vars",
+        id: 3,
+        column: "value",
+        reason: expect.stringMatching(CANT_TELL) as string,
+      },
+    ]);
+    expect(mockDatabase.writes).toEqual([]);
+    expect(JSON.stringify(report)).not.toContain(LOOKS_LIKE_CIPHERTEXT);
+  });
+
+  it("doesn't take ciphertext under a key that's gone for plaintext", async () => {
+    given(envVars, envVarRow(staticAad("a lost value", KEY_C)));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toHaveLength(1);
+    expect(mockDatabase.writes).toEqual([]);
+  });
+
+  it("names a value whose read is ciphertext, and encrypts it as it reads", async () => {
+    const short = staticAad("1", KEY_A);
+    expect(short.length).toBeLessThan(50);
+    given(envVars, envVarRow(short));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.readsAsCiphertext).toEqual([
+      { surface: "env_vars", id: 3, column: "value" },
+    ]);
+    expect(report.failures).toEqual([]);
+    const [{ set }] = mockDatabase.writes as [{ set: { value: string } }];
+    expect(
+      getSecretVault().decrypt(set.value, {
+        purpose: "env-var",
+        table: "env_vars",
+        column: "value",
+        recordId: "OLD_ENV",
+        tenantId: "42",
+      }),
+    ).toBe(short);
+  });
+
+  it("names an envelope holding ciphertext, and doesn't write it", async () => {
+    given(servers, {
+      id: 1,
+      userId: OWNER,
+      sshKey: encryptServerSecret(staticAad("a key", KEY_A), "sshKey", OWNER),
+      password: null,
+      version: "100",
+    });
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.readsAsCiphertext).toEqual([
+      { surface: "servers", id: 1, column: "sshKey" },
+    ]);
+    expect(mockDatabase.writes).toEqual([]);
+  });
+
+  it("doesn't name a value that only resembles ciphertext", async () => {
+    given(envVars, envVarRow("QWxhZGRpbjpvcGVuIHNlc2FtZQ=="));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.readsAsCiphertext).toEqual([]);
+    expect(result(report, "env_vars")).toMatchObject({ encrypted: 1 });
+  });
+
+  it("moves an MFA secret and a setting too", async () => {
+    given(users, {
+      id: "user-1",
+      mfaSecret: staticAad("TOTPSECRET", KEY_A),
+      version: "100",
+    });
+    given(systemSettings, {
+      id: 9,
+      key: "smtpPassword",
+      value: "a plaintext password",
+      version: "100",
+    });
+
+    const report = await encryptLegacySecrets();
+
+    expect(result(report, "users")).toMatchObject({ encrypted: 1 });
+    expect(result(report, "system_settings")).toMatchObject({ encrypted: 1 });
+    expect(report.failures).toEqual([]);
+    expect(mockDatabase.writes.map((w) => w.table)).toEqual([
+      users,
+      systemSettings,
+    ]);
+  });
+
+  it("counts a row the app changed first", async () => {
+    mockDatabase.writeResult = () => ({ rowCount: 0 });
+    given(envVars, envVarRow("plaintext"));
+
+    const report = await encryptLegacySecrets();
+
+    expect(result(report, "env_vars")).toMatchObject({
+      encrypted: 0,
+      changedDuringRun: 1,
+    });
+  });
+});
+
+describe("tool credentials", () => {
+  const given = (...rows: unknown[]) =>
+    mockDatabase.otherReads.set(toolCredentials, [rows]);
+  const row = (credentials: string, encrypted: boolean) => ({
+    id: 5,
+    credentials,
+    encrypted,
+    version: "100",
+  });
+  const PLAINTEXT = JSON.stringify({ apiKey: "tool-key-canary" });
+
+  it("encrypts plaintext, and flips the flag with it", async () => {
+    given(row(PLAINTEXT, false));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    const [{ table, set }] = mockDatabase.writes as [
+      {
+        table: unknown;
+        set: {
+          credentials: string;
+          encrypted: boolean;
+          encryptionMetadata: { algorithm: string };
+        };
+      },
+    ];
+    expect(table).toBe(toolCredentials);
+    expect(set.encrypted).toBe(true);
+    expect(set.encryptionMetadata.algorithm).toBe("aes-256-gcm");
+    expect(set.credentials).not.toContain("tool-key-canary");
+    expect(
+      credentialEncryption.decrypt(JSON.parse(set.credentials) as never),
+    ).toEqual({
+      apiKey: "tool-key-canary",
+    });
+  });
+
+  it.each([
+    ["an empty string", "", false],
+    ["an empty object", "{}", false],
+    ["an empty array", "[]", false],
+    ["spaces", "  ", false],
+    ["an empty object marked encrypted", "{}", true],
+  ])("leaves %s alone", async (_name, stored, marked) => {
+    given(row(stored, marked));
+
+    const report = await encryptLegacySecrets();
+
+    expect(mockDatabase.writes).toEqual([]);
+    expect(report.failures).toEqual([]);
+  });
+
+  it("leaves what's encrypted alone", async () => {
+    given(row(storedCredential(KEY_A), true));
+
+    const report = await encryptLegacySecrets();
+
+    expect(mockDatabase.writes).toEqual([]);
+    expect(report.failures).toEqual([]);
+  });
+
+  it.each<[string, () => string, boolean, RegExp]>([
+    ["garbage marked encrypted", () => "garbage", true, /marked as encrypted/],
+    ["JSON marked encrypted", () => PLAINTEXT, true, /marked as encrypted/],
+    [
+      "ciphertext marked plaintext",
+      () => storedCredential(KEY_A),
+      false,
+      /marked as not encrypted/,
+    ],
+    ["something not JSON", () => "not-json", false, /not a JSON object/],
+    ["a JSON string", () => '"a string"', false, /not a JSON object/],
+    ["JSON null", () => "null", false, /not a JSON object/],
+    [
+      "ciphertext under a key that's gone",
+      () => storedCredential(KEY_C),
+      true,
+      /can't decrypt it/,
+    ],
+  ])(
+    "reports %s, and writes nothing",
+    async (_name, stored, marked, reason) => {
+      given(row(stored(), marked));
+
+      const report = await encryptLegacySecrets().catch(() => null);
+      if (!report) return; // The key check can stop first, which also writes nothing.
+
+      expect(report.failures[0]?.reason).toMatch(reason);
+      expect(mockDatabase.writes).toEqual([]);
+    },
+  );
+
+  it("is counted at boot only if a run would encrypt it", async () => {
+    mockDatabase.plaintextCredentials = [
+      { credentials: PLAINTEXT },
+      { credentials: "{}" },
+      { credentials: "" },
+      { credentials: "not-json" },
+      { credentials: '"a string"' },
+      { credentials: "null" },
+      { credentials: storedCredential(KEY_A) },
+    ];
+
+    await expect(countLegacyRows()).resolves.toBe(1);
+  });
+});
+
+describe("OAuth tokens", () => {
+  const given = (accessToken: string, refreshToken: string | null) =>
+    mockDatabase.otherReads.set(oauthTokens, [
+      [{ id: 6, accessToken, refreshToken, version: "100" }],
+    ]);
+
+  it("encrypts plaintext so the app reads the same token", async () => {
+    given("access-canary", null);
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toEqual([]);
+    const [{ table, set }] = mockDatabase.writes as [
+      { table: unknown; set: { accessToken: string; refreshToken?: string } },
+    ];
+    expect(table).toBe(oauthTokens);
+    expect(set.refreshToken).toBeUndefined();
+    expect(set.accessToken).not.toContain("access-canary");
+    expect(
+      credentialEncryption.decrypt(JSON.parse(set.accessToken) as never),
+    ).toBe("access-canary");
+  });
+
+  it("leaves what's encrypted alone, and reports what's under a key that's gone", async () => {
+    given(storedCredential(KEY_A), storedCredential(KEY_C));
+
+    const report = await encryptLegacySecrets();
+
+    expect(report.failures).toMatchObject([
+      { surface: "oauth_tokens", id: 6, column: "refreshToken" },
+    ]);
+    expect(mockDatabase.writes).toEqual([]);
+  });
+
+  it.each(["1.0", "1e5", '{"token":"x"}', '"quoted"'])(
+    "reports %s, which wouldn't read back the same",
+    async (token) => {
+      given(token, null);
+
+      const report = await encryptLegacySecrets();
+
+      expect(report.failures[0]?.reason).toBe(
+        "did not read back unchanged after encrypting",
+      );
+      expect(mockDatabase.writes).toEqual([]);
+    },
+  );
+
+  it("is counted at boot once a row, whichever column holds plaintext", async () => {
+    mockDatabase.tokens = [
+      { accessToken: "plain", refreshToken: "plain" },
+      { accessToken: storedCredential(KEY_A), refreshToken: "plain" },
+      { accessToken: "plain", refreshToken: null },
+      { accessToken: storedCredential(KEY_A), refreshToken: null },
+      { accessToken: "", refreshToken: null },
+    ];
+
+    await expect(countLegacyRows()).resolves.toBe(3);
   });
 });

@@ -77,20 +77,29 @@ export function withBodyLimit(
 ): Request {
   if (!request.body) return request;
 
-  const declaredTooLong = Number(request.headers.get("content-length")) > limit;
-  let bytes = 0;
-  const body = request.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
+  let body: ReadableStream<Uint8Array>;
+  if (Number(request.headers.get("content-length")) > limit) {
+    // No pipe here, because the length alone refuses this body. A pipe into a stream
+    // that has already failed still reads on Node 24, up to two chunks before it stops.
+    const error = tooLong();
+    void request.body.cancel(error).catch(() => undefined);
+    body = new ReadableStream({
       start(controller) {
-        if (declaredTooLong) controller.error(tooLong());
+        controller.error(error);
       },
-      transform(chunk, controller) {
-        bytes += chunk.byteLength;
-        if (bytes > limit) controller.error(tooLong());
-        else controller.enqueue(chunk);
-      },
-    }),
-  );
+    });
+  } else {
+    let bytes = 0;
+    body = request.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          bytes += chunk.byteLength;
+          if (bytes > limit) controller.error(tooLong());
+          else controller.enqueue(chunk);
+        },
+      }),
+    );
+  }
 
   return new Request(request.url, {
     method: request.method,
