@@ -19,6 +19,7 @@ import { Spinner } from "@cronium/ui";
 import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { NotFoundCard } from "@/components/error/not-found-card";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHistory";
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
@@ -165,6 +166,16 @@ export default function WorkflowDetailsPage({
   );
   const rotateWebhookKeyMutation = trpc.workflows.rotateWebhookKey.useMutation({
     onSuccess: (data) => setRevealedWebhookKey(data.webhookKey),
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: trpcErrorMessage(
+          error,
+          "Failed to rotate the webhook key",
+        ),
+        variant: "destructive",
+      });
+    },
   });
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialData, setHasInitialData] = useState(false);

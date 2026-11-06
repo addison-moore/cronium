@@ -1466,7 +1466,7 @@ describe("advanceWorkflowRun — a timed-out run", () => {
     });
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining(`run ${run.id} for a timeout`),
-      "lost",
+      "Error: lost",
     );
   });
 
@@ -1833,7 +1833,7 @@ describe("advanceRunsForJob", () => {
     expect(runRow(runB.id).status).toBe(LogStatus.SUCCESS);
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("advance failed for run"),
-      "nodes query failed",
+      "Error: nodes query failed",
     );
   });
 });
@@ -1868,7 +1868,7 @@ describe("reconcileWorkflowRuns", () => {
     expect(runRow(r2.id).status).toBe(LogStatus.SUCCESS);
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("reconcile failed for run"),
-      "boom",
+      "Error: boom",
     );
   });
 });

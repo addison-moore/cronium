@@ -882,11 +882,7 @@ describe("the record an audit purge leaves", () => {
     expect(await auditLogExists(id)).toBe(true);
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining("tool_audit_logs"),
-      expect.objectContaining({
-        cause: expect.objectContaining({
-          message: "record failed on purpose",
-        }),
-      }),
+      expect.stringContaining("P0001: record failed on purpose"),
     );
   });
 
@@ -1541,14 +1537,10 @@ describe("running alongside other work", () => {
         webhook_events: 1,
       });
       expect(await countRows(scheduleIncidents)).toBe(1);
-      // Logged with its cause: Drizzle's own message is only the failed SQL.
+      // From its cause: Drizzle's own message is only the failed SQL.
       expect(error).toHaveBeenCalledWith(
         expect.stringContaining("schedule_incidents"),
-        expect.objectContaining({
-          cause: expect.objectContaining({
-            message: "purge failed on purpose",
-          }),
-        }),
+        expect.stringContaining("P0001: purge failed on purpose"),
       );
     } finally {
       await pool.query(

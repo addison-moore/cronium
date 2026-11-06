@@ -31,6 +31,7 @@ import {
 import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { transitionJob } from "./job-transition";
 import { computeRetryBackoffMs } from "@/lib/services/retry-policy";
+import { describeFailure } from "@/lib/pg-errors";
 
 /** Grace on top of a job's own timeout before an unleased RUNNING job is
  * declared dead. */
@@ -43,6 +44,25 @@ export const DEFAULT_TIMEOUT_MS = 60 * 60_000;
 export const CLAIM_STALL_MS = 10 * 60_000;
 
 const SWEEP_BATCH = 100;
+
+/**
+ * How long a worker that just started holds off sweeping: one claim lease
+ * (DEFAULT_CLAIM_LEASE_MS). A worker starting usually means the stack restarted.
+ * An orchestrator can only renew a lease through the app, so a lease that ran out
+ * while the app was down says nothing about whether its owner is alive, and that
+ * owner's job may be running fine. The orchestrator also starts after the worker,
+ * so sweeping straight away would fail every job a slow restart outlasted the lease
+ * of, just before its owner could renew it.
+ */
+export const SWEEP_START_GRACE_MS = 60_000;
+
+/** Whether a worker started at `startedAtMs` may sweep yet. */
+export function sweepGraceOver(
+  startedAtMs: number,
+  nowMs: number = Date.now(),
+): boolean {
+  return nowMs - startedAtMs >= SWEEP_START_GRACE_MS;
+}
 
 export interface SweepResult {
   requeued: number;
@@ -69,7 +89,7 @@ async function finalizeLog(job: Job, error: string): Promise<void> {
   } catch (logError) {
     console.error(
       `[Sweeper] Failed to finalize log ${logId} for job ${job.id}:`,
-      logError instanceof Error ? logError.message : String(logError),
+      describeFailure(logError),
     );
   }
 }

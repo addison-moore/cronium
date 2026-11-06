@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 const SOCKET_TICKET_PREFIX = "cronium:socket-ticket:consumed:";
 const SOCKET_SECURITY_CHANNEL = "cronium:socket-security:v1";
@@ -34,7 +35,7 @@ function newClient(url: string): RedisClient {
   client.on("error", (error) => {
     console.error(
       "Socket security Valkey connection error:",
-      error.message || String(error),
+      describeFailure(error),
     );
   });
   return client;
@@ -162,7 +163,10 @@ export async function subscribeToSocketSecurityEvents(
       return;
     }
     void Promise.resolve(handler(event)).catch((error) => {
-      console.error("Socket security event handler failed:", error);
+      console.error(
+        "Socket security event handler failed:",
+        failureWithStack(error),
+      );
     });
   });
 

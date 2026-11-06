@@ -10,6 +10,7 @@ import {
   getAuthenticatedSocketUserId,
 } from "@/lib/socket-ticket";
 import type { LogStatus, Job, Log } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 interface LogStreamAuth {
   ticket?: string;
@@ -136,7 +137,7 @@ export class LogsWebSocketHandler {
 
             console.log(`Socket ${socket.id} subscribed to log ${logId}`);
           } catch (error) {
-            console.error("Error subscribing to log:", error);
+            console.error("Error subscribing to log:", failureWithStack(error));
             socket.emit("error", { message: "Failed to subscribe" });
           }
         },
@@ -256,7 +257,10 @@ export class LogsWebSocketHandler {
         }
       })
       .catch((error) => {
-        console.error("Error broadcasting job update:", error);
+        console.error(
+          "Error broadcasting job update:",
+          failureWithStack(error),
+        );
       });
   }
 
@@ -279,7 +283,10 @@ export class LogsWebSocketHandler {
         }
       })
       .catch((error) => {
-        console.error("Error broadcasting execution update:", error);
+        console.error(
+          "Error broadcasting execution update:",
+          failureWithStack(error),
+        );
       });
   }
 

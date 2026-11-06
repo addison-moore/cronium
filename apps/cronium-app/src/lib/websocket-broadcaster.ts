@@ -3,6 +3,7 @@
  */
 
 import type { Log, Job } from "@/shared/schema";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 type BroadcastType = "log" | "job" | "execution" | "log-line";
 
@@ -155,10 +156,10 @@ export class WebSocketBroadcaster {
           return { success: true, attempts };
         }
       } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
+        lastError = describeFailure(error);
         console.error(
           `[WebSocketBroadcaster] Broadcast attempt ${attempts} failed:`,
-          lastError,
+          describeFailure(error),
         );
       }
 
@@ -345,7 +346,10 @@ export class WebSocketBroadcaster {
       }
     } catch (error) {
       if (this.isHealthy) {
-        console.error("[WebSocketBroadcaster] Health check failed:", error);
+        console.error(
+          "[WebSocketBroadcaster] Health check failed:",
+          failureWithStack(error),
+        );
       }
       this.isHealthy = false;
     }

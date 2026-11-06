@@ -8,6 +8,7 @@
  * is there, because those last requests can log entries too. So once a signal has
  * arrived, process.exit waits for the logger.
  */
+import { failureWithStack } from "@/lib/pg-errors";
 import { auditLogger } from "./audit-logger";
 
 /**
@@ -24,6 +25,13 @@ const EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
   SIGTERM: 143,
 };
 
+function logFailedWrite(error: unknown): void {
+  console.error(
+    "[AuditLog] Writing the last entries failed:",
+    failureWithStack(error),
+  );
+}
+
 export function flushAuditLogBeforeExit(): void {
   let stopping = false;
 
@@ -38,7 +46,7 @@ export function flushAuditLogBeforeExit(): void {
       exiting = true;
       void auditLogger
         .shutdown()
-        .catch(console.error)
+        .catch(logFailedWrite)
         .finally(() => exit(code));
     };
 
@@ -54,7 +62,7 @@ export function flushAuditLogBeforeExit(): void {
 
     // Requests can outlast whatever is left of the grace period, and what they
     // wait on is no reason to risk what has already been logged.
-    auditLogger.flush().catch(console.error);
+    auditLogger.flush().catch(logFailedWrite);
   };
 
   process.on("SIGTERM", onSignal);

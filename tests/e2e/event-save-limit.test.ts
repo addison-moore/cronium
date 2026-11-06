@@ -209,6 +209,22 @@ it("refuses a batched tRPC save in the format the app's client knows as its own"
   expect(answer.error.json.message).toMatch(TOO_LONG);
 });
 
+// The same client refuses a success that isn't in this shape, so this holds real superjson
+// to that too. Getting it wrong would fail every call in the app.
+it("saves a batched tRPC call in the format the app's client knows as its own", async () => {
+  const res = await send(
+    "/api/trpc/events.create?batch=1",
+    "POST",
+    JSON.stringify({ 0: trpcEvent("limit-format-saved", "echo hello") }),
+  );
+
+  expect(res.status).toBe(200);
+  const [answer] = JSON.parse(res.text) as [
+    { result: { data: { json: { id: unknown } } } },
+  ];
+  expect(typeof answer.result.data.json.id).toBe("number");
+});
+
 const updates: Array<[string, string, string, (id: number) => Build]> = [
   ["REST PATCH", "/api/events/{id}", "PATCH", () => (content) => ({ content })],
   ["REST PUT", "/api/events/{id}", "PUT", () => (content) => ({ content })],

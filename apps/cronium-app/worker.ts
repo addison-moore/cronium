@@ -22,7 +22,7 @@ import { createServer } from "http";
 import os from "os";
 import { Client as PgClient } from "pg";
 import { runDispatchTick } from "./src/lib/scheduling/dispatcher";
-import { runSweepTick } from "./src/lib/scheduling/sweeper";
+import { runSweepTick, sweepGraceOver } from "./src/lib/scheduling/sweeper";
 import { retentionWindows, runRetention } from "./src/lib/scheduling/retention";
 import {
   consumeJobTransitions,
@@ -42,7 +42,7 @@ import { serverCleanupService } from "./src/lib/services/server-cleanup-service"
 import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
 import { auditLogger } from "./src/lib/security/audit-logger";
-import { describeFailure } from "./src/lib/pg-errors";
+import { describeFailure, failureWithStack } from "./src/lib/pg-errors";
 import { closeHungConnections, tcpKeepAlive } from "./src/server/db";
 
 /** Compose passes an unset variable through as "", and Number("") is 0. As a limit on
@@ -135,7 +135,7 @@ const dispatchLoop = startLoop("dispatch", DISPATCH_INTERVAL_MS, async () => {
   // Heartbeat only after a successful tick: a consistently failing dispatcher
   // must not advertise healthy scheduling to the web app.
   await writeWorkerHeartbeat(WORKER_ID).catch((error) => {
-    console.error("[Worker] Heartbeat write failed:", error);
+    console.error("[Worker] Heartbeat write failed:", failureWithStack(error));
   });
   if (result.dispatched > 0 || result.incidents > 0) {
     console.log(
@@ -151,7 +151,10 @@ const claimLoop = startLoop("claim", CLAIM_INTERVAL_MS, async () => {
   }
 });
 
+const workerStartedAt = Date.now();
+
 const sweepLoop = startLoop("sweep", SWEEP_INTERVAL_MS, async () => {
+  if (!sweepGraceOver(workerStartedAt)) return;
   const result = await runSweepTick();
   if (result.requeued || result.failed || result.timedOut) {
     console.log(
@@ -253,7 +256,7 @@ async function startListener(): Promise<void> {
     if (reconnecting) return;
     console.warn(
       "[Worker] LISTEN connection error; reconnecting in 5s:",
-      error.message,
+      describeFailure(error),
     );
     reconnect(5_000);
   });
@@ -283,7 +286,7 @@ async function startListener(): Promise<void> {
             void advanceRunsForJob(msg.payload).catch((error) => {
               console.error(
                 "[Worker] Workflow advance on job change failed:",
-                error instanceof Error ? error.message : String(error),
+                describeFailure(error),
               );
             });
           }
@@ -308,7 +311,7 @@ async function startListener(): Promise<void> {
     if (reconnecting) return;
     console.warn(
       "[Worker] LISTEN unavailable (polling covers it); retrying in 30s:",
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
     reconnect(30_000);
   }
@@ -375,7 +378,6 @@ async function main(): Promise<void> {
   retentionLoop.poke();
   dispatchLoop.poke();
   claimLoop.poke();
-  sweepLoop.poke();
   workflowLoop.poke();
 
   // Reads only, and doesn't hold up startup.
@@ -386,7 +388,7 @@ async function main(): Promise<void> {
     .catch((error) => {
       console.warn(
         "[Worker] Could not check for legacy secrets:",
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
     });
 }
@@ -426,6 +428,6 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
 main().catch((error) => {
-  console.error("[Worker] Fatal startup error:", error);
+  console.error("[Worker] Fatal startup error:", failureWithStack(error));
   process.exit(1);
 });

@@ -17,7 +17,7 @@ import {
 } from "@cronium/ui";
 import { Checkbox } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
-import { QUERY_OPTIONS } from "@/trpc/shared";
+import { QUERY_OPTIONS, trpcErrorMessage } from "@/trpc/shared";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { MonacoEditor } from "@cronium/ui";
 import { TagsInput } from "@cronium/ui";
@@ -50,6 +50,7 @@ import {
   extractServerIds,
   linkedServers,
   parseInitialEnvVars,
+  parseInitialHttpHeaders,
   parseInitialTags,
   type EventFormInitialData,
   type EventFormServer,
@@ -218,6 +219,7 @@ export default function EventForm({
   );
 
   const timezoneOptions = buildTimezoneOptions();
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Derived state
   const isScriptType = isScriptEventType(type);
@@ -300,7 +302,8 @@ export default function EventForm({
   // be the dependency: EventEditTab builds a new one on every render, and every
   // toast re-renders it, so each run put the saved tags, env vars and servers back
   // over what had been edited. A refused save lost a new env var, and a toast
-  // closing re-ticked an archived server that had just been unticked.
+  // closing re-ticked an archived server that had just been unticked. The event's
+  // type can't be either: changing it to or from HTTP Request did the same.
   useEffect(() => {
     if (initialData) {
       // Parse and set tool action config. Stored value may be an object (newer
@@ -331,21 +334,24 @@ export default function EventForm({
         setValue("envVars", envVars);
       }
 
-      // Parse HTTP request data
-      if (isHttpRequest && initialData.httpMethod) {
+      // Parse HTTP request data, whatever the event's type. One that used to be an
+      // HTTP request still has these, and they should be there if it's switched
+      // back. buildEventPayload only sends them for an HTTP request.
+      if (initialData.httpMethod) {
         setValue("httpMethod", initialData.httpMethod);
         setValue("httpUrl", initialData.httpUrl ?? "");
         setValue(
           "httpHeaders",
-          (initialData.httpHeaders as Array<{ key: string; value: string }>) ??
-            [],
+          parseInitialHttpHeaders(initialData.httpHeaders),
         );
         setValue("httpBody", initialData.httpBody ?? "");
       }
 
       // Set server IDs. An archived server stays selected until someone unticks
-      // it: dropping it here would turn a REMOTE event with nothing else selected
-      // into a LOCAL one on any save (deriveRunLocation), quietly moving the script.
+      // it, and so does a direct one a run goes to. Dropped here, a LOCAL_AND_REMOTE
+      // event with nothing else selected would turn LOCAL on any save
+      // (deriveRunLocation), quietly moving the script, and a REMOTE one would ask
+      // for a location it already has.
       if (initialData.servers && Array.isArray(initialData.servers)) {
         setValue(
           "selectedServerIds",
@@ -353,7 +359,7 @@ export default function EventForm({
         );
       }
     }
-  }, [initialData?.id, setValue, isHttpRequest]);
+  }, [initialData?.id, setValue]);
 
   // Update content when type changes
   useEffect(() => {
@@ -362,9 +368,10 @@ export default function EventForm({
         setValue("content", getDefaultScriptContent(type));
       }
     }
-    // Not the whole object, for the same reason as the effect above: a script
-    // written after changing the event's type would go back to the template.
-  }, [type, initialData?.content, initialData?.type, isScriptType, setValue]);
+    // Only when the type changes. With anything from initialData here, a refetch
+    // that changed the stored script could put the template back over one written
+    // after changing the type.
+  }, [type, isScriptType, setValue]);
 
   // Force local execution for Tool Actions
   useEffect(() => {
@@ -390,7 +397,7 @@ export default function EventForm({
         // Prepare form data for submission (pure construction in
         // lib/event-payload.ts: strips form-only fields, derives run
         // location, and normalizes schedule/content fields).
-        const formData = buildEventPayload(data);
+        const formData = buildEventPayload(data, initialData?.startTime);
 
         // Say so here rather than send 10 MB to be told the same thing. Beside the script
         // and scrolled to, because the submit button is a screen or more below it.
@@ -440,21 +447,18 @@ export default function EventForm({
       } catch (error) {
         console.error("Error submitting form:", error);
 
-        // Extract error message from tRPC error
-        let errorMessage = `Failed to ${isEditing ? "update" : "create"} event. Please try again.`;
-
-        if (error && typeof error === "object" && "message" in error) {
-          errorMessage = error.message as string;
-        }
-
         toast({
           title: "Error",
-          description: errorMessage,
+          description: trpcErrorMessage(
+            error,
+            `Failed to ${isEditing ? "update" : "create"} event. Please try again.`,
+          ),
           variant: "destructive",
         });
       }
     },
     [
+      initialData?.startTime,
       isEditing,
       eventId,
       createEventMutation,
@@ -1033,8 +1037,9 @@ export default function EventForm({
                 )}
               />
               <p className="text-muted-foreground text-sm">
-                If specified, the event will start running from this time. Leave
-                empty to start immediately.
+                If specified, the event will start running from this time, in
+                your browser&apos;s timezone ({browserTimezone}). Leave empty to
+                start immediately.
               </p>
             </div>
 

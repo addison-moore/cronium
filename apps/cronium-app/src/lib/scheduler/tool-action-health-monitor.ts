@@ -1,4 +1,5 @@
 import { type ToolActionHealthStatus } from "./tool-action-executor";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface HealthMetrics {
   toolId: number;
@@ -349,7 +350,7 @@ export class ToolActionHealthMonitor {
         );
       }
     } catch (error) {
-      console.error("Error updating health metrics:", error);
+      console.error("Error updating health metrics:", failureWithStack(error));
     }
   }
 }

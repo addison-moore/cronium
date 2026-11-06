@@ -5,6 +5,7 @@ import {
 } from "./job-transformer";
 import { transformSSHJobForOrchestrator } from "./ssh-job-transformer";
 import { storage } from "@/server/storage";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Enhanced job transformer that handles multi-server SSH jobs
@@ -136,7 +137,10 @@ export async function enhancedTransformJobForOrchestrator(
       };
     }
   } catch (error) {
-    console.error("Error enhancing job transformation:", error);
+    console.error(
+      "Error enhancing job transformation:",
+      failureWithStack(error),
+    );
     // Return original transformation on error
   }
 

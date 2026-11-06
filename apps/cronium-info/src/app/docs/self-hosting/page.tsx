@@ -371,6 +371,13 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 <code>10m</code>.
               </li>
               <li>
+                A web application firewall needs an exception for the routes
+                that carry scripts. ModSecurity with the OWASP Core Rule Set
+                refuses ordinary scripts by default, and any request over 128
+                KB. The app shows the status when something other than Cronium
+                answers it.
+              </li>
+              <li>
                 Optional features are enabled purely by adding variables to{" "}
                 <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
@@ -636,7 +643,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                     <TableCell>Yes</TableCell>
                     <TableCell>
                       Unique identifier for this orchestrator instance (used for
-                      logging and job claims).
+                      logging and job claims). Keep it the same across restarts:
+                      running jobs belong to it, and the next process picks them
+                      up by it.
                     </TableCell>
                   </TableRow>
                   <TableRow>

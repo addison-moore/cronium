@@ -12,6 +12,7 @@
 import { storage } from "@/server/storage";
 import type { Role, RolePermissions } from "@/server/storage";
 import { UserRole } from "@/shared/schema";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const ALL_GRANTED: RolePermissions = {
   console: true,
@@ -63,7 +64,10 @@ export async function hasServerPermission(
     const permissions = await getUserPermissions(userId);
     return permissions[key];
   } catch (error) {
-    console.error(`Permission check failed for ${userId}/${key}:`, error);
+    console.error(
+      `Permission check failed for ${userId}/${key}:`,
+      failureWithStack(error),
+    );
     return false;
   }
 }

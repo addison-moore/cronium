@@ -7,6 +7,12 @@ import {
   credentialEncryption,
   parseEncryptedData,
 } from "@/lib/security/credential-encryption";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 /**
  * OAuth access/refresh tokens are long-lived and grant access to a user's
@@ -28,6 +34,18 @@ export function encryptSecret(value: string): string {
     );
   }
   return JSON.stringify(credentialEncryption.encrypt(value));
+}
+
+/**
+ * The text for an OAuthError. A failed query's message would be the encrypted
+ * tokens and the SQL, and the callback route puts this in a redirect's query string.
+ */
+function reasonFor(what: string, error: unknown): string {
+  if (isQueryFailure(error)) {
+    console.error(`[TokenManager] ${what}:`, describeFailure(error));
+    return `${what}: ${QUERY_FAILED_MESSAGE}`;
+  }
+  return `${what}: ${error instanceof Error ? error.message : "Unknown error"}`;
 }
 
 export function decryptSecret(stored: string): string {
@@ -82,7 +100,7 @@ export class TokenManager {
         });
     } catch (error) {
       throw new OAuthError(
-        `Failed to store tokens: ${error instanceof Error ? error.message : "Unknown error"}`,
+        reasonFor("Failed to store tokens", error),
         "storage_failed",
       );
     }
@@ -125,7 +143,7 @@ export class TokenManager {
       };
     } catch (error) {
       throw new OAuthError(
-        `Failed to retrieve tokens: ${error instanceof Error ? error.message : "Unknown error"}`,
+        reasonFor("Failed to retrieve tokens", error),
         "retrieval_failed",
       );
     }
@@ -185,7 +203,10 @@ export class TokenManager {
           await this.provider.revokeTokens(tokens.accessToken);
         } catch (error) {
           // Log but don't throw - we still want to delete from DB
-          console.error("Failed to revoke tokens with provider:", error);
+          console.error(
+            "Failed to revoke tokens with provider:",
+            failureWithStack(error),
+          );
         }
       }
 
@@ -200,7 +221,7 @@ export class TokenManager {
         );
     } catch (error) {
       throw new OAuthError(
-        `Failed to delete tokens: ${error instanceof Error ? error.message : "Unknown error"}`,
+        reasonFor("Failed to delete tokens", error),
         "deletion_failed",
       );
     }
