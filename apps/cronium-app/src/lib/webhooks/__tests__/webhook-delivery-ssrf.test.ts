@@ -23,9 +23,10 @@ jest.mock("../WebhookQueue", () => ({
   WebhookQueue: jest.fn().mockImplementation(() => ({})),
 }));
 jest.mock("../WebhookSecurity", () => ({
-  WebhookSecurity: jest
-    .fn()
-    .mockImplementation(() => ({ generateSignature: () => "signature" })),
+  WebhookSecurity: jest.fn().mockImplementation(() => ({
+    generateSignature: () => "signature",
+    generateDeliverySignature: () => "signature-v2",
+  })),
 }));
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-id" }));
 
