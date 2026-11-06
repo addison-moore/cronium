@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
+import { eventTooLong } from "./delivery-body";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
@@ -160,6 +161,26 @@ export class WebhookRouter {
         webhook.transformations as Record<string, unknown> | undefined,
       );
 
+      // Refused here, where the sender can be told. Once this answers with a success,
+      // nobody is left who could do anything about an event that can't go out. Without
+      // `transformations`, the limit has room for anything the cap above lets in.
+      const deliveredEvent = `webhook.${eventType}`;
+      const deliveredMetadata = { webhookId: webhook.id, source: "webhook" };
+      const tooLong = eventTooLong(
+        deliveredEvent,
+        processedData,
+        deliveredMetadata,
+      );
+      if (tooLong !== undefined) {
+        await this.logWebhookRequest(webhook.id, {
+          success: false,
+          error: tooLong,
+          duration: Date.now() - startTime,
+        });
+
+        return NextResponse.json({ error: tooLong }, { status: 413 });
+      }
+
       // Store event, stamped with the owning tenant (the inbound webhook's
       // owner) so downstream fan-out and reads stay tenant-scoped.
       const result = await db
@@ -181,13 +202,10 @@ export class WebhookRouter {
 
       // Fan out only within the inbound webhook's own tenant (HI-01).
       await this.webhookManager.triggerEvent(
-        `webhook.${eventType}`,
+        deliveredEvent,
         processedData,
         webhook.userId,
-        {
-          webhookId: webhook.id,
-          source: "webhook",
-        },
+        deliveredMetadata,
       );
 
       // Log successful request

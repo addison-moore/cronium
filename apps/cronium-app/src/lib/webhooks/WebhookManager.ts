@@ -9,6 +9,12 @@ import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue } from "./WebhookQueue";
 import { readResponseBody, WEBHOOK_TIMEOUT_MS } from "./response-body";
+import {
+  bodyTooLong,
+  deliveryPayload,
+  eventTooLong,
+  MAX_WEBHOOK_REQUEST_BYTES,
+} from "./delivery-body";
 import { nanoid } from "nanoid";
 import {
   assertRequestUrlIsPublic,
@@ -58,6 +64,8 @@ export interface WebhookDeliveryResult {
   success: boolean;
   /** Only there when the attempt's row couldn't be stored: no history shows it. */
   recorded?: false;
+  /** Only there when another attempt can't change this, so the queue makes none. */
+  retryable?: false;
   statusCode?: number;
   response?: string;
   /**
@@ -79,22 +87,6 @@ const storedEventContentSchema = z.strictObject({
   data: z.record(z.string(), z.unknown()),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
-
-/** The delivery body for a stored event. A retry has to produce what the first
- * attempt sent, so both build it here. */
-function deliveryPayload(
-  event: typeof webhookEvents.$inferSelect,
-  data: Record<string, unknown>,
-  metadata?: Record<string, unknown>,
-): WebhookPayload {
-  return {
-    id: event.id.toString(),
-    event: event.event,
-    timestamp: event.createdAt,
-    data,
-    ...(metadata !== undefined && { metadata }),
-  };
-}
 
 export class WebhookManager {
   private static instance: WebhookManager;
@@ -303,9 +295,9 @@ export class WebhookManager {
    * its own in the form `triggerEvent` stores. So it shows in the webhook's history
    * and stats, under `webhook.test`, and can be retried.
    *
-   * @throws WebhookPreconditionError when the webhook is disabled. Nothing is sent
-   * or recorded then. A failed attempt isn't thrown: it comes back with
-   * `success: false`, recorded like any other.
+   * @throws WebhookPreconditionError when the webhook is disabled, or the event is
+   * too long to deliver. Nothing is sent or recorded then. A failed attempt isn't
+   * thrown: it comes back with `success: false`, recorded like any other.
    */
   async sendTestEvent(
     webhook: typeof webhooks.$inferSelect,
@@ -315,6 +307,11 @@ export class WebhookManager {
     // Disabled means nothing goes to this URL, as with `triggerEvent`.
     if (!webhook.active) {
       throw new WebhookPreconditionError("Webhook is disabled");
+    }
+
+    const tooLong = eventTooLong("webhook.test", data, metadata);
+    if (tooLong !== undefined) {
+      throw new WebhookPreconditionError(tooLong);
     }
 
     // Decrypted before anything is recorded: a secret that can't be read means
@@ -458,6 +455,34 @@ export class WebhookManager {
 
     try {
       const rawBody = JSON.stringify(payload);
+
+      // Every attempt would send these same bytes, so another can't change this. It's
+      // recorded once, because each retry would only add a row to the webhook's history.
+      const tooLong = bodyTooLong(rawBody);
+      if (tooLong !== undefined) {
+        const duration = Date.now() - startTime;
+        return await this.recordAttempt(
+          {
+            webhookId,
+            webhookEventId,
+            deliveryId,
+            status: "failed",
+            error: tooLong,
+            headers: {},
+            duration,
+            attemptedAt: new Date(),
+          },
+          {
+            id: deliveryId,
+            webhookId,
+            success: false,
+            retryable: false,
+            error: tooLong,
+            duration,
+          },
+        );
+      }
+
       // When this attempt is made. The body's `timestamp` and `X-Webhook-Timestamp`
       // are the event's and stay the same on every attempt, so neither can tell a
       // late retry from a replayed request.
@@ -529,7 +554,7 @@ export class WebhookManager {
         httpsAgent: ssrfHttpsAgent,
         proxy: false,
         maxRedirects: 0,
-        maxBodyLength: MAX_WEBHOOK_RESPONSE_BYTES,
+        maxBodyLength: MAX_WEBHOOK_REQUEST_BYTES,
         // Treat any status as a resolved response; we record the code.
         validateStatus: () => true,
         // A stream hands over the status before the body. With a buffered response,
@@ -647,9 +672,9 @@ export class WebhookManager {
    * stays out of the queue, which could only say the attempt was queued, and which
    * would repeat a failure on its own schedule after the caller had moved on.
    *
-   * @throws WebhookPreconditionError when it won't send. Nothing is sent or
-   * recorded then. A failed attempt isn't thrown: it comes back with
-   * `success: false`, recorded like any other.
+   * @throws WebhookPreconditionError when it won't send, including when the event is
+   * too long to deliver. Nothing is sent or recorded then. A failed attempt isn't
+   * thrown: it comes back with `success: false`, recorded like any other.
    */
   async retryDelivery(deliveryId: string): Promise<WebhookDeliveryResult> {
     // Use optimized query to get delivery with webhook and event in single query
@@ -685,6 +710,15 @@ export class WebhookManager {
       throw new WebhookPreconditionError(
         "This delivery's stored event can't be sent again",
       );
+    }
+
+    const tooLong = eventTooLong(
+      event.event,
+      content.data.data,
+      content.data.metadata,
+    );
+    if (tooLong !== undefined) {
+      throw new WebhookPreconditionError(tooLong);
     }
 
     // Decrypt the HMAC secret and custom headers at this delivery-signing

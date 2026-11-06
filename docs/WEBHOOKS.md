@@ -26,6 +26,8 @@ Each attempt is one `POST` to the webhook's URL, with a JSON body:
 | `data`      | The event's contents.                                                                                                                                                                                           |
 | `metadata`  | Details about where the event came from. Left out when the event has none.                                                                                                                                      |
 
+A body can be up to 8 MB (8,388,608 bytes), so check that your receiver and anything in front of it will take that much. nginx, for example, refuses more than 1 MB unless `client_max_body_size` says otherwise, and its 413 counts as a failed attempt like any other answer. An event that would be longer isn't sent at all: see [Attempts and retries](#attempts-and-retries).
+
 Both signatures cover the body. The request also has these headers:
 
 | Header                   | Value                                                                      | Signed                      |
@@ -172,11 +174,14 @@ An event can reach you more than once, so handle deliveries with the steps above
 
 **A manual retry** is one call to `webhookSystem.retryDelivery`. It makes one attempt and reports what the receiver answered, and a failure isn't repeated. It works on any recorded delivery, including one that succeeded or one for an event the webhook no longer subscribes to, until the record is removed after `CRONIUM_WEBHOOK_RETENTION_DAYS` (30 days by default). It is refused if the webhook is disabled or the event isn't recorded under the webhook's owner. Each user can make 10 of these calls a minute, though calls made at the same moment can get past that limit.
 
+**An event past 8 MB is never sent, so it isn't retried.** Every attempt would send the same bytes, so another couldn't change anything. The queue records one failed attempt on each subscribed webhook, with no status and an `error` giving the length. `webhookSystem.test` and `webhookSystem.retryDelivery` refuse such an event with `PRECONDITION_FAILED`, and nothing is sent or recorded.
+
 ## Answering a delivery
 
 - **A 2xx means delivered, as soon as the status arrives.** Anything else is recorded as a failed attempt and retried if retries remain. That includes a 3xx, because redirects aren't followed.
 - **Send a 2xx only once you've taken the event.** Cronium keeps your answer's body for the record and nothing else, so what happens to the body can't change the status. A 2xx isn't sent again if its connection then drops, or its body runs long or can't be decompressed. When a body doesn't finish, the delivery's `error` says so, and a manual retry can send the event again.
-- **You have 30 seconds to send the status.** After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **You have 30 seconds to send the status.** That starts with the request, so the time a long body takes to reach you uses some of it. After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **Let the body arrive before you close the connection.** If you refuse a long body by answering and closing straight away, your status can be lost. The attempt is then recorded with an error such as `write EPIPE` and no status, and retried like any other failed attempt.
 - **The body gets another 30 seconds and 1 MB, after decompression.** Cronium stops reading at either limit and closes the connection.
 - **The first 1,000 characters of your answer are stored** in the delivery history, so don't put anything sensitive in them.
 
@@ -200,5 +205,7 @@ Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its s
 | Time header      | `X-Delivery-Timestamp`                                | `X-Webhook-Timestamp`                                      |
 | Id header        | `X-Delivery-Id`                                       | `X-Webhook-Delivery-Id`                                    |
 | Who checks       | Your receiver, as above                               | Cronium: within 5 minutes, each id accepted once           |
+
+**A request's body can be up to 1 MB (1,048,576 bytes),** and a longer one gets a 413. The delivery can be longer than the request, because of the fields added and the escaping described under [Which events are sent](#which-events-are-sent): plain text made only of `"` comes out 6 times as long, and nothing a request can contain grows more than that. That still fits in a delivery, so what the endpoint accepts can go out. The exception is a webhook with stored `transformations` that copy fields. If that would take an event past 8 MB, the request gets a 413, and nothing is stored or sent.
 
 **One Cronium can't receive from another: a delivery sent to an inbound endpoint gets a 401.** That is deliberate. A webhook has one secret for both directions, so accepting deliveries would let anyone holding a captured delivery and the endpoint's URL replay it into that webhook, and a webhook subscribed to `*` whose URL is an inbound endpoint could trigger itself. To forward events between instances, put a small relay between them that verifies the delivery and signs a new inbound request.
