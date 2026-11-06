@@ -214,8 +214,18 @@ docker compose up -d
   those variables to `0` in `.env` first. Re-running `install.sh` keeps your existing
   `.env` and does not add them for you. The tool audit log is the exception: nothing
   is deleted from it until you set a window.
+- **Webhooks and variables saved before July 2026 stay plaintext until you encrypt
+  them.** Upgrading doesn't do it for you. The worker logs a warning at boot if any
+  remain, and
+  [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
+  has the command.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
+
+Both compose files give `cronium-app` 20 seconds to stop and `cronium-worker` 40, so
+requests and jobs can finish and the last tool audit log entries can be written. If you
+run the images another way, allow them the same: a process killed sooner loses the
+entries it hadn't written.
 
 ## Backup and Restore
 

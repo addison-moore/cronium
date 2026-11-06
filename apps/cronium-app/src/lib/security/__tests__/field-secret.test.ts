@@ -1,3 +1,4 @@
+import { createCipheriv, randomBytes } from "crypto";
 import {
   encryptServerSecret,
   decryptServerSecret,
@@ -8,6 +9,8 @@ import {
   decryptSystemSetting,
   encryptMfaSecret,
   decryptMfaSecret,
+  isLegacyCiphertextUnderKey,
+  looksLikeLegacyCiphertext,
 } from "@/lib/security/field-secret";
 import { __resetSecretVaultForTests } from "@/lib/security/secret-vault";
 
@@ -96,5 +99,78 @@ describe("field-secret record-bound migration (2.1)", () => {
     );
     expect(decryptEnvVarValue("plainval", 42, "API_KEY")).toBe("plainval");
     expect(decryptSystemSetting("plainpw", "smtpPassword")).toBe("plainpw");
+  });
+
+  describe("legacy static-AAD ciphertext", () => {
+    /** The frozen format: IV[16] || ciphertext || tag[16], base64, static AAD. */
+    function legacyEncrypt(plaintext: string, keyHex = KEY): string {
+      const iv = randomBytes(16);
+      const cipher = createCipheriv(
+        "aes-256-gcm",
+        Buffer.from(keyHex, "hex"),
+        iv,
+      );
+      cipher.setAAD(Buffer.from("cronium-server-encryption"));
+      const ciphertext = Buffer.concat([
+        cipher.update(plaintext, "utf8"),
+        cipher.final(),
+      ]);
+      return Buffer.concat([iv, ciphertext, cipher.getAuthTag()]).toString(
+        "base64",
+      );
+    }
+    const OTHER_KEY = "77".repeat(32);
+    const key = (hex: string) => Buffer.from(hex, "hex");
+
+    it("still decrypts on read", () => {
+      const stored = legacyEncrypt("an old ssh key");
+      expect(decryptServerSecret(stored, "sshKey", "user-1")).toBe(
+        "an old ssh key",
+      );
+    });
+
+    it("still fails a read of something the key can't authenticate", () => {
+      const stored = legacyEncrypt("an old ssh key", OTHER_KEY);
+      expect(() => decryptServerSecret(stored, "sshKey", "user-1")).toThrow();
+    });
+
+    it("recognizes only the shape a read would try to decrypt", () => {
+      expect(looksLikeLegacyCiphertext(legacyEncrypt("an old ssh key"))).toBe(
+        true,
+      );
+      expect(looksLikeLegacyCiphertext("A".repeat(64))).toBe(true);
+
+      expect(looksLikeLegacyCiphertext("")).toBe(false);
+      expect(looksLikeLegacyCiphertext("short")).toBe(false);
+      expect(looksLikeLegacyCiphertext("A".repeat(49))).toBe(false);
+      expect(looksLikeLegacyCiphertext(`${"A".repeat(60)}-`)).toBe(false);
+      expect(
+        looksLikeLegacyCiphertext(`-----BEGIN KEY-----\n${"A".repeat(60)}`),
+      ).toBe(false);
+      // Long enough, but it decodes to too little to hold an IV and a tag.
+      expect(looksLikeLegacyCiphertext("=".repeat(64))).toBe(false);
+    });
+
+    it("says whether a key authenticates it, and a passthrough never counts", () => {
+      const stored = legacyEncrypt("an old ssh key");
+
+      expect(isLegacyCiphertextUnderKey(stored, key(KEY))).toBe(true);
+      expect(isLegacyCiphertextUnderKey(stored, key(OTHER_KEY))).toBe(false);
+
+      // Tampering with the middle fails the tag.
+      const bytes = Buffer.from(stored, "base64");
+      bytes[20] = bytes[20]! ^ 0xff;
+      expect(
+        isLegacyCiphertextUnderKey(bytes.toString("base64"), key(KEY)),
+      ).toBe(false);
+
+      // A read returns each of these unchanged, or fails on the last, under any key.
+      for (const plaintext of ["", "plainkey", "A".repeat(64)]) {
+        expect(isLegacyCiphertextUnderKey(plaintext, key(KEY))).toBe(false);
+      }
+      expect(decryptServerSecret("plainkey", "sshKey", "user-1")).toBe(
+        "plainkey",
+      );
+    });
   });
 });

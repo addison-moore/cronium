@@ -114,6 +114,12 @@ jobs:
           echo "Services never became healthy"
           exit 1
 
+      - name: Assert the secret maintenance CLI runs from the image
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        run: |
+          docker compose exec -T cronium-worker \
+            node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy --dry-run
+
       - name: Dump state on failure
         if: failure()
         working-directory: ${{ runner.temp }}/cronium-smoke
