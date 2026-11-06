@@ -313,7 +313,7 @@ describe("what a test answers", () => {
     });
 
     const [request] = receiver.received as [ReceivedRequest];
-    expect(answer).toMatchObject({
+    expect(answer).toEqual({
       success: true,
       data: {
         id: request.headers["x-delivery-id"],
@@ -526,6 +526,84 @@ describe("what a test records", () => {
       successfulDeliveries: 1,
       failedDeliveries: 1,
     });
+  });
+});
+
+describe("retrying a test delivery", () => {
+  it("sends the same test again, to that webhook alone, and is recorded on the same event", async () => {
+    const bystander = await startReceiver();
+    await webhookAt(bystander.url, { events: ["*"] });
+    const receiver = await startReceiver([503]);
+    const webhook = await webhookAt(receiver.url);
+    const caller = callerFor(owner);
+
+    const answer = await caller.webhookSystem.test({
+      webhookId: webhook.id,
+      testData: { hello: "world", nested: { zebra: 1, apple: 2 } },
+    });
+    expect(answer).toMatchObject({ success: false, data: { statusCode: 503 } });
+
+    const retried = await caller.webhookSystem.retryDelivery({
+      deliveryId: answer.data.id,
+    });
+
+    expect(retried).toMatchObject({
+      success: true,
+      data: { webhookId: webhook.id, statusCode: 200 },
+      message: "Webhook delivery retry succeeded",
+    });
+    const [first, second] = receiver.received as [
+      ReceivedRequest,
+      ReceivedRequest,
+    ];
+    expect(receiver.received).toHaveLength(2);
+    expect(JSON.parse(second.body)).toEqual(JSON.parse(first.body));
+    expect(second.headers["x-webhook-event"]).toBe("webhook.test");
+    expect(second.headers["x-webhook-timestamp"]).toBe(
+      first.headers["x-webhook-timestamp"],
+    );
+    expect(second.headers["x-delivery-id"]).toBe(retried.data.id);
+    expect(second.headers["x-webhook-signature"]).toBe(
+      signatureOf(second.body, webhook.secret),
+    );
+    await sleep(QUEUE_WAIT_MS);
+    expect(bystander.received).toHaveLength(0);
+
+    const [event, ...others] = await eventRows();
+    expect(others).toHaveLength(0);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows.map((row) => [row.webhookEventId, row.status])).toEqual([
+      [event!.id, "failed"],
+      [event!.id, "success"],
+    ]);
+  });
+});
+
+describe("the rate limit", () => {
+  it("stops a client in a loop after 10 a minute, and only that client", async () => {
+    const receiver = await startReceiver();
+    const webhook = await webhookAt(receiver.url);
+    const test = () =>
+      callerFor(owner).webhookSystem.test({ webhookId: webhook.id });
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      expect((await test()).success).toBe(true);
+    }
+    expect(receiver.received).toHaveLength(10);
+
+    await expect(test()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    // Past the limit it sends nothing and writes nothing.
+    expect(receiver.received).toHaveLength(10);
+    expect(await eventRows()).toHaveLength(10);
+    expect(await allDeliveries()).toHaveLength(10);
+
+    owner = await seedActiveUser();
+    const others = await webhookAt(receiver.url);
+    const answer = await callerFor(owner).webhookSystem.test({
+      webhookId: others.id,
+    });
+    expect(answer.success).toBe(true);
   });
 });
 
