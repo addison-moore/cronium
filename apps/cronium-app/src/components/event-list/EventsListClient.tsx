@@ -139,6 +139,13 @@ export function EventsListClient({
       });
       if (onRefresh) onRefresh();
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fork event",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateEventMutation = trpc.events.update.useMutation({
