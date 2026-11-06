@@ -212,6 +212,55 @@ describe("WebhookSecurity.verifySignature", () => {
   });
 });
 
+describe("WebhookSecurity.generateDeliverySignature", () => {
+  const timestamp = "2026-11-05T12:00:00.000Z";
+  const signature = sec.generateDeliverySignature(
+    timestamp,
+    "delivery-1",
+    '{"a":1}',
+    SECRET,
+  );
+
+  it("is an HMAC-SHA512 of the attempt's time and id and the body", () => {
+    const expected = crypto
+      .createHmac("sha512", SECRET)
+      .update(`${timestamp}.delivery-1.{"a":1}`)
+      .digest("hex");
+    expect(signature).toBe(`sha512=${expected}`);
+  });
+
+  it.each([
+    ["time", "2026-11-05T12:00:00.001Z", "delivery-1", '{"a":1}', SECRET],
+    ["id", timestamp, "delivery-2", '{"a":1}', SECRET],
+    ["body", timestamp, "delivery-1", '{"a":2}', SECRET],
+    ["secret", timestamp, "delivery-1", '{"a":1}', "other"],
+  ])("changes with the %s", (_what, time, id, body, secret) => {
+    expect(sec.generateDeliverySignature(time, id, body, secret)).not.toBe(
+      signature,
+    );
+  });
+
+  it("can't pass as an inbound signature, however it's labelled", async () => {
+    const now = new Date().toISOString();
+    const delivered = sec.generateDeliverySignature(
+      now,
+      "delivery-1",
+      '{"hello":"world"}',
+      SECRET,
+    );
+    const hex = delivered.slice("sha512=".length);
+
+    for (const relabelled of [delivered, `sha256=${hex}`]) {
+      const result = await sec.verifyWebhook(
+        request({ timestamp: now, signature: relabelled }),
+        { secret: SECRET },
+      );
+      expect(result.isValid).toBe(false);
+    }
+    expect(replay.__seen.size).toBe(0);
+  });
+});
+
 describe("WebhookSecurity.verifyWebhook replay memory", () => {
   it("remembers a delivery id for the whole time its signature stays valid", async () => {
     // A timestamp at the far future edge of the 5 minute tolerance stays

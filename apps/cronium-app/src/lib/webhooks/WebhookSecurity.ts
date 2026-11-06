@@ -8,6 +8,7 @@ export interface SignatureVerificationResult {
 
 export class WebhookSecurity {
   private static readonly SIGNATURE_PREFIX = "sha256=";
+  private static readonly DELIVERY_SIGNATURE_PREFIX = "sha512=";
   private static readonly TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000; // 5 minutes
 
   /**
@@ -17,6 +18,28 @@ export class WebhookSecurity {
     const hmac = crypto.createHmac("sha256", secret);
     hmac.update(payload);
     return `${WebhookSecurity.SIGNATURE_PREFIX}${hmac.digest("hex")}`;
+  }
+
+  /**
+   * Generate the `X-Webhook-Signature-V2` value for one delivery attempt.
+   *
+   * It covers the attempt's time and id as well as the body, so a receiver can
+   * refuse a replayed request and still accept a late retry.
+   *
+   * SHA-512 keeps it apart from the two SHA-256 signatures made with this secret.
+   * Under SHA-256, a captured one would be accepted, relabelled, at the webhook's
+   * own inbound endpoint (`verifyWebhook` expects this same string), and it would
+   * pass as `X-Webhook-Signature` over the signed string sent as a body.
+   */
+  generateDeliverySignature(
+    timestamp: string,
+    deliveryId: string,
+    rawBody: string,
+    secret: string,
+  ): string {
+    const hmac = crypto.createHmac("sha512", secret);
+    hmac.update(`${timestamp}.${deliveryId}.${rawBody}`);
+    return `${WebhookSecurity.DELIVERY_SIGNATURE_PREFIX}${hmac.digest("hex")}`;
   }
 
   /**
@@ -118,6 +141,10 @@ export class WebhookSecurity {
    * delivery ID is atomically consumed so a captured request cannot be
    * replayed. `rawBody` is the exact received bytes (not a re-serialization),
    * so senders and this verifier agree byte-for-byte.
+   *
+   * A delivery from `WebhookManager` doesn't pass this, on purpose: a webhook has
+   * one secret for both directions, so accepting its own deliveries here would let
+   * a captured one be replayed in, and a `*` subscription loop through its endpoint.
    */
   async verifyWebhook(
     request: {

@@ -335,9 +335,20 @@ export class WebhookManager {
     }
 
     try {
-      // Generate signature
-      const signature = this.webhookSecurity.generateSignature(
-        JSON.stringify(payload),
+      const rawBody = JSON.stringify(payload);
+      // When this attempt is made. The body's `timestamp` and `X-Webhook-Timestamp`
+      // are the event's and stay the same on every attempt, so neither can tell a
+      // late retry from a replayed request.
+      const attemptTimestamp = new Date().toISOString();
+
+      // Generate signatures. `X-Webhook-Signature` stays over the body alone, because
+      // receivers verify it that way; `X-Webhook-Signature-V2` also covers the
+      // attempt. docs/WEBHOOKS.md tells receivers how to check them.
+      const signature = this.webhookSecurity.generateSignature(rawBody, secret);
+      const signatureV2 = this.webhookSecurity.generateDeliverySignature(
+        attemptTimestamp,
+        deliveryId,
+        rawBody,
         secret,
       );
 
@@ -351,13 +362,15 @@ export class WebhookManager {
       };
       const requestHeaders = {
         ...systemHeaders,
+        "X-Delivery-Timestamp": attemptTimestamp,
         "X-Webhook-Signature": signature,
+        "X-Webhook-Signature-V2": signatureV2,
         ...headers,
       };
       // What the delivery record keeps. `headers` was decrypted just to make this
       // request (HI-09), and they are usually credentials, so only their names
       // survive; webhook_deliveries is not encrypted and is returned by the
-      // history API.
+      // history API. The signatures stay out too, and `attempted_at` has the time.
       const recordedHeaders = {
         ...systemHeaders,
         ...Object.fromEntries(
@@ -374,7 +387,7 @@ export class WebhookManager {
         method: "POST",
         url,
         headers: requestHeaders,
-        data: JSON.stringify(payload),
+        data: rawBody,
         timeout: 30000,
         httpAgent: ssrfHttpAgent,
         httpsAgent: ssrfHttpsAgent,
@@ -472,11 +485,11 @@ export class WebhookManager {
    *
    * The body is the original event, rebuilt from its row. Its `id` stays the same,
    * so a receiver can tell it's the same event. Its `timestamp` is the event's, in
-   * the body and in `X-Webhook-Timestamp`, and `X-Delivery-Id` is new because it
-   * names one attempt; both are what an automatic retry sends. jsonb doesn't keep
-   * key order, so the bytes and therefore the signature can differ from the first
-   * attempt's even under the same secret. The URL, secret and headers are the
-   * webhook's current ones.
+   * the body and in `X-Webhook-Timestamp`, and `X-Delivery-Id` and
+   * `X-Delivery-Timestamp` are new because they name one attempt; all of that is
+   * what an automatic retry sends. jsonb doesn't keep key order, so the bytes and
+   * therefore `X-Webhook-Signature` can differ from the first attempt's even under
+   * the same secret. The URL, secret and headers are the webhook's current ones.
    *
    * This makes one attempt and waits for it, so the outcome it returns is real. It
    * stays out of the queue, which could only say the attempt was queued, and which
