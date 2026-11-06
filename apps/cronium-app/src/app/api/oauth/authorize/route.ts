@@ -4,7 +4,7 @@ import {
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
 import { z } from "zod";
-import { OAuthFlow } from "@/lib/oauth/OAuthFlow";
+import { BROWSER_NONCE_COOKIE, OAuthFlow } from "@/lib/oauth/OAuthFlow";
 import { createProviderFromEnv } from "@/lib/oauth/providers";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
@@ -70,13 +70,15 @@ export async function POST(request: NextRequest) {
 
     // Bind the flow to this browser: an HttpOnly SameSite cookie the callback
     // must echo (its hash is stored with the state). SameSite=Lax so it is sent
-    // on the top-level GET redirect back from the provider.
+    // on the top-level GET redirect back from the provider. Secure goes by the
+    // public URL, as the session cookie's does: a production install can be on
+    // http://localhost, where Safari drops a Secure cookie.
     const response = NextResponse.json({ authUrl });
-    response.cookies.set("cronium-oauth-nonce", browserNonce, {
+    response.cookies.set(BROWSER_NONCE_COOKIE.name, browserNonce, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/api/oauth",
+      secure: baseUrl.startsWith("https://"),
+      path: BROWSER_NONCE_COOKIE.path,
       maxAge: 10 * 60,
     });
     return response;

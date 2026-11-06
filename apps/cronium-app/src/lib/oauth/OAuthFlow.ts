@@ -14,6 +14,15 @@ function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/**
+ * The browser-binding cookie. A cookie is only deleted by naming its path, so the routes
+ * that set and clear this one share it.
+ */
+export const BROWSER_NONCE_COOKIE = {
+  name: "cronium-oauth-nonce",
+  path: "/api/oauth",
+} as const;
+
 /** Result of starting a flow: the provider URL plus the browser-binding nonce. */
 export interface OAuthInitiation {
   authUrl: string;
@@ -81,15 +90,6 @@ export class OAuthFlow {
     userId: string;
     toolId: number;
   }> {
-    // Check for errors
-    if (params.error) {
-      throw new OAuthError(
-        params.errorDescription ?? params.error,
-        params.error,
-        400,
-      );
-    }
-
     // Atomically claim the state: delete-and-return only if unexpired, so a
     // replayed callback can't reuse it and two concurrent callbacks can't both
     // proceed.
@@ -105,7 +105,7 @@ export class OAuthFlow {
 
     if (!authRequest) {
       throw new OAuthError(
-        "Invalid or expired state parameter",
+        "This connection attempt has expired or was already used",
         "invalid_state",
         400,
       );
@@ -122,6 +122,27 @@ export class OAuthFlow {
       throw new OAuthError(
         "OAuth session could not be verified for this browser",
         "invalid_browser_binding",
+        400,
+      );
+    }
+
+    // What the redirect says only counts for a flow this browser started, so it's read
+    // after the checks above. A refusal has used up the state too: that attempt is over.
+    if (params.error) {
+      const reason = params.errorDescription
+        ? `${params.errorDescription} (${params.error})`
+        : params.error;
+      throw new OAuthError(
+        `${this.provider.name} didn't grant access: ${reason}`,
+        params.error,
+        400,
+      );
+    }
+
+    if (!params.code) {
+      throw new OAuthError(
+        `${this.provider.name}'s answer had no authorization code`,
+        "missing_code",
         400,
       );
     }

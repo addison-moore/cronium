@@ -382,7 +382,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 <code>.env</code>: <code>SMTP_HOST</code>/<code>SMTP_PORT</code>
                 /<code>SMTP_USER</code>/<code>SMTP_PASSWORD</code>/
                 <code>SMTP_FROM_EMAIL</code> for outbound email,{" "}
-                <code>CRONIUM_IMAGE_TAG</code> to pin a release, and{" "}
+                <code>OAUTH_GOOGLE_CLIENT_ID</code>/
+                <code>OAUTH_GOOGLE_CLIENT_SECRET</code> for the Google Sheets
+                tool, <code>CRONIUM_IMAGE_TAG</code> to pin a release, and{" "}
                 <code>APP_PORT</code> to move the public port or
                 <code>SOCKET_PORT</code> to move the loopback proxy target. Use
                 <code>SOCKET_ALLOWED_ORIGINS</code> only when trusted browser
