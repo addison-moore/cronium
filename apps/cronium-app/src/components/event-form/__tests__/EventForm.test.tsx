@@ -377,6 +377,22 @@ describe("EventForm", () => {
           ]);
         });
 
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          const field = valueField() as HTMLInputElement;
+          await user.click(field);
+          field.setSelectionRange(5, 6);
+          await user.paste("one\n");
+
+          expect(field).toHaveValue("startoneend");
+          expect(field).not.toHaveAttribute("readonly");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
         it("takes a drop the way it takes a paste", async () => {
           const user = await renderWithEmptyRow();
           fireEvent.drop(valueField(), {
@@ -451,6 +467,54 @@ describe("EventForm", () => {
           await user.paste("token\n");
 
           expect(valueField()).toHaveValue("token");
+        });
+
+        it("leaves a typed line break alone when one line is pasted elsewhere", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.type(valueField(), "abc{Enter}");
+          (valueField() as HTMLTextAreaElement).setSelectionRange(0, 0);
+          await user.paste("x");
+
+          expect(valueField()).toHaveValue("xabc\n");
+          expect(await save(user)).toEqual([{ key: "PEM", value: "xabc\n" }]);
+        });
+
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\n");
+          expect(valueField()).toHaveValue("startoneend");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
+        it("leaves the caret after a multi-line paste", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\ntwo\n");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone\ntwo\n!end" },
+          ]);
+        });
+
+        it("still sees an edit that undoes a pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste("x\n");
+          await user.keyboard("{Backspace}");
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: "" }]);
         });
 
         it("adds a line break on Enter instead of saving", async () => {
