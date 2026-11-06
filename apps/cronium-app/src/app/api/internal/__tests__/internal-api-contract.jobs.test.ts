@@ -312,6 +312,37 @@ describe("POST /api/internal/jobs/claim", () => {
     expect(update.error).not.toContain("SECRET-DETAIL");
   });
 
+  it("still delivers the rest when failing a job throws, and fails the others", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {
+      /* expected */
+    });
+    const badA = { ...claimedJob(), id: "job-a" };
+    const badB = { ...claimedJob(), id: "job-b" };
+    mockJobService.claimJobs!.mockResolvedValue([claimedJob(), badA, badB]);
+    mockJobService
+      .updateJobStatus!.mockRejectedValueOnce(new Error("db down"))
+      .mockResolvedValueOnce(undefined);
+    mockPrepare.mockResolvedValue({
+      ready: [{ job: claimedJob(), transformed: orchJob() }],
+      failed: [
+        { job: badA, error: new Error("one") },
+        { job: badB, error: new Error("two") },
+      ],
+    });
+
+    const res = await claimPOST(req(url, "POST", body, orchAuth));
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      jobs: Array<{ id: string }>;
+      count: number;
+    };
+    expect(payload.jobs.map((job) => job.id)).toEqual([JOB_ID]);
+    expect(payload.count).toBe(1);
+    expect(mockJobService.updateJobStatus).toHaveBeenCalledTimes(2);
+    errorSpy.mockRestore();
+  });
+
   it("401s with a wrong orchestrator key", async () => {
     const res = await claimPOST(
       req(url, "POST", body, { authorization: "Bearer wrong-key" }),
@@ -1062,6 +1093,41 @@ describe("PUT /api/internal/jobs/[jobId]/status", () => {
       JOB_ID,
       JobStatus.CANCELLED,
       expect.objectContaining({ error: "Job cancelled" }),
+      `orchestrator:${ORCH_ID}`,
+    );
+  });
+
+  it("reads the message out of the error object the Go client sends", async () => {
+    mockJobService.getJob!.mockResolvedValue(claimedJob());
+    mockJobService.updateJobStatus!.mockResolvedValue(runningJob());
+
+    const res = await statusPUT(
+      req(
+        url,
+        "PUT",
+        {
+          status: "failed",
+          timestamp: T0,
+          details: {
+            message: "could not start",
+            error: {
+              type: "generic",
+              code: "EXECUTION_ERROR",
+              message: "could not start",
+              retryable: false,
+            },
+          },
+        },
+        capHeaders(),
+      ),
+      jobParams,
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockJobService.updateJobStatus).toHaveBeenCalledWith(
+      JOB_ID,
+      JobStatus.FAILED,
+      expect.objectContaining({ error: "could not start" }),
       `orchestrator:${ORCH_ID}`,
     );
   });

@@ -41,8 +41,10 @@ export function JobStatusCard({ job }: JobStatusCardProps) {
         </div>
 
         {job.lastError && (
-          <div className="bg-destructive/10 rounded-md p-3">
-            <p className="text-destructive text-sm">{job.lastError}</p>
+          <div className="bg-destructive/10 max-h-64 overflow-auto rounded-md p-3">
+            <p className="text-destructive text-sm break-words whitespace-pre-wrap">
+              {job.lastError}
+            </p>
           </div>
         )}
 
