@@ -84,7 +84,7 @@ async function encryptLegacy(dryRun: boolean): Promise<number> {
   }
   for (const v of report.readsAsCiphertext) {
     console.warn(
-      `  NOTE: ${v.surface} id=${v.id} column=${v.column} reads as old ciphertext, not the value that was saved. This doesn't change that: set the value again to fix it, before the key it's under is gone.`,
+      `  NOTE: ${v.surface} id=${v.id} column=${v.column} reads as old ciphertext, not the value that was saved. This run doesn't change that. Set the value again to fix it.`,
     );
   }
   console.log(`Legacy rows remaining: ${report.remaining}`);

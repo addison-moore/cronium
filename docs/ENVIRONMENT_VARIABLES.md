@@ -532,6 +532,10 @@ target `DATABASE_URL`, or in a published image as
 `node apps/cronium-app/dist/rotate-secrets.cjs`:
 
 ```bash
+# 0. While the old key is still active, move what's from before the vault. See the next
+#    section, which also says what to do with what it reports.
+pnpm --filter @cronium/app rotate:secrets --encrypt-legacy
+
 # 1. Generate a new key
 NEW=$(openssl rand -hex 32)
 
@@ -558,13 +562,13 @@ because those values may still be under the old key. Run it again, and don't rem
 old key until a run shows `re-encrypted=0` and `changed-during-run=0` on every line.
 
 The driver **warns** about `legacy` values: anything still stored the way it was
-before the vault, which it can't rotate. **Run `--encrypt-legacy`, described in the next
-section, before you change the key.** On servers, env vars and MFA secrets these can be
-ciphertext bound to the key they were saved under. Reads only try the active key, so
-changing the key without moving them first makes them fail, and removing the old key
-orphans them for good. If the key has already changed, `--encrypt-legacy` can still open
-them while the old key is in `ENCRYPTION_KEYS_RETIRED`. Plaintext isn't affected by a key
-change, but it's readable in every copy of the database, so the same run encrypts it.
+before the vault, which it can't rotate. That's what step 0 is for. On servers, env vars
+and MFA secrets these can be ciphertext bound to the key they were saved under. Reads
+only try the active key, so changing the key without moving them first makes them fail,
+and removing the old key orphans them for good. If the key has already changed,
+`--encrypt-legacy` can still open them while the old key is in
+`ENCRYPTION_KEYS_RETIRED`. Plaintext isn't affected by a key change, but it's readable in
+every copy of the database, so the same run encrypts it.
 
 ## Encrypting values saved before encryption at rest
 
@@ -655,8 +659,9 @@ this again. The reasons it gives:
   characters, and nothing can tell which. If you have the old key, add it to
   `ENCRYPTION_KEYS_RETIRED` and run this again.
 - `its encrypted form is too long for this column`. A version where `env_vars.value` is
-  still `varchar(255)` can't hold an encrypted value of more than 150 characters. A dry
-  run doesn't catch this one. Upgrade, which changes the column, and run this again.
+  still `varchar(255)` can't hold an encrypted value of more than 150 characters, and the
+  app can't save one there either. A dry run doesn't catch this one. Run this again on a
+  version where the column is wider, or shorten the value.
 - `marked as encrypted, but isn't in the encrypted format`,
   `marked as not encrypted, but holds encrypted data` and
   `not a JSON object of credentials`. A tool credential the app can't use.
