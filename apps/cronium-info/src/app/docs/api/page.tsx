@@ -59,7 +59,7 @@ const statusCodes: Array<[number, string]> = [
   [404, "No such event, workflow, server or log"],
   [405, "The route does not support that method"],
   [409, "The run could not start, and the response says why"],
-  [413, "Run input over 1 MB"],
+  [413, "Run input over 1 MB, or saving an event with a request over 10 MB"],
   [429, "Too many run requests; see Retry-After"],
   [500, "Server error"],
 ];

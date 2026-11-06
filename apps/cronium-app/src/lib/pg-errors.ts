@@ -3,6 +3,8 @@
  * DrizzleQueryError, so the details are on `cause`: a check of `error.code` never
  * matches on the real path, only in a test that rejects with a hand-built object.
  */
+import { quotedForLog } from "@/lib/security/audit-entry";
+
 export interface DriverError {
   /** A SQLSTATE if Postgres answered, or a Node code such as ECONNREFUSED. */
   code?: string;
@@ -19,4 +21,10 @@ export function driverError(error: unknown): DriverError {
 
 export function pgErrorCode(error: unknown): string | undefined {
   return driverError(error).code;
+}
+
+/** Leaves out Drizzle's own message, which repeats every value in the query. */
+export function describeFailure(error: unknown): string {
+  const { code, message, name } = driverError(error);
+  return quotedForLog(`${String(code ?? name)}: ${String(message)}`);
 }

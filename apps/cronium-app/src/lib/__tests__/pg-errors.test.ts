@@ -1,5 +1,5 @@
 import { DrizzleQueryError } from "drizzle-orm/errors";
-import { driverError, pgErrorCode } from "@/lib/pg-errors";
+import { describeFailure, driverError, pgErrorCode } from "@/lib/pg-errors";
 
 describe("pgErrorCode", () => {
   it("reads the SQLSTATE from the driver's error inside Drizzle's wrapper", () => {
@@ -43,5 +43,27 @@ describe("driverError", () => {
     const error = new TypeError("Do not know how to serialize a BigInt");
 
     expect(driverError(error)).toBe(error);
+  });
+});
+
+describe("describeFailure", () => {
+  const cause = Object.assign(new Error("value too long"), { code: "22001" });
+
+  it("gives the driver's code and message, without the query's values", () => {
+    const wrapped = new DrizzleQueryError(
+      "insert into t values ($1)",
+      ["a secret value"],
+      cause,
+    );
+
+    // The premise: Drizzle's own message holds them.
+    expect(wrapped.message).toContain("a secret value");
+    expect(describeFailure(wrapped)).toBe("22001: value too long");
+  });
+
+  it("describes an error with no code by its name", () => {
+    expect(describeFailure(new TypeError("cannot encode"))).toBe(
+      "TypeError: cannot encode",
+    );
   });
 });
