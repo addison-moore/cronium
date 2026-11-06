@@ -42,7 +42,7 @@ import { serverCleanupService } from "./src/lib/services/server-cleanup-service"
 import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
 import { auditLogger } from "./src/lib/security/audit-logger";
-import { driverError } from "./src/lib/pg-errors";
+import { describeFailure } from "./src/lib/pg-errors";
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT ?? 5003);
@@ -92,12 +92,9 @@ function startLoop(
         await fn();
       } while (pokedWhileRunning && !shuttingDown);
     } catch (error) {
-      // The driver's words: a transaction that lost its connection otherwise
-      // reads only "Failed query: rollback", and other statements list their values.
-      console.error(
-        `[Worker] ${name} loop error:`,
-        driverError(error).message ?? String(error),
-      );
+      // Not Drizzle's own message: a transaction that lost its connection would read
+      // only "Failed query: rollback", and other statements would list their values.
+      console.error(`[Worker] ${name} loop error:`, describeFailure(error));
     } finally {
       running = false;
     }

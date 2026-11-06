@@ -16,6 +16,7 @@ import userEvent from "@testing-library/user-event";
 
 const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
+const mockToast = jest.fn();
 
 jest.mock("@/lib/trpc", () => ({
   trpc: {
@@ -68,6 +69,7 @@ jest.mock("@cronium/ui", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   return {
     ...actual,
+    useToast: () => ({ toast: mockToast }),
     MonacoEditor: ({
       value,
       onChange,
@@ -91,6 +93,8 @@ jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
 
 import EventForm from "../EventForm";
 import { EventType, EventTriggerType, TimeUnit } from "@/shared/schema";
+import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
+import { saveRequestBytes } from "../lib/event-payload";
 
 const scheduledBashEvent = {
   type: EventType.BASH,
@@ -102,6 +106,7 @@ describe("EventForm", () => {
   beforeEach(() => {
     mockCreateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockUpdateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
+    mockToast.mockReset();
   });
 
   describe("cron/interval mode switching", () => {
@@ -210,6 +215,181 @@ describe("EventForm", () => {
           scheduleUnit: "SECONDS",
         }),
       );
+    });
+  });
+
+  describe("environment variables", () => {
+    async function addVariable(key: string, value: string) {
+      const user = userEvent.setup();
+      render(<EventForm initialData={scheduledBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "With variables");
+      await user.click(screen.getByRole("button", { name: "Add Variable" }));
+      fireEvent.change(screen.getByLabelText("Key"), {
+        target: { value: key },
+      });
+      // Pasted, in effect: typing this many characters would take minutes.
+      fireEvent.change(screen.getByLabelText("Value"), {
+        target: { value },
+      });
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+      return user;
+    }
+
+    const tooLongMessage = /environment variable value can be at most 128 KB/;
+
+    it("submits a value too long for the old column", async () => {
+      const value = "x".repeat(4_096);
+      await addVariable("TOKEN", value);
+
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ envVars: [{ key: "TOKEN", value }] }),
+      );
+    });
+
+    it("says beside the row that a value is too long, and saves nothing", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+
+      expect(await screen.findByText(tooLongMessage)).toBeInTheDocument();
+      expect(screen.getByLabelText("Value")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("clears the message once the value fits", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+      await screen.findByText(tooLongMessage);
+
+      fireEvent.change(screen.getByLabelText("Value"), {
+        target: { value: "x".repeat(128_000) },
+      });
+
+      await waitFor(() =>
+        expect(screen.queryByText(tooLongMessage)).not.toBeInTheDocument(),
+      );
+    });
+
+    it("asks for a missing key beside the row", async () => {
+      await addVariable("", "some value");
+
+      expect(
+        await screen.findByText("Environment variable key is required"),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Key")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    describe("line breaks the field can't hold", () => {
+      const note = /this value lost its line breaks/;
+
+      async function pasteIntoValue(text: string) {
+        const user = userEvent.setup();
+        render(<EventForm initialData={scheduledBashEvent} />);
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.paste(screen.getByLabelText("Value"), {
+          clipboardData: { getData: () => text },
+        });
+        // jsdom doesn't do the insert, so this is the input event that follows.
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: text.trimEnd().replace(/\r?\n/g, " ") },
+        });
+        return user;
+      }
+
+      it("says so when a paste loses them", async () => {
+        await pasteIntoValue("-----BEGIN KEY-----\nabc\n-----END KEY-----\n");
+        expect(await screen.findByText(note)).toBeInTheDocument();
+      });
+
+      it("says nothing about a paste of one line, trailing line break or not", async () => {
+        await pasteIntoValue("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      it("takes the note away with the value, and with the row", async () => {
+        const user = await pasteIntoValue("line one\nline two");
+        await screen.findByText(note);
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "" },
+        });
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "again" },
+        });
+        await screen.findByText(note);
+        await user.click(screen.getByRole("button", { name: "×" }));
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
+      const savedElsewhere = {
+        ...scheduledBashEvent,
+        name: "Set over the API",
+        environmentVariables: [{ key: "PEM", value: multiLine }],
+      };
+
+      it("keeps them in a saved value nobody edited", async () => {
+        const user = userEvent.setup();
+        render(<EventForm initialData={savedElsewhere} />);
+
+        await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+        expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+          expect.objectContaining({
+            envVars: [{ key: "PEM", value: multiLine }],
+          }),
+        );
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      it("says so when editing a saved value loses them", async () => {
+        render(<EventForm initialData={savedElsewhere} />);
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "-----BEGIN KEY-----abc-----END KEY-----!" },
+        });
+
+        expect(await screen.findByText(note)).toBeInTheDocument();
+      });
+    });
+
+    it("says when the variables are too much together", async () => {
+      const user = userEvent.setup();
+      render(<EventForm initialData={scheduledBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "With variables");
+      for (let row = 0; row < 8; row += 1) {
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.change(screen.getAllByLabelText("Key")[row]!, {
+          target: { value: `K${row}` },
+        });
+        fireEvent.change(screen.getAllByLabelText("Value")[row]!, {
+          target: { value: "x".repeat(128_000) },
+        });
+      }
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+      expect(
+        await screen.findByText(/can be at most 1 MB in total/),
+      ).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    // The submit button is a screen or more below this card, so a message nobody
+    // scrolled to would read as a button that does nothing.
+    it("moves the focus to the list when a save fails on it", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+      await screen.findByText(tooLongMessage);
+
+      const list = screen.getByLabelText("Value").closest("[tabindex]");
+      await waitFor(() => expect(list).toHaveFocus());
     });
   });
 
@@ -326,6 +506,183 @@ describe("EventForm", () => {
         }),
       );
       expect(payload).not.toHaveProperty("runOnLocal");
+    });
+  });
+
+  describe("a save too long for one request", () => {
+    const manualBashEvent = {
+      type: EventType.BASH,
+      content: "echo hello",
+      triggerType: EventTriggerType.MANUAL,
+    };
+    const tooLong = /This script is too long to save/;
+    const consoleError = () =>
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    function setScript(script: string) {
+      // Pasted, in effect: typing this many characters would take days.
+      fireEvent.change(screen.getByTestId("monaco-stub"), {
+        target: { value: script },
+      });
+    }
+
+    async function save(
+      user: ReturnType<typeof userEvent.setup>,
+      button = "Create Event",
+    ) {
+      await user.click(screen.getByRole("button", { name: button }));
+    }
+
+    async function renderNamed() {
+      const user = userEvent.setup();
+      render(<EventForm initialData={manualBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "Long");
+      return user;
+    }
+
+    /** A script that brings this form's request to exactly `bytes`. */
+    async function scriptForRequestOf(
+      bytes: number,
+      user: ReturnType<typeof userEvent.setup>,
+    ) {
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      const input = mockCreateMutateAsync.mock.calls[0]?.[0] as object;
+      const shell = saveRequestBytes({ ...input, content: "" });
+      mockCreateMutateAsync.mockClear();
+      return "x".repeat(bytes - shell);
+    }
+
+    it("refuses a script past the limit before sending anything, and says why beside it", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+
+      expect(await screen.findByText(tooLong)).toHaveTextContent(
+        /comes to 10\.01 MB once sent, and the limit is 10 MB/,
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+      expect(mockToast).not.toHaveBeenCalled();
+    });
+
+    it("brings the script into view, because the submit button is a screen or more below it", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+
+      await screen.findByText(tooLong);
+      expect(screen.getByTestId("monaco-stub").parentElement).toHaveFocus();
+    });
+
+    it("sends a request of exactly the limit, and refuses one byte more", async () => {
+      const user = await renderNamed();
+      const script = await scriptForRequestOf(MAX_REQUEST_BODY_BYTES, user);
+
+      setScript(script);
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      expect(screen.queryByText(tooLong)).not.toBeInTheDocument();
+
+      mockCreateMutateAsync.mockClear();
+      setScript(`${script}x`);
+      await save(user);
+      expect(await screen.findByText(tooLong)).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("counts what's sent, so a script under 10 MB can still be too long", async () => {
+      const user = await renderNamed();
+
+      // 6 MB of script, and 12 MB of JSON.
+      setScript(`echo hi${"\n".repeat(6 * 1024 * 1024)}`);
+      await save(user);
+
+      expect(await screen.findByText(tooLong)).toHaveTextContent(/12\.\d+ MB/);
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("clears the message once the script is edited, and saves when it fits", async () => {
+      const user = await renderNamed();
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user);
+      await screen.findByText(tooLong);
+
+      setScript("echo short");
+      await waitFor(() =>
+        expect(screen.queryByText(tooLong)).not.toBeInTheDocument(),
+      );
+
+      await save(user);
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+    });
+
+    it("checks an update the same way, on the request it would send", async () => {
+      const user = userEvent.setup();
+      render(
+        <EventForm
+          initialData={{ ...manualBashEvent, name: "Long" }}
+          isEditing
+          eventId={7}
+        />,
+      );
+
+      setScript("x".repeat(MAX_REQUEST_BODY_BYTES + 1));
+      await save(user, "Update Event");
+
+      expect(await screen.findByText(tooLong)).toBeInTheDocument();
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("says so in a toast for an event with no script field to show it beside", async () => {
+      const user = userEvent.setup();
+      render(
+        <EventForm
+          initialData={{
+            type: EventType.HTTP_REQUEST,
+            triggerType: EventTriggerType.MANUAL,
+            name: "Long",
+            httpMethod: "POST",
+            httpUrl: "https://api.example.test/",
+            httpBody: "x".repeat(MAX_REQUEST_BODY_BYTES + 1),
+          }}
+        />,
+      );
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Too long to save",
+            description: expect.stringContaining(
+              "This event is too long to save",
+            ) as string,
+            variant: "destructive",
+          }),
+        ),
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's own words if the server refuses it after all", async () => {
+      consoleError();
+      const message = "This event is too long to save, from the server";
+      mockCreateMutateAsync.mockRejectedValue(new Error(message));
+      const user = await renderNamed();
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            description: message,
+            variant: "destructive",
+          }),
+        ),
+      );
     });
   });
 });

@@ -108,7 +108,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "string",
         required: false,
-        description: "The script. Required unless type is HTTP_REQUEST.",
+        description:
+          "The script. Required unless type is HTTP_REQUEST. The whole request can be at most 10 MB as sent, where a line break or a quote takes 2 bytes.",
       },
       {
         name: "httpMethod",
@@ -174,7 +175,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "array",
         required: false,
-        description: "Environment variables as [{ key, value }].",
+        description:
+          "Environment variables as [{ key, value }]. Up to 1,000 variables. A value can be up to 128 KB, and all of them together up to 1 MB.",
       },
       {
         name: "description",
@@ -256,7 +258,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "string",
         required: false,
-        description: "The script.",
+        description:
+          "The script. The whole request can be at most 10 MB as sent, where a line break or a quote takes 2 bytes.",
       },
       {
         name: "status",
@@ -365,7 +368,7 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         type: "array",
         required: false,
         description:
-          "Replaces all env vars, as [{ key, value }]. Send the values too: a value left blank is stored blank.",
+          "Replaces all env vars, as [{ key, value }]. Send the values too: a value left blank is stored blank. Up to 1,000 variables. A value can be up to 128 KB, and all of them together up to 1 MB.",
       },
       {
         name: "httpMethod",
