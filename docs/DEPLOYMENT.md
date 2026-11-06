@@ -357,4 +357,8 @@ docker compose down -v     # stop and delete data volumes
 than inlining it — keep it that way. `.github/workflows/install-smoke.yml`
 runs the installer end-to-end and fails when these drift; schema changes
 require a generated migration (`pnpm --filter @cronium/app db:generate`,
-enforced by `.github/workflows/migrations-check.yml`).
+enforced by `.github/workflows/migrations-check.yml`). A data change or a
+trigger goes in its own file from `db:generate --custom`, starting with
+`-- cronium:custom-migration`: a database from the old `drizzle-kit push` flow
+stamps a migration without that line and never runs it. A test,
+`migration-legacy-marker.test.ts`, enforces this.

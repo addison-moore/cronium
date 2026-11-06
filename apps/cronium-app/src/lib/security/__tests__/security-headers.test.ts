@@ -6,11 +6,18 @@ import {
 
 describe("buildContentSecurityPolicy", () => {
   const csp = buildContentSecurityPolicy("abc123");
+  const directive = (name: string) =>
+    csp.split("; ").find((d) => d.startsWith(`${name} `));
 
-  it("uses a per-request nonce with strict-dynamic and no unsafe-* for scripts", () => {
-    expect(csp).toContain("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
-    expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+  it("allows scripts by per-request nonce and from our own origin, nothing else", () => {
+    expect(directive("script-src")).toBe("script-src 'self' 'nonce-abc123'");
     expect(csp).not.toContain("unsafe-eval");
+  });
+
+  it("does not trust scripts that a nonced script inserts", () => {
+    // 'strict-dynamic' lets a nonced script load code from any origin. It is how
+    // Monaco's CDN build ran in the authenticated origin without anyone noticing.
+    expect(csp).not.toContain("strict-dynamic");
   });
 
   it("blocks framing, plugins, and base-tag injection", () => {
@@ -21,8 +28,8 @@ describe("buildContentSecurityPolicy", () => {
 
   it("keeps workers on our own origin and allows Socket.IO connections", () => {
     // Monaco's workers are bundled chunks, so nothing needs blob: workers.
-    expect(csp).toContain("worker-src 'self';");
-    expect(csp).toContain("connect-src 'self' ws: wss:");
+    expect(directive("worker-src")).toBe("worker-src 'self'");
+    expect(directive("connect-src")).toBe("connect-src 'self' ws: wss:");
   });
 });
 

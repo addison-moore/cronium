@@ -12,7 +12,7 @@ This guide provides step-by-step instructions for setting up the Cronium develop
 ## Environment Variables
 
 Create an `env/.env.local` file (this is the path the app's `pnpm dev` script
-loads via `dotenv -e ../../env/.env.local`) with the following variables:
+loads via `dotenv-cli -e ../../env/.env.local`) with the following variables:
 
 ```bash
 # Database
