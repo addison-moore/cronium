@@ -10,6 +10,7 @@ import {
   scryptSync,
 } from "crypto";
 import { failureWithStack } from "@/lib/pg-errors";
+import { parseRetiredKeys } from "../../../scripts/retired-keys.cjs";
 
 export interface EncryptedData {
   encrypted: string;
@@ -134,27 +135,19 @@ export class CredentialEncryption {
       this.keyLength,
     );
 
-    // Load any retired keys so decrypt can fall back to them during a rotation.
-    this.retiredMasterKeys = [];
-    const retiredRaw = process.env.ENCRYPTION_KEYS_RETIRED;
-    if (retiredRaw) {
-      try {
-        const retired = JSON.parse(retiredRaw) as unknown;
-        if (Array.isArray(retired)) {
-          for (const k of retired) {
-            if (typeof k === "string" && k.length >= 32) {
-              this.retiredMasterKeys.push(
-                scryptSync(k, CredentialEncryption.MASTER_SALT, this.keyLength),
-              );
-            }
-          }
-        }
-      } catch {
-        console.warn(
-          "[Security] ENCRYPTION_KEYS_RETIRED is not valid JSON; ignoring retired keys",
-        );
-      }
+    // Load any retired keys so decrypt can fall back to them during a rotation. A process
+    // refuses to start on a bad list, so warning is for one that got past that.
+    const { keys: retiredKeys, problem } = parseRetiredKeys(
+      process.env.ENCRYPTION_KEYS_RETIRED,
+    );
+    if (problem) {
+      console.warn(
+        `[Security] ENCRYPTION_KEYS_RETIRED ${problem} Ignoring anything that isn't a key.`,
+      );
     }
+    this.retiredMasterKeys = retiredKeys.map((key) =>
+      scryptSync(key, CredentialEncryption.MASTER_SALT, this.keyLength),
+    );
 
     console.log(
       `Credential encryption initialized${this.retiredMasterKeys.length ? ` (+${this.retiredMasterKeys.length} retired key(s) for rotation)` : ""}`,

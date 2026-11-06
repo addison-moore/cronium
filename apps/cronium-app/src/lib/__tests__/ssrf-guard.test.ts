@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // Node environment because the agent tests below open real sockets.
-jest.mock("dns/promises", () => ({ lookup: jest.fn() }));
+jest.mock("@/lib/resolve-host", () => ({ resolveHost: jest.fn() }));
 // The guard rightly refuses loopback, but loopback is the only place a hermetic
 // test can connect to. Wrap the real check so a test can exempt its own server's
 // address with treatAsPublic(); every other address still gets the real check.
@@ -15,7 +15,6 @@ jest.mock("@/lib/tools/safe-fetch", () => {
 
 import axios from "axios";
 import type { LookupOptions } from "dns";
-import { lookup } from "dns/promises";
 import http from "http";
 import https from "https";
 import net from "net";
@@ -26,9 +25,10 @@ import {
   ssrfHttpsAgent,
 } from "../ssrf-guard";
 import { executeHttpRequest } from "../scheduler/http-executor";
+import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
 
-const mockLookup = lookup as jest.MockedFunction<typeof lookup>;
+const mockResolveHost = resolveHost as jest.MockedFunction<typeof resolveHost>;
 const mockIsDisallowedIp = isDisallowedIp as jest.MockedFunction<
   typeof isDisallowedIp
 >;
@@ -43,7 +43,7 @@ const records = (addresses: string[]) =>
   }));
 
 function resolvesTo(...addresses: string[]) {
-  mockLookup.mockResolvedValue(records(addresses) as never);
+  mockResolveHost.mockResolvedValue(records(addresses));
 }
 
 function treatAsPublic(...exempt: string[]) {
@@ -53,7 +53,7 @@ function treatAsPublic(...exempt: string[]) {
 }
 
 beforeEach(() => {
-  mockLookup.mockReset();
+  mockResolveHost.mockReset();
   mockIsDisallowedIp.mockImplementation(realIsDisallowedIp);
 });
 
@@ -201,7 +201,7 @@ describe("ssrf-guard", () => {
       });
 
       it("errors when DNS resolution fails", async () => {
-        mockLookup.mockRejectedValue(new Error("ENOTFOUND"));
+        mockResolveHost.mockRejectedValue(new Error("ETIMEOUT"));
 
         const { err } = await callLookup(options);
 
@@ -460,15 +460,16 @@ describe("ssrf-guard", () => {
 
         expect(result.data?.status).toBe(302);
         expect(paths).toEqual(["/redirect"]);
-        expect(mockLookup).toHaveBeenCalledTimes(1);
+        expect(mockResolveHost).toHaveBeenCalledTimes(1);
       });
     });
 
     it("re-validates a redirect hop if a client does follow redirects", async () => {
-      mockLookup.mockImplementation((async (hostname: string) =>
+      mockResolveHost.mockImplementation(async (hostname) =>
         records(
           hostname === "public.test" ? ["127.0.0.1"] : ["203.0.113.10", "::1"],
-        )) as never);
+        ),
+      );
       treatAsPublic("127.0.0.1");
 
       await expect(
@@ -480,10 +481,7 @@ describe("ssrf-guard", () => {
         }),
       ).rejects.toThrow(/resolves to a disallowed address/);
 
-      expect(mockLookup).toHaveBeenCalledWith(
-        "internal.test",
-        expect.anything(),
-      );
+      expect(mockResolveHost).toHaveBeenCalledWith("internal.test");
       expect(paths).toEqual(["/redirect"]);
     });
   });

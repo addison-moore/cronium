@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useLayoutEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -8,6 +8,7 @@ import { Label } from "@cronium/ui";
 import { Badge } from "@cronium/ui";
 import { Alert, AlertDescription } from "@cronium/ui";
 import { Separator } from "@cronium/ui";
+import { Spinner } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -37,6 +38,7 @@ import {
   type ToolPlugin,
   ToolPluginRegistry,
 } from "@/tools/types/tool-plugin";
+import { useToolPlugins } from "@/tools/use-tool-plugins";
 import ActionParameterForm from "./ActionParameterForm";
 import { cn } from "@/lib/utils";
 import {
@@ -58,7 +60,11 @@ export interface ToolActionConfig {
 interface ToolActionSectionProps {
   value: ToolActionConfig | null;
   onChange: (config: ToolActionConfig | null) => void;
+  // False while the form this is part of is out of sight, as EventForm's `active`.
+  active?: boolean;
   availableTools: Tool[];
+  /** Whether the credentials are still loading: `availableTools` is empty until then. */
+  isLoadingTools: boolean;
 }
 
 // Default fallback icons for categories (used if plugin doesn't provide categoryIcon)
@@ -105,7 +111,9 @@ const getActionTypeColor = (action: ToolAction): string => {
 export default function ToolActionSection({
   value,
   onChange,
+  active = true,
   availableTools,
+  isLoadingTools,
 }: ToolActionSectionProps) {
   const { toast } = useToast();
 
@@ -124,7 +132,11 @@ export default function ToolActionSection({
   const [showTemplateAlert, setShowTemplateAlert] = useState(false);
 
   // Get all plugins
-  const allPlugins = useMemo(() => ToolPluginRegistry.getAll(), []);
+  const {
+    plugins: allPlugins,
+    status: pluginsStatus,
+    retry: retryPlugins,
+  } = useToolPlugins();
 
   // Fetch templates for selected tool and action
   const { data: templatesData } =
@@ -134,7 +146,7 @@ export default function ToolActionSection({
         actionId: selectedAction?.id ?? "",
       },
       {
-        enabled: !!selectedPlugin && !!selectedAction,
+        enabled: active && !!selectedPlugin && !!selectedAction,
       },
     );
 
@@ -208,8 +220,9 @@ export default function ToolActionSection({
     return toolsByType[selectedToolType.toLowerCase()] ?? [];
   }, [selectedToolType, toolsByType]);
 
-  // Initialize from value
-  useEffect(() => {
+  // Initialize from value. A layout effect, so the frame after the loading state is the
+  // event's settings: with a passive one the browser can paint the tool picker first.
+  useLayoutEffect(() => {
     if (value?.toolId && value?.actionId) {
       const tool = availableTools.find((t) => t.id === value.toolId);
       if (tool) {
@@ -259,6 +272,16 @@ export default function ToolActionSection({
     const tool = availableTools.find((t) => t.id === parseInt(toolId));
     if (tool) {
       setSelectedTool(tool);
+
+      // Saved with the event, so it has to reach the form like any other setting.
+      if (selectedPlugin && selectedAction) {
+        onChange({
+          toolType: selectedPlugin.id,
+          toolId: tool.id,
+          actionId: selectedAction.id,
+          parameters,
+        });
+      }
     }
   };
 
@@ -540,16 +563,67 @@ export default function ToolActionSection({
     return null;
   };
 
+  const title = (
+    <CardTitle className="flex items-center gap-2">
+      <Zap className="h-5 w-5" />
+      Tool Action Configuration
+    </CardTitle>
+  );
+
+  // Nothing below can be right until both have answered: it would say that no tools
+  // match, or that no credentials are configured, about an event that has both.
+  if (pluginsStatus === "failed") {
+    return (
+      <Card>
+        <CardHeader>{title}</CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="space-y-3">
+              <p>
+                Couldn&apos;t load the tool list.{" "}
+                {value
+                  ? "This event's tool settings can't be shown or changed until it loads, and saving keeps them as they are."
+                  : "A tool action can't be set up until it loads."}{" "}
+                Check your connection and try again, or reload the page.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={retryPlugins}
+              >
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (pluginsStatus === "loading" || isLoadingTools) {
+    return (
+      <Card>
+        <CardHeader>{title}</CardHeader>
+        <CardContent>
+          <div role="status" className="flex items-center justify-center py-8">
+            <Spinner size="lg" />
+            <span className="ml-2">Loading tools...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Tool Action Configuration
-          </CardTitle>
+          {title}
           {selectedToolType && (
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={handleClearSelection}
@@ -578,6 +652,7 @@ export default function ToolActionSection({
               </div>
               <div className="flex gap-2">
                 <Button
+                  type="button"
                   variant={!selectedCategory ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedCategory(null)}
@@ -587,6 +662,7 @@ export default function ToolActionSection({
                 {categories.map((cat) => (
                   <Button
                     key={cat}
+                    type="button"
                     variant={selectedCategory === cat ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSelectedCategory(cat)}
@@ -801,6 +877,7 @@ export default function ToolActionSection({
                   <div className="flex items-center justify-between">
                     <Label>Configure Parameters</Label>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleTestAction}

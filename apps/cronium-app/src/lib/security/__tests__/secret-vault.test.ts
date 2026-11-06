@@ -1,6 +1,9 @@
 import {
   SecretVault,
   SecretDecryptionError,
+  SecretVaultUnavailableError,
+  __resetSecretVaultForTests,
+  getSecretVault,
   isSecretEnvelope,
 } from "@/lib/security/secret-vault";
 
@@ -128,5 +131,67 @@ describe("SecretVault keyring rotation", () => {
 describe("SecretVault key validation", () => {
   it("rejects a short/invalid active key", () => {
     expect(() => new SecretVault({ activeKeyHex: "abc" })).toThrow();
+  });
+});
+
+describe("getSecretVault and ENCRYPTION_KEYS_RETIRED", () => {
+  const before = {
+    active: process.env.ENCRYPTION_KEY,
+    retired: process.env.ENCRYPTION_KEYS_RETIRED,
+  };
+
+  function startWith(retired: string | undefined): void {
+    process.env.ENCRYPTION_KEY = KEY_B;
+    if (retired === undefined) delete process.env.ENCRYPTION_KEYS_RETIRED;
+    else process.env.ENCRYPTION_KEYS_RETIRED = retired;
+    __resetSecretVaultForTests();
+  }
+
+  afterEach(() => {
+    if (before.active === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = before.active;
+    if (before.retired === undefined) {
+      delete process.env.ENCRYPTION_KEYS_RETIRED;
+    } else {
+      process.env.ENCRYPTION_KEYS_RETIRED = before.retired;
+    }
+    __resetSecretVaultForTests();
+  });
+
+  it("opens what a retired key sealed", () => {
+    const sealed = new SecretVault({ activeKeyHex: KEY_A }).encrypt(
+      "hunter2",
+      binding,
+    );
+
+    startWith(JSON.stringify([KEY_A]));
+
+    expect(getSecretVault().decrypt(sealed, binding)).toBe("hunter2");
+  });
+
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+    ["an empty list", "[]"],
+  ])("%s: has only the active key", (_, retired) => {
+    startWith(retired);
+
+    expect(getSecretVault().keyIds()).toHaveLength(1);
+  });
+
+  // A process refuses to start on these, so this is for one that got past that. The vault
+  // used to pass JSON.parse's SyntaxError on, which quotes the start of its input: part of
+  // a key, for the usual typo.
+  it.each([
+    ["the inner quotes left out", `[${KEY_A}]`],
+    ["a JSON string", JSON.stringify(KEY_A)],
+    ["a key cut short", JSON.stringify([KEY_A.slice(0, 63)])],
+    ["a good key beside a bad one", JSON.stringify([KEY_A, "nope"])],
+  ])("%s: fails closed, without quoting it", (_, retired) => {
+    startWith(retired);
+
+    expect(() => getSecretVault()).toThrow(SecretVaultUnavailableError);
+    expect(() => getSecretVault()).toThrow("ENCRYPTION_KEYS_RETIRED");
+    expect(() => getSecretVault()).not.toThrow(KEY_A.slice(0, 8));
   });
 });

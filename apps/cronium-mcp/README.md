@@ -100,6 +100,14 @@ Claude will `get_capabilities` (your SQL + Slack credential ids and action param
 | `CRONIUM_BASE_URL`  | ✅       | e.g. `http://localhost:5001` or your instance URL |
 | `CRONIUM_API_TOKEN` | ✅       | an MCP-scoped Cronium API token                   |
 
+`CRONIUM_BASE_URL` has to be the address that answers, `https://` included: the bridge
+reports a redirect and doesn't follow it.
+
+When something other than Cronium answers, such as a reverse proxy while Cronium
+restarts, the client gets `Got HTTP 502, not Cronium's answer` and possible causes, and
+the bridge's log gets the start of what came back. A tool call also says it may still
+have gone through, unless the answer was a 3xx or 4xx, so check before repeating it.
+
 ## Remote endpoint (claude.ai web app & other HTTP MCP clients)
 
 Cronium serves the **same tools over HTTP** at **`/api/mcp`** (in the app itself — no

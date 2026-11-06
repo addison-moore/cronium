@@ -7,13 +7,16 @@ import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
-import { WebhookQueue } from "./WebhookQueue";
+import { WebhookQueue, type QueueFullReason } from "./WebhookQueue";
 import { readResponseBody, WEBHOOK_TIMEOUT_MS } from "./response-body";
 import {
   bodyTooLong,
   deliveryPayload,
+  eventBodyBytes,
   eventTooLong,
   MAX_WEBHOOK_REQUEST_BYTES,
+  serializePayload,
+  type SerializedPayload,
 } from "./delivery-body";
 import { nanoid } from "nanoid";
 import {
@@ -30,7 +33,11 @@ import {
   splitCustomHeaders,
   webhookCustomHeadersSchema,
 } from "./custom-headers";
-import { WebhookPreconditionError } from "./webhook-errors";
+import {
+  NOT_QUEUED_MESSAGE,
+  WebhookPreconditionError,
+  WebhookQueueFullError,
+} from "./webhook-errors";
 
 // Cap the response body we buffer from a webhook target.
 const MAX_WEBHOOK_RESPONSE_BYTES = 1 * 1024 * 1024;
@@ -75,6 +82,20 @@ export interface WebhookDeliveryResult {
   error?: string;
   duration: number;
 }
+
+/**
+ * An event with room claimed for its deliveries. `send` or `cancel` has to follow, or
+ * the room stays claimed. When it's refused, nothing is claimed or stored.
+ */
+export type PreparedEvent =
+  | { refused: QueueFullReason }
+  | {
+      refused?: undefined;
+      /** Store the event and queue its deliveries. */
+      send: () => Promise<void>;
+      /** Give the room back, for an event that isn't going out after all. */
+      cancel: () => void;
+    };
 
 /**
  * What `triggerEvent` stores in `webhook_events.payload`: the part of a delivery
@@ -219,6 +240,9 @@ export class WebhookManager {
    * subscriptions. `ownerUserId` is the tenant that produced the event (the
    * owner of the inbound webhook); it MUST be provided so one user's payload
    * can never reach another user's outbound webhook (HI-01).
+   *
+   * @throws WebhookQueueFullError when the queue has no room for it. Nothing is
+   * stored or sent then.
    */
   async triggerEvent(
     event: string,
@@ -226,6 +250,30 @@ export class WebhookManager {
     ownerUserId: string,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
+    const prepared = await this.prepareEvent(
+      event,
+      data,
+      ownerUserId,
+      metadata,
+    );
+    if (prepared.refused) throw new WebhookQueueFullError(prepared.refused);
+    await prepared.send();
+  }
+
+  /**
+   * `triggerEvent` in two steps, for a caller with something to do in between. The
+   * first claims room in the queue, or says there's none while there's still someone
+   * to tell and nothing has been stored. So the inbound endpoint can refuse an event
+   * without writing it to Postgres first, however often its sender tries again.
+   *
+   * With no subscribers there's nothing to hold, so this is never refused.
+   */
+  async prepareEvent(
+    event: string,
+    data: Record<string, unknown>,
+    ownerUserId: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<PreparedEvent> {
     if (!ownerUserId) {
       throw new Error("triggerEvent requires an owning tenant userId");
     }
@@ -237,50 +285,95 @@ export class WebhookManager {
     );
 
     if (subscribedWebhooks.length === 0) {
-      return;
+      return { send: async () => undefined, cancel: () => undefined };
     }
-
-    const webhookEvent = await this.recordEvent(
-      event,
-      data,
-      ownerUserId,
-      metadata,
-    );
-
-    // Queue deliveries for each webhook
-    const payload = deliveryPayload(webhookEvent, data, metadata);
 
     const { decryptWebhookSecret, decryptWebhookHeaders } =
       await import("./webhook-secret");
-    for (const webhook of subscribedWebhooks) {
-      const retryConfig = webhook.retryConfig as
-        | {
-            maxRetries: number;
-            retryDelay: number;
-            backoffMultiplier: number;
-          }
-        | undefined;
+    const reservation = this.webhookQueue.reserve(
+      ownerUserId,
+      eventBodyBytes(event, data, metadata),
+      subscribedWebhooks.map((webhook) => {
+        const retryConfig = webhook.retryConfig as
+          | {
+              maxRetries: number;
+              retryDelay: number;
+              backoffMultiplier: number;
+            }
+          | undefined;
+        return {
+          webhookId: webhook.id,
+          url: webhook.url,
+          // Decrypt at the delivery-signing boundary.
+          secret: decryptWebhookSecret(
+            webhook.secret,
+            webhook.key,
+            webhook.userId,
+          ),
+          headers: decryptWebhookHeaders(
+            webhook.headers,
+            webhook.key,
+            webhook.userId,
+          ),
+          ...(retryConfig !== undefined && { retryConfig }),
+        };
+      }),
+    );
+    if (reservation.refused) return { refused: reservation.refused };
 
-      await this.webhookQueue.enqueue({
-        webhookId: webhook.id,
-        ownerUserId: webhook.userId,
-        webhookEventId: webhookEvent.id,
-        url: webhook.url,
-        // Decrypt at the delivery-signing boundary.
-        secret: decryptWebhookSecret(
-          webhook.secret,
-          webhook.key,
-          webhook.userId,
-        ),
-        headers: decryptWebhookHeaders(
-          webhook.headers,
-          webhook.key,
-          webhook.userId,
-        ),
-        payload,
-        ...(retryConfig !== undefined && { retryConfig }),
-      });
-    }
+    return {
+      cancel: reservation.cancel,
+      send: async () => {
+        let webhookEvent: typeof webhookEvents.$inferSelect;
+        let payload: SerializedPayload;
+        try {
+          webhookEvent = await this.recordEvent(
+            event,
+            data,
+            ownerUserId,
+            metadata,
+          );
+          payload = serializePayload(
+            deliveryPayload(webhookEvent, data, metadata),
+          );
+        } catch (error) {
+          reservation.cancel();
+          throw error;
+        }
+
+        reservation.enqueue(webhookEvent.id, payload);
+
+        await Promise.all(
+          reservation.full.map(({ webhookId }) =>
+            this.recordNotQueued(webhookId, webhookEvent.id),
+          ),
+        );
+      },
+    };
+  }
+
+  /**
+   * Record an event a webhook had no room for, in the form a failed attempt takes.
+   * `retryDelivery` works from these rows, so this is how its owner can still send it.
+   */
+  private async recordNotQueued(
+    webhookId: number,
+    webhookEventId: number,
+  ): Promise<void> {
+    const deliveryId = nanoid();
+    await this.recordAttempt(
+      {
+        webhookId,
+        webhookEventId,
+        deliveryId,
+        status: "failed",
+        error: NOT_QUEUED_MESSAGE,
+        headers: {},
+        duration: 0,
+        attemptedAt: new Date(),
+      },
+      { id: deliveryId, webhookId, success: false, duration: 0 },
+    );
   }
 
   /**
@@ -343,7 +436,7 @@ export class WebhookManager {
       webhook.url,
       secret,
       headers,
-      deliveryPayload(event, data, metadata),
+      serializePayload(deliveryPayload(event, data, metadata)),
     );
   }
 
@@ -412,7 +505,7 @@ export class WebhookManager {
     url: string,
     secret: string,
     headers: Record<string, string>,
-    payload: WebhookPayload,
+    payload: SerializedPayload,
   ): Promise<WebhookDeliveryResult> {
     const startTime = Date.now();
     const deliveryId = nanoid();
@@ -455,7 +548,7 @@ export class WebhookManager {
     let result: WebhookDeliveryResult;
 
     try {
-      const rawBody = JSON.stringify(payload);
+      const rawBody = payload.body;
 
       // Every attempt would send these same bytes, so another can't change this. It's
       // recorded once, because each retry would only add a row to the webhook's history.
@@ -744,7 +837,9 @@ export class WebhookManager {
       webhook.url,
       decryptWebhookSecret(webhook.secret, webhook.key, webhook.userId),
       decryptWebhookHeaders(webhook.headers, webhook.key, webhook.userId),
-      deliveryPayload(event, content.data.data, content.data.metadata),
+      serializePayload(
+        deliveryPayload(event, content.data.data, content.data.metadata),
+      ),
     );
   }
 }
