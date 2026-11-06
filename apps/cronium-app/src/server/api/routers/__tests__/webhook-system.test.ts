@@ -684,6 +684,36 @@ describe("webhookSystem.retryDelivery", () => {
     });
   });
 
+  it("says so when a delivered retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry succeeded. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a refused retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: false,
+      statusCode: 500,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: false,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry failed: HTTP 500. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
   it("passes on a refusal to send, with its message", async () => {
     mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
     managerMock.retryDelivery.mockRejectedValue(
