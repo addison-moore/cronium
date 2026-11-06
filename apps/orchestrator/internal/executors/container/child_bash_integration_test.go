@@ -4,15 +4,12 @@ package container
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
-	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +20,8 @@ import (
 // by every checkout on a machine: build your own and name it in CRONIUM_TEST_BASH_IMAGE.
 
 const (
-	childBashToken = "execution-token-for-child-bash"
+	// The token sandboxedJob gives a job.
+	childBashToken = "test-token"
 	// Per job, not per test: the tests below run several, and a busy daemon takes a while.
 	childBashJobTimeout = 8 * time.Minute
 )
@@ -52,10 +50,9 @@ cat /tmp/requests
 
 // fakeRuntimeRun is what a job reported, with the requests it made taken out of stdout.
 type fakeRuntimeRun struct {
-	stdout, stderr []string
-	requests       []string
-	executionID    string
-	exitCode       int
+	jobResult
+	requests    []string
+	executionID string
 }
 
 // routes returns the first line of each request.
@@ -68,31 +65,16 @@ func (r fakeRuntimeRun) routes() []string {
 	return routes
 }
 
-// childBashSandbox is the production sandbox on the real Docker daemon. It skips the test
-// when Docker is unreachable or the image is missing, because it never pulls or builds.
+// childBashSandbox is the production sandbox, using the bash image CRONIUM_TEST_BASH_IMAGE
+// names, if it names one.
 func childBashSandbox(t *testing.T) *Executor {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), childBashJobTimeout)
 	defer cancel()
-	cli, err := client.New(client.FromEnv)
-	if err != nil {
-		t.Skipf("Docker client unavailable: %v", err)
-	}
-	if _, err := cli.Ping(ctx, client.PingOptions{}); err != nil {
-		t.Skipf("Docker daemon unreachable: %v", err)
-	}
-	e := hardenedExecutor()
-	e.dockerClient = cli
-	e.tokens = make(map[string]string)
-	e.executionIDs = make(map[string]string)
+	e := sandboxExecutor(t, ctx)
 	e.runtimeAddrs = make(map[string]string)
-	e.sidecar = NewSidecarManager(e, e.log)
 	if image := os.Getenv("CRONIUM_TEST_BASH_IMAGE"); image != "" {
 		e.config.Images = map[string]string{"bash": image}
-	}
-	image := e.getImageForScript(types.ScriptTypeBash)
-	if _, err := cli.ImageInspect(ctx, image); err != nil {
-		t.Skipf("%s not present locally (this test does not build it): %v", image, err)
 	}
 	return e
 }
@@ -103,54 +85,11 @@ func runWithFakeRuntime(t *testing.T, e *Executor, script string) fakeRuntimeRun
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), childBashJobTimeout)
 	defer cancel()
-	suffix := make([]byte, 6)
-	_, err := rand.Read(suffix)
-	require.NoError(t, err)
-	job := &types.Job{
-		ID:   "child-bash-" + hex.EncodeToString(suffix),
-		Type: types.JobTypeContainer,
-		Execution: types.ExecutionConfig{
-			Script: &types.Script{
-				Type:    types.ScriptTypeBash,
-				Content: fakeRuntimeScript + script + fakeRuntimeReportScript,
-			},
-		},
-	}
-	executionID := "exec-" + job.ID
-	e.sidecar.storeExecutionToken(job.ID, childBashToken)
-	e.mu.Lock()
-	e.executionIDs[job.ID] = executionID
+	job := sandboxedJob(t, ctx, e, interpreter{scriptType: types.ScriptTypeBash}, fakeRuntimeScript+script+fakeRuntimeReportScript)
 	e.runtimeAddrs[job.ID] = "127.0.0.1:8081"
-	e.mu.Unlock()
+	run := fakeRuntimeRun{jobResult: runJob(t, ctx, e, job), executionID: e.executionIDs[job.ID]}
 
-	id, err := e.createContainer(ctx, job, "none", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = e.removeContainer(context.Background(), id)
-	})
-
-	updates := make(chan types.ExecutionUpdate, 1000)
-	e.runContainer(ctx, id, job, updates, executionID, NewExecutionTiming())
-	close(updates)
-
-	run := fakeRuntimeRun{executionID: executionID}
-	var stdout []string
-	for update := range updates {
-		switch data := update.Data.(type) {
-		case *types.LogEntry:
-			if data.Stream == "stdout" {
-				stdout = append(stdout, data.Line)
-			} else {
-				run.stderr = append(run.stderr, data.Line)
-			}
-		case *types.StatusUpdate:
-			if update.Type == types.UpdateTypeComplete {
-				require.NotNil(t, data.ExitCode, "completed without an exit code: %s", data.Message)
-				run.exitCode = *data.ExitCode
-			}
-		}
-	}
-
+	stdout := run.stdout
 	report := -1
 	for i, line := range stdout {
 		if line == "--- recorded" {
