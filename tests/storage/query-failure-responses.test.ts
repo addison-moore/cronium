@@ -544,7 +544,9 @@ describe("the OAuth callback's redirect, which puts the text in a URL", () => {
     const { location, params } = await callback();
 
     expectNothingOfTheQuery(decodeURIComponent(location));
-    expect(params.get("details")).toBe(QUERY_FAILED);
+    expect(params.get("details")).toBe(
+      `Failed to store tokens: ${QUERY_FAILED}`,
+    );
   });
 
   it("still says why it refused a browser", async () => {

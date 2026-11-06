@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { api } from "@/trpc/server";
 import type { Event, WorkflowData } from "@/components/event-list";
 import type { Metadata } from "next";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -37,7 +38,7 @@ async function EventsList() {
           ? (rawEvent.tags as string[])
           : (JSON.parse(rawEvent.tags as string) as string[]);
       } catch (error) {
-        console.error("Failed to parse event tags:", error);
+        console.error("Failed to parse event tags:", failureWithStack(error));
         tags = [];
       }
     }
@@ -53,7 +54,7 @@ async function EventsList() {
               value: string;
             }>);
       } catch (error) {
-        console.error("Failed to parse httpHeaders:", error);
+        console.error("Failed to parse httpHeaders:", failureWithStack(error));
         httpHeaders = undefined;
       }
     }

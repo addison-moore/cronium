@@ -1,3 +1,4 @@
+import { failureWithStack } from "@/lib/pg-errors";
 /**
  * Runs once when the Next server starts. Next only looks for this file next to
  * `app`, so here in src/.
@@ -14,7 +15,7 @@ export async function register() {
     } catch (error) {
       console.error(
         "[AuditLog] Couldn't set up writing the last entries when this server stops:",
-        error,
+        failureWithStack(error),
       );
     }
   }

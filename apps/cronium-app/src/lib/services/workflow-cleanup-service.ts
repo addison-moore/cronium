@@ -40,6 +40,7 @@ import {
   limitLockWait,
   settleTimedOutRunSteps,
 } from "@/lib/scheduling/workflow-engine";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const RUN_TIMED_OUT = "Workflow run timed out";
 const RUN_TIMED_OUT_BEFORE_JOB_STARTED =
@@ -146,7 +147,10 @@ export class WorkflowCleanupService {
 
       console.log("[WorkflowCleanup] Cleanup cycle completed");
     } catch (error) {
-      console.error("[WorkflowCleanup] Error during cleanup:", error);
+      console.error(
+        "[WorkflowCleanup] Error during cleanup:",
+        failureWithStack(error),
+      );
     }
   }
 
@@ -183,12 +187,15 @@ export class WorkflowCleanupService {
         await this.markWorkflowAsTimedOut(run.id).catch((error: unknown) => {
           console.error(
             `[WorkflowCleanup] Error marking workflow run ${run.id} as timed out:`,
-            error,
+            failureWithStack(error),
           );
         });
       }
     } catch (error) {
-      console.error("[WorkflowCleanup] Error cleaning up workflows:", error);
+      console.error(
+        "[WorkflowCleanup] Error cleaning up workflows:",
+        failureWithStack(error),
+      );
     }
   }
 
@@ -227,7 +234,10 @@ export class WorkflowCleanupService {
         await this.markJobAsTimedOut(job.id);
       }
     } catch (error) {
-      console.error("[WorkflowCleanup] Error cleaning up jobs:", error);
+      console.error(
+        "[WorkflowCleanup] Error cleaning up jobs:",
+        failureWithStack(error),
+      );
     }
   }
 
@@ -312,7 +322,7 @@ export class WorkflowCleanupService {
     } catch (error) {
       console.error(
         `[WorkflowCleanup] Error writing the timeout log for workflow run ${runId}:`,
-        error,
+        failureWithStack(error),
       );
     }
 
@@ -345,7 +355,7 @@ export class WorkflowCleanupService {
     } catch (error) {
       console.error(
         `[WorkflowCleanup] Error timing out the jobs of workflow run ${runId}:`,
-        error,
+        failureWithStack(error),
       );
     }
 
@@ -354,7 +364,7 @@ export class WorkflowCleanupService {
     } catch (error) {
       console.error(
         `[WorkflowCleanup] Error settling the steps of workflow run ${runId}:`,
-        error,
+        failureWithStack(error),
       );
     }
   }
@@ -432,7 +442,7 @@ export class WorkflowCleanupService {
     } catch (error) {
       console.error(
         "[WorkflowCleanup] Error settling timed-out workflow runs:",
-        error,
+        failureWithStack(error),
       );
     }
   }
@@ -507,7 +517,7 @@ export class WorkflowCleanupService {
     } catch (error) {
       console.error(
         `[WorkflowCleanup] Error marking job ${jobId} as timed out:`,
-        error,
+        failureWithStack(error),
       );
     }
   }

@@ -8,6 +8,7 @@ import {
   failureWithStack,
   isQueryFailure,
   messageForCaller,
+  messageForJobLog,
   pgErrorCode,
   stackFrames,
 } from "@/lib/pg-errors";
@@ -305,6 +306,34 @@ describe("isQueryFailure", () => {
     ["nothing", undefined],
   ])("is false of %s", (_, error) => {
     expect(isQueryFailure(error)).toBe(false);
+  });
+});
+
+describe("messageForJobLog", () => {
+  const lostConnection = new Error("Connection terminated unexpectedly");
+
+  it.each([
+    ["Postgres's answer", failedQuery(postgresError("refused", "P0001"))],
+    ["Postgres's answer with no wrapper", postgresError("duplicate key")],
+    ["a wrapper with no cause", failedQuery(undefined)],
+    ["a wrapper whose cause isn't an error", failedQuery("text")],
+    ["a cause with no message", failedQuery(new Error(""))],
+    ["a message built from Drizzle's", new Error(`Failed query: ${SECRET}`)],
+  ])("gives the fixed message for %s", (_, error) => {
+    expect(messageForJobLog(error)).toBe(QUERY_FAILED_MESSAGE);
+  });
+
+  it("says a connection was lost, in words holding nothing of the query", () => {
+    expect(messageForJobLog(failedQuery(lostConnection))).toBe(
+      "Connection terminated unexpectedly",
+    );
+  });
+
+  it("keeps any other error's message, and the text of what isn't an error", () => {
+    expect(messageForJobLog(new Error("Action timed out"))).toBe(
+      "Action timed out",
+    );
+    expect(messageForJobLog("text")).toBe("text");
   });
 });
 

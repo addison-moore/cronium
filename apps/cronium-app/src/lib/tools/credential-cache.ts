@@ -2,6 +2,7 @@ import { LRUCache } from "lru-cache";
 import { db } from "@/server/db";
 import { toolCredentials } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 interface CachedCredential {
   id: number;
@@ -174,7 +175,7 @@ export class CredentialCacheManager {
         accessCount: 1,
       };
     } catch (error) {
-      console.error("Error fetching credential:", error);
+      console.error("Error fetching credential:", failureWithStack(error));
       return null;
     }
   }
@@ -225,7 +226,7 @@ export class CredentialCacheManager {
 
     // Fetch fresh data in background
     this.fetchAndCache(toolId, userId).catch((error) => {
-      console.error("Background revalidation failed:", error);
+      console.error("Background revalidation failed:", failureWithStack(error));
     });
   }
 }

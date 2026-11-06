@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { isSystemSettingSensitive } from "./encryption-service";
 import { decryptSystemSetting } from "@/lib/security/field-secret";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Interface for email message
 interface EmailMessage {
@@ -50,7 +51,10 @@ export async function getSmtpSettings() {
           value: decryptSystemSetting(setting.value, setting.key),
         };
       } catch (error) {
-        console.error(`Error decrypting system setting ${setting.key}:`, error);
+        console.error(
+          `Error decrypting system setting ${setting.key}:`,
+          failureWithStack(error),
+        );
         // Return setting without decryption rather than failing
         return setting;
       }
@@ -180,7 +184,7 @@ export async function sendEmail(
     if (error instanceof Error && error.message === "SMTP_CONFIG_MISSING") {
       throw error;
     }
-    console.error("Error sending email:", error);
+    console.error("Error sending email:", failureWithStack(error));
     return false;
   }
 }
@@ -282,7 +286,10 @@ function getEmailTemplate(
 
     return template;
   } catch (error) {
-    console.error(`Error processing email template ${templateName}:`, error);
+    console.error(
+      `Error processing email template ${templateName}:`,
+      failureWithStack(error),
+    );
     // Fallback to simple HTML if template can't be loaded
     return `<html><body>
       <h2>${replacements.subject ?? "Notification"}</h2>

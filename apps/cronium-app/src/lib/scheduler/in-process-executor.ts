@@ -17,8 +17,12 @@ import { type Event, type Job, JobStatus, JobType } from "@/shared/schema";
 import { jobService } from "@/lib/services/job-service";
 import { executeToolAction } from "@/lib/scheduler/tool-action-executor";
 import { executeHttpEvent } from "@/lib/scheduler/http-event-executor";
-import { driverError } from "@/lib/pg-errors";
 import { MAX_UNIFIED_IO_OUTPUT_BYTES, toMb } from "@/lib/unified-io/limits";
+import {
+  describeFailure,
+  failureWithStack,
+  messageForJobLog,
+} from "@/lib/pg-errors";
 
 /**
  * Run a tool-action job in-process and finalize it via the normal job lifecycle.
@@ -90,10 +94,13 @@ export async function runInProcessJob(
   } catch (err) {
     // executeToolAction is designed not to throw, but stay defensive: a failure
     // here must still finalize the job, never leave it stuck QUEUED/RUNNING.
-    // The driver's words, since this ends up in the run's log: a status update that
-    // lost its connection otherwise reads only "Failed query: rollback".
-    const message = driverError(err).message ?? String(err);
-    console.error(`[InProcess] Job ${job.id} failed to execute:`, message);
+    console.error(
+      `[InProcess] Job ${job.id} failed to execute:`,
+      describeFailure(err),
+    );
+    // This becomes the output in the job's log. What failed was often saving the
+    // result, and Drizzle's message would repeat all of it there.
+    const message = messageForJobLog(err);
     try {
       await jobService.updateJobStatus(job.id, JobStatus.FAILED, {
         output: message,
@@ -104,7 +111,7 @@ export async function runInProcessJob(
     } catch (finalizeErr) {
       console.error(
         `[InProcess] Could not finalize failed job ${job.id}:`,
-        finalizeErr,
+        failureWithStack(finalizeErr),
       );
     }
   }

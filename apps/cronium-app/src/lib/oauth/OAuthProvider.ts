@@ -5,6 +5,7 @@ import {
   OAuthError,
   type OAuthTokenResponse,
 } from "./types";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export abstract class BaseOAuthProvider implements OAuthProvider {
   constructor(protected config: OAuthProviderConfig) {}
@@ -147,7 +148,7 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
         throw error;
       }
       // Log but don't throw - revocation is best effort
-      console.error("Failed to revoke token:", error);
+      console.error("Failed to revoke token:", failureWithStack(error));
     }
   }
 
