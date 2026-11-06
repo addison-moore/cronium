@@ -136,6 +136,19 @@ describe("auth", () => {
     );
   });
 
+  // The stdio bridge (apps/cronium-mcp) goes by this to tell a rejected token from a gateway's
+  // own 401, and it's published apart from the app, so rewording it has to keep the start.
+  it.each([
+    ["no token", undefined],
+    ["a bad token", "bogus"],
+  ])("starts its 401's error with `unauthorized:` for %s", async (_, token) => {
+    apiTokenMock.mockResolvedValue(null);
+    const res = await post(rpc("ping"), token);
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/^unauthorized:/);
+  });
+
   it("accepts an OAuth access token ahead of the API-token path", async () => {
     oauthMock.mockResolvedValue({ session: SESSION, scopes: ["mcp"] });
     apiTokenMock.mockResolvedValue(null);

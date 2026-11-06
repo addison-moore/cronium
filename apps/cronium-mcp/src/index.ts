@@ -65,7 +65,7 @@ function requestIds(msg: unknown): JsonRpcId[] {
  * This is how the bridge tells Cronium from anything else in front of it. It goes by the body,
  * not the status or the content type, because /api/mcp itself answers at 200, 400 and 413, a
  * proxy's page can come at 200, and real Kong answers in JSON, at 200 as well. The route's
- * other answers, its 401 and its empty 202 for notifications, go by their status.
+ * other answers are its 401, below, and its empty 202 for notifications, which goes by its status.
  */
 function parseJsonRpc(body: string): unknown {
   const isMessage = (value: unknown): boolean =>
@@ -80,6 +80,21 @@ function parseJsonRpc(body: string): unknown {
     ? parsed.length > 0 && parsed.every(isMessage)
     : isMessage(parsed);
   return isJsonRpc ? parsed : undefined;
+}
+
+/**
+ * Whether this is Cronium's own 401, the one thing it says that isn't JSON-RPC. A gateway in front
+ * of it can want credentials of its own, and real Kong, nginx, Caddy and Traefik all answer 401,
+ * so this goes by the body as well. The route has worded this two ways, and both start like this.
+ */
+function isCroniumTokenRefusal(res: Response, body: string): boolean {
+  if (res.status !== 401) return false;
+  try {
+    const { error } = JSON.parse(body) as { error?: unknown };
+    return typeof error === "string" && error.startsWith("unauthorized:");
+  } catch {
+    return false;
+  }
 }
 
 /** Whether this message, or one in a batch, is a tool call: nothing else here changes anything. */
@@ -143,7 +158,7 @@ function httpFailureMessage(
   body: string,
   isToolCall: boolean,
 ): string {
-  if (res.status === 401) {
+  if (isCroniumTokenRefusal(res, body)) {
     return (
       "Cronium rejected the API token (HTTP 401). Check CRONIUM_API_TOKEN — " +
       "create a token with the MCP scope under Settings → API Tokens (tokens expire)."
@@ -336,7 +351,7 @@ async function probe(): Promise<void> {
       signal: AbortSignal.timeout(10_000),
     });
     const body = await res.text();
-    if (res.status === 401) {
+    if (isCroniumTokenRefusal(res, body)) {
       logFailure(httpFailureMessage(res, body, false), body);
       process.exit(1);
     }

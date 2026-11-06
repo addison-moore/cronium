@@ -81,6 +81,57 @@ const NOT_CRONIUM = {
     type: "text/html",
     body: nginxPage("404 Not Found"),
   },
+  nginx_basic_401: {
+    status: 401,
+    type: "text/html",
+    wwwAuthenticate: 'Basic realm="Cronium"',
+    body: nginxPage("401 Authorization Required"),
+  },
+  kong_key_401: {
+    status: 401,
+    type: "application/json; charset=utf-8",
+    wwwAuthenticate: "Key",
+    body: '{\n  "message":"No API key found in request",\n  "request_id":"a934917eed2885379300d1444fbf6313"\n}',
+  },
+  kong_basic_401: {
+    status: 401,
+    type: "application/json; charset=utf-8",
+    wwwAuthenticate: 'Basic realm="service"',
+    body: '{\n  "message":"Unauthorized",\n  "request_id":"1b224c0212b8730db4547f1f76195d30"\n}',
+  },
+  caddy_401: {
+    status: 401,
+    wwwAuthenticate: 'Basic realm="restricted"',
+    body: "",
+  },
+  traefik_401: {
+    status: 401,
+    type: "text/plain",
+    wwwAuthenticate: 'Basic realm="traefik"',
+    body: "401 Unauthorized\n",
+  },
+  // Not seen from a real product, but near enough to Cronium's own to get wrong.
+  plain_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":"unauthorized"}',
+  },
+  capital_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":"Unauthorized: bad key"}',
+  },
+  object_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":{"message":"unauthorized: bad key"}}',
+  },
+  null_401: { status: 401, type: "application/json", body: "null" },
+  cronium_words_403: {
+    status: 403,
+    type: "application/json",
+    body: '{"error":"unauthorized: not at this status"}',
+  },
   sign_in_200: { status: 200, type: "text/html", body: SIGN_IN_PAGE },
   empty_200: { status: 200, type: "text/plain", body: "" },
   no_content_204: { status: 204 },
@@ -148,12 +199,13 @@ const REDIRECTS = {
   },
 };
 
-/** Two more that need tests of their own. */
+/** Others that need tests of their own. */
 const OTHER_ANSWERS = {
-  gateway_401: {
+  // What the route said from when it was written until its OAuth support.
+  older_cronium_401: {
     status: 401,
-    type: "application/json; charset=utf-8",
-    body: '{\n  "message":"No API key found in request",\n  "request_id":"1f0beb32429e5a1dba54bc0292d51a01"\n}',
+    type: "application/json",
+    body: '{"error":"unauthorized: provide a valid Cronium API token as a Bearer token"}',
   },
   long_page_200: { status: 200, type: "text/html", body: "x".repeat(1000) },
 };
@@ -357,6 +409,9 @@ before(async () => {
         const headers = {};
         if (canned.type) headers["content-type"] = canned.type;
         if (canned.location) headers.location = canned.location;
+        if (canned.wwwAuthenticate) {
+          headers["www-authenticate"] = canned.wwwAuthenticate;
+        }
         res.writeHead(canned.status, headers);
         res.end(canned.body);
         return;
@@ -364,8 +419,16 @@ before(async () => {
       const probeOnly =
         auth === `Bearer ${EXPIRING_TOKEN}` && body.includes('"ping"');
       if (auth !== `Bearer ${GOOD_TOKEN}` && !probeOnly) {
-        res.writeHead(401, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "unauthorized" }));
+        res.writeHead(401, {
+          "content-type": "application/json",
+          "www-authenticate": `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/api/mcp", error="invalid_token", error_description="The access token is invalid or expired"`,
+        });
+        res.end(
+          JSON.stringify({
+            error:
+              "unauthorized: authenticate with an OAuth access token or a Cronium API token",
+          }),
+        );
         return;
       }
       const msg = JSON.parse(body);
@@ -824,8 +887,43 @@ test("says where a redirect was going, without its query", async () => {
   }
 });
 
-test("keeps the 401 message for a gateway's 401 too, and exits at startup as it did", async () => {
-  const { log, code } = await bridgeLog("gateway_401", /no-such-line/);
+test("doesn't blame the token for a gateway's 401, or quit over it at startup", async () => {
+  for (const token of [
+    "nginx_basic_401",
+    "kong_key_401",
+    "kong_basic_401",
+    "caddy_401",
+    "traefik_401",
+    "plain_error_401",
+  ]) {
+    const { log, code } = await bridgeLog(token, /the answer began/);
+    assert.equal(code, null, token);
+    assert.doesNotMatch(log, /rejected|CRONIUM_API_TOKEN/, token);
+    assert.match(
+      log,
+      /warning — Got HTTP 401, not Cronium's answer\. .* Will retry per request\./,
+      token,
+    );
+  }
+});
+
+test("leaves going through out of a tool call a gateway refused with a 401", async () => {
+  const [res] = await runBridge([call(5)], { token: "kong_key_401" });
+  assert.equal(res.id, 5);
+  assert.equal(res.error.code, -32001);
+  assert.equal(
+    res.error.message,
+    "Got HTTP 401, not Cronium's answer. It may be from a reverse proxy, firewall or sign-in page, or CRONIUM_BASE_URL may be wrong.",
+  );
+});
+
+test("logs what a gateway said in its 401, for whoever reads the log", async () => {
+  const { log } = await bridgeLog("kong_key_401", /the answer began/);
+  assert.match(log, /the answer began .*No API key found in request/);
+});
+
+test("still says Cronium rejected the token, and quits at startup, for an older Cronium's words", async () => {
+  const { log, code } = await bridgeLog("older_cronium_401", /no-such-line/);
   assert.equal(code, 1);
   assert.ok(log.includes(`cronium-mcp: ${TOKEN_REJECTED}`), log);
 });
@@ -880,7 +978,7 @@ test("fails fast at startup when the token is rejected outright", async () => {
   child.stderr.on("data", (c) => (stderr += c.toString()));
   const [code] = await once(child, "exit");
   assert.equal(code, 1);
-  assert.match(stderr, /CRONIUM_API_TOKEN/);
+  assert.ok(stderr.includes(`cronium-mcp: ${TOKEN_REJECTED}`), stderr);
 });
 
 test("keeps the words for a refused connection, for a tool call and a read alike", async () => {
