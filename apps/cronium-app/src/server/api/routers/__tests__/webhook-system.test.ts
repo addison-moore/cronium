@@ -125,6 +125,7 @@ jest.mock("@/lib/webhooks/webhook-secret", () => ({
   ),
 }));
 
+import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
 // Pull the next-auth module augmentation (id/role/status/sessionVersion) into
 // this test's TypeScript program.
@@ -630,19 +631,69 @@ describe("webhookSystem.getStats", () => {
 });
 
 describe("webhookSystem.retryDelivery", () => {
-  it("retries a delivery owned by the caller", async () => {
-    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
-    managerMock.retryDelivery.mockResolvedValue({ queued: true });
+  const attempt = (overrides: Record<string, unknown>) => ({
+    id: "dl_new",
+    webhookId: 42,
+    duration: 12,
+    ...overrides,
+  });
 
-    const result = await userCaller().webhookSystem.retryDelivery({
-      deliveryId: "dl_123",
-    });
+  async function retryOwned(result: Record<string, unknown>) {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockResolvedValue(result);
+    return userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" });
+  }
+
+  it("reports success when the receiver took a delivery owned by the caller", async () => {
+    const delivered = attempt({ success: true, statusCode: 200 });
+
+    const result = await retryOwned(delivered);
 
     expect(managerMock.retryDelivery).toHaveBeenCalledWith("dl_123");
     expect(result).toEqual({
       success: true,
-      data: { queued: true },
-      message: "Webhook delivery retry initiated",
+      data: delivered,
+      message: "Webhook delivery retry succeeded",
+    });
+  });
+
+  it("reports failure when the receiver answered with an error", async () => {
+    const refused = attempt({ success: false, statusCode: 500 });
+
+    expect(await retryOwned(refused)).toEqual({
+      success: false,
+      data: refused,
+      message: "Webhook delivery retry failed: HTTP 500",
+    });
+  });
+
+  it("reports why when the attempt got no answer at all", async () => {
+    const unreachable = attempt({
+      success: false,
+      error: "connect ECONNREFUSED",
+    });
+
+    expect(await retryOwned(unreachable)).toEqual({
+      success: false,
+      data: unreachable,
+      message: "Webhook delivery retry failed: connect ECONNREFUSED",
+    });
+  });
+
+  it("passes on a refusal to send, with its message", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockRejectedValue(
+      new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Webhook is disabled",
+      }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Webhook is disabled",
     });
   });
 

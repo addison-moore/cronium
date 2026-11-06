@@ -369,7 +369,7 @@ export const webhookSystemRouter = createTRPCRouter({
       );
     }),
 
-  // Retry failed webhook delivery
+  // Send a delivery's event again and report what the receiver did
   retryDelivery: protectedProcedure
     .use(withTiming)
     .input(z.object({ deliveryId: z.string() }))
@@ -390,9 +390,20 @@ export const webhookSystemRouter = createTRPCRouter({
             throw notFoundError("Delivery");
           }
 
-          const result = await webhookManager.retryDelivery(input.deliveryId);
+          const attempt = await webhookManager.retryDelivery(input.deliveryId);
 
-          return mutationResponse(result, "Webhook delivery retry initiated");
+          // Not mutationResponse, whose `success` is always true. A receiver
+          // refusing the retry isn't an error in this request, but it isn't a
+          // success either, and the attempt's details are worth keeping.
+          return {
+            success: attempt.success,
+            data: attempt,
+            message: attempt.success
+              ? "Webhook delivery retry succeeded"
+              : `Webhook delivery retry failed: ${
+                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+                }`,
+          };
         },
         {
           component: "webhookSystemRouter",
