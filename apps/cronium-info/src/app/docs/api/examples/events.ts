@@ -161,14 +161,16 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "integer",
         required: false,
-        description: "REMOTE events: the server to run on, or null.",
+        description:
+          "REMOTE events: the server to run on, or null. A REMOTE event needs this or selectedServerIds.",
       },
       {
         name: "selectedServerIds",
         in: "body",
         type: "array",
         required: false,
-        description: "REMOTE events: run on each of these servers.",
+        description:
+          "REMOTE events: run on each of these servers. A REMOTE event needs this or serverId.",
       },
       {
         name: "envVars",
@@ -267,7 +269,7 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         type: "string",
         required: false,
         description:
-          "ACTIVE, PAUSED, DRAFT or ARCHIVED. Pausing stops the schedule.",
+          "ACTIVE, PAUSED, DRAFT or ARCHIVED. Pausing stops the schedule. A script that runs only on servers can't be set to ACTIVE while it has none.",
       },
       {
         name: "customSchedule",
@@ -331,7 +333,8 @@ export const eventEndpoints: readonly ApiEndpoint[] = [
         in: "body",
         type: "array",
         required: false,
-        description: "Replaces the event's list of servers.",
+        description:
+          "Replaces the event's list of servers. An event that runs on servers has to keep at least one, unless the same request sets runLocation to LOCAL.",
       },
       {
         name: "timeoutValue",

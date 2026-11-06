@@ -9,6 +9,7 @@ import { EventTypeIcon } from "@/components/ui/event-type-icon";
 import WorkflowsCard from "./WorkflowsCard";
 import { ScheduleIncidentsCard } from "./ScheduleIncidentsCard";
 import { formatDate as formatDateUtil } from "@/lib/utils";
+import { isStrandedRemoteEvent } from "@/shared/event-servers";
 
 const copy = {
   never: "Never",
@@ -25,6 +26,7 @@ const copy = {
   timeout: "Timeout",
   executionInfo: "Execution Information",
   executionLocation: "Execution Location",
+  noServers: "no servers",
   retryAttempts: "Retry Attempts",
   executionStats: "Execution Stats",
   successful: "Successful",
@@ -211,6 +213,12 @@ export function EventOverviewTab({
                     {event.runLocation === "LOCAL_AND_REMOTE"
                       ? "Local + Remote"
                       : event.runLocation}
+                    {!event.secretFieldsRedacted &&
+                      isStrandedRemoteEvent(event) && (
+                        <span className="text-warning-text ml-2">
+                          ({copy.noServers})
+                        </span>
+                      )}
                   </span>
                 )}
               </div>

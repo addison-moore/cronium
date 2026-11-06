@@ -11,6 +11,7 @@ import {
   authenticateRestPrincipal,
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
+import { NO_SERVERS_MESSAGE, saveStrandsEvent } from "@/shared/event-servers";
 import { legacyEventPatchSchema } from "@/shared/schemas/events";
 import {
   assertEventCapability,
@@ -230,6 +231,14 @@ export async function PATCH(
       allowedFields.serverId,
       selectedServerIds,
     );
+
+    const current = await storage.getEventWithRelations(eventId);
+    if (
+      current &&
+      saveStrandsEvent(current, { ...allowedFields, selectedServerIds })
+    ) {
+      return NextResponse.json({ error: NO_SERVERS_MESSAGE }, { status: 400 });
+    }
 
     // Explicit allowed-field mapping is provided by the strict schema above;
     // owner, source, counters and every unknown security field are rejected.

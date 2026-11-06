@@ -42,6 +42,7 @@ import { authenticateRestPrincipal } from "@/lib/api-auth";
 import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { resourceAccessHttpStatus } from "@/server/security/resource-access";
+import { NO_SERVERS_MESSAGE } from "@/shared/event-servers";
 import { TRPCError } from "@trpc/server";
 import {
   EVENT_TOO_LONG_MESSAGE,
@@ -244,6 +245,45 @@ describe("POST /api/events", () => {
     });
   });
 
+  describe("a REMOTE event", () => {
+    it("is refused with no server, as events.create refuses it", async () => {
+      const res = await post({ ...baseEvent, runLocation: "REMOTE" });
+
+      expect(res.status).toBe(400);
+      expect(s.createScript).not.toHaveBeenCalled();
+    });
+
+    it("is refused with an empty server list", async () => {
+      const res = await post({
+        ...baseEvent,
+        runLocation: "REMOTE",
+        selectedServerIds: [],
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("is taken with a direct server", async () => {
+      const res = await post({
+        ...baseEvent,
+        runLocation: "REMOTE",
+        serverId: 9,
+      });
+
+      expect(res.status).toBe(201);
+    });
+
+    it("is taken with a linked server", async () => {
+      const res = await post({
+        ...baseEvent,
+        runLocation: "REMOTE",
+        selectedServerIds: [9],
+      });
+
+      expect(res.status).toBe(201);
+    });
+  });
+
   it("says access denied, not internal server error, for a forbidden server", async () => {
     const consoleError = jest
       .spyOn(console, "error")
@@ -273,6 +313,51 @@ describe("PATCH /api/events/[id]", () => {
   it("does not re-anchor the schedule for an unrelated edit", async () => {
     await patch({ name: "renamed" });
     expect(scheduler.updateScript).not.toHaveBeenCalled();
+  });
+
+  describe("a REMOTE event", () => {
+    const remoteOn = (servers: Array<{ id: number }>, status = "PAUSED") =>
+      s.getEventWithRelations!.mockResolvedValue({
+        id: 1,
+        userId: USER,
+        type: "BASH",
+        status,
+        runLocation: "REMOTE",
+        envVars: [],
+        servers,
+      });
+
+    it("can't lose its last server", async () => {
+      remoteOn([{ id: 9 }]);
+
+      const res = await patch({ selectedServerIds: [] });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: NO_SERVERS_MESSAGE });
+      expect(s.updateScript).not.toHaveBeenCalled();
+    });
+
+    it("can't be activated with no servers", async () => {
+      remoteOn([]);
+
+      const res = await patch({ status: "ACTIVE" });
+
+      expect(res.status).toBe(400);
+      expect(s.updateScript).not.toHaveBeenCalled();
+    });
+
+    it("can still be renamed with no servers", async () => {
+      remoteOn([]);
+
+      const res = await patch({ name: "renamed" });
+
+      expect(res.status).toBe(200);
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { userId: USER },
+      );
+    });
   });
 
   describe("saving the fields, env vars and servers", () => {

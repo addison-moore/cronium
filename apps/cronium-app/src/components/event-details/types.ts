@@ -27,6 +27,9 @@ export interface Event {
   scheduleUnit: string;
   customSchedule: string | null;
   runLocation: string;
+  serverId?: number | null;
+  // Set for someone else's shared event, whose servers are left out
+  secretFieldsRedacted?: boolean;
   createdAt: string;
   updatedAt: string;
   lastRunAt: string | null;
