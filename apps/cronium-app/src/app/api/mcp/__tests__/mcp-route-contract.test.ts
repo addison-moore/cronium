@@ -141,6 +141,26 @@ describe("auth", () => {
     );
   });
 
+  it("accepts an OAuth access token ahead of the API-token path", async () => {
+    oauthMock.mockResolvedValue({ session: SESSION, scopes: ["mcp"] });
+    apiTokenMock.mockResolvedValue(null);
+    const res = await post(rpc("ping"), "oauth-token");
+    expect(res.status).toBe(200);
+  });
+
+  it("threads the authenticated session, scopes, and mcp provenance into the caller", async () => {
+    await post(rpc("ping"), "good-token");
+    expect(createCallerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: SESSION,
+        tokenScopes: ["mcp"],
+        requestSource: "mcp",
+      }),
+    );
+  });
+});
+
+describe("a bad token, and one that couldn't be checked", () => {
   it("keeps a bad token's 401 to the byte", async () => {
     apiTokenMock.mockResolvedValue(null);
     const res = await post(rpc("ping"), "bogus");
@@ -200,24 +220,6 @@ describe("auth", () => {
 
       expect(body.length).toBeLessThanOrEqual(300);
     });
-  });
-
-  it("accepts an OAuth access token ahead of the API-token path", async () => {
-    oauthMock.mockResolvedValue({ session: SESSION, scopes: ["mcp"] });
-    apiTokenMock.mockResolvedValue(null);
-    const res = await post(rpc("ping"), "oauth-token");
-    expect(res.status).toBe(200);
-  });
-
-  it("threads the authenticated session, scopes, and mcp provenance into the caller", async () => {
-    await post(rpc("ping"), "good-token");
-    expect(createCallerMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        session: SESSION,
-        tokenScopes: ["mcp"],
-        requestSource: "mcp",
-      }),
-    );
   });
 });
 

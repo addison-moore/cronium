@@ -82,13 +82,16 @@ test("stays up through a 503, passes it on, and works once the database is back"
       waiting.get(message.id)?.(message);
     }
   });
+  // With a limit of its own, so a bridge that never answers fails this rather than hangs it.
   const ask = (id) => {
     bridge.stdin.write(
       `${JSON.stringify({ jsonrpc: "2.0", id, method: "ping" })}\n`,
     );
-    return answers.has(id)
-      ? Promise.resolve(answers.get(id))
-      : new Promise((resolve) => waiting.set(id, resolve));
+    return new Promise((resolve, reject) => {
+      if (answers.has(id)) return resolve(answers.get(id));
+      waiting.set(id, resolve);
+      setTimeout(() => reject(new Error(`no answer to ${id}`)), 10_000).unref();
+    });
   };
 
   try {
