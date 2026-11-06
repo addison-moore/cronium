@@ -70,9 +70,15 @@ cronium_send_discord_message() {
     "${CRONIUM_HELPERS_DIR}/cronium.toolAction" discord "$@"
 }
 
+# Returns 0 if the variable has a value, 1 if it doesn't, and 2 if the read failed, which
+# says nothing either way.
 cronium_variable_exists() {
+    local key="$1"
     local value
-    value=$(cronium_get_variable "$1" 2>/dev/null)
+    value=$(cronium_get_variable "$key") || {
+        echo "Error: Could not tell whether variable '$key' exists" >&2
+        return 2
+    }
     [ -n "$value" ]
 }
 
@@ -84,7 +90,12 @@ cronium_increment_variable() {
     local key="$1"
     local increment="${2:-1}"
     local current
-    current=$(cronium_get_variable "$key" 2>/dev/null || echo "0")
+    # Only a variable with no value starts from 0. One that couldn't be read still holds
+    # its value, and anything written here would replace it.
+    current=$(cronium_get_variable "$key") || {
+        echo "Error: Could not read variable '$key', so it was not changed" >&2
+        return 1
+    }
     current="${current:-0}"
 
     if ! [[ "$current" =~ ^-?[0-9]+$ ]]; then
@@ -93,7 +104,7 @@ cronium_increment_variable() {
     fi
 
     local new_value=$((current + increment))
-    cronium_set_variable "$key" "$new_value"
+    cronium_set_variable "$key" "$new_value" || return 1
     echo "$new_value"
 }
 
@@ -102,7 +113,11 @@ cronium_append_variable() {
     local append="$2"
     local separator="${3:-}"
     local current
-    current=$(cronium_get_variable "$key" 2>/dev/null || echo "")
+    # See cronium_increment_variable.
+    current=$(cronium_get_variable "$key") || {
+        echo "Error: Could not read variable '$key', so it was not changed" >&2
+        return 1
+    }
 
     if [ -z "$current" ]; then
         cronium_set_variable "$key" "$append"
@@ -112,10 +127,11 @@ cronium_append_variable() {
 }
 
 cronium_info() {
+    local token="${CRONIUM_API_TOKEN:-}"
     echo "Cronium Bash SDK v2.0.0"
     echo "API URL: ${CRONIUM_API_ENDPOINT:-}"
     echo "Execution ID: ${CRONIUM_EXECUTION_ID:-}"
-    echo "Token: ${CRONIUM_API_TOKEN:0:10}..."
+    echo "Token: ${token:0:10}..."
 }
 
 # The runner's older dotted names. They exist only on a remote server and keep
