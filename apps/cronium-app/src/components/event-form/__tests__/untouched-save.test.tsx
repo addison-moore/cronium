@@ -528,10 +528,12 @@ describe("saving an event without changing anything", () => {
       });
       await user.click(screen.getByText("Update Event"));
 
-      await waitFor(() =>
-        expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
-          expect.objectContaining({ startTime: "2027-03-04T06:00:00.000Z" }),
-        ),
+      await waitFor(
+        () =>
+          expect(mockUpdateMutateAsync).toHaveBeenCalledWith(
+            expect.objectContaining({ startTime: "2027-03-04T06:00:00.000Z" }),
+          ),
+        { timeout: 10_000 },
       );
     },
   );

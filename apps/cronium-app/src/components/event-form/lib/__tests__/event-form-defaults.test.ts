@@ -101,7 +101,7 @@ describe("buildEventFormDefaults", () => {
     const defaults = buildEventFormDefaults({
       startTime: new Date("2026-03-05T12:34:56.789Z"),
     });
-    // Which time it shows depends on the zone, which start-time.test.tsx sets.
+    // Which time it shows depends on the zone, which start-time.test.ts sets.
     expect(defaults.startTime).toMatch(/^2026-03-0[56]T\d{2}:\d{2}$/);
   });
 
