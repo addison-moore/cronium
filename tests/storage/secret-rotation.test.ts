@@ -3,7 +3,8 @@
  * rotation driver's dry run used to say nothing about:
  *
  *   - sensitive settings outside the vault, which the bootstrap seed used to write
- *   - API tokens from before hashing, which only the active key can read
+ *   - API tokens from before hashing, which only the active key can read, and which
+ *     it now hashes itself
  *   - the copies of env vars in `jobs.payload`, which it didn't touch
  *
  * Real Postgres on purpose: the job write depends on jsonb operators and on what a
@@ -14,11 +15,12 @@
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
-import { promisify } from "node:util";
+import { format, promisify } from "node:util";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { POST as claimJobs } from "@/app/api/internal/jobs/claim/route";
 import { authenticateApiToken } from "@/lib/api-auth";
+import { hashApiToken } from "@/lib/api-token-hash";
 import { getSmtpSettings } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 import { dispatchEventJob } from "@/lib/scheduling/dispatch";
@@ -58,6 +60,7 @@ const OWNER = "rotation-owner";
 // Random, because a repeated character makes the CLI print a low-entropy warning first.
 const KEY_OLD = randomBytes(32).toString("hex");
 const KEY_NEW = randomBytes(32).toString("hex");
+const KEY_OLDER = randomBytes(32).toString("hex");
 const KEY_LOST = randomBytes(32).toString("hex");
 const ORIGINAL_KEY = process.env.ENCRYPTION_KEY;
 const ORCHESTRATOR_KEY = "rotation-test-orchestrator-key";
@@ -162,7 +165,8 @@ async function claimedJobs(): Promise<ClaimedJob[]> {
 
 /** Hold the row, as a claim or a status change does, while `during` runs. */
 async function withRowHeld(
-  id: string,
+  table: "jobs" | "api_tokens",
+  id: string | number,
   during: (client: {
     query: (text: string, values?: unknown[]) => Promise<unknown>;
   }) => Promise<void>,
@@ -170,7 +174,7 @@ async function withRowHeld(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [id]);
+    await client.query(`SELECT 1 FROM ${table} WHERE id = $1 FOR UPDATE`, [id]);
     await during(client);
     await client.query("COMMIT");
   } catch (error) {
@@ -181,17 +185,19 @@ async function withRowHeld(
   }
 }
 
-/** Resolves once the driver's write is waiting on a row lock. */
-async function untilJobWriteIsBlocked() {
-  for (let attempt = 0; attempt < 200; attempt++) {
+/** Resolves once this many writes to the table are waiting on a row lock. */
+async function untilWritesAreBlocked(table: "jobs" | "api_tokens", writes = 1) {
+  // A long limit, because the driver gets through every other surface first.
+  for (let attempt = 0; attempt < 2400; attempt++) {
     const { rows } = await pool.query<{ count: string }>(
       `SELECT count(*) FROM pg_stat_activity
-       WHERE wait_event_type = 'Lock' AND query ILIKE 'update "jobs"%'`,
+       WHERE wait_event_type = 'Lock' AND query ILIKE $1`,
+      [`update "${table}"%`],
     );
-    if (Number(rows[0]!.count) > 0) return;
+    if (Number(rows[0]!.count) >= writes) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error("the driver's job write never blocked");
+  throw new Error(`${writes} write(s) to ${table} never blocked`);
 }
 
 /** The CLI in its own process, as an operator runs it. */
@@ -384,28 +390,86 @@ describe("the bootstrap seed", () => {
 });
 
 describe("API tokens from before hashing", () => {
-  async function seedOldToken(
+  async function seedStoredToken(
     name: string,
-    raw: string,
+    stored: string,
     overrides: Partial<typeof apiTokens.$inferInsert> = {},
   ): Promise<number> {
     const [row] = await db
       .insert(apiTokens)
-      .values({
-        userId: OWNER,
-        name,
-        token: encryptionService.encrypt(raw),
-        ...overrides,
-      })
+      .values({ userId: OWNER, name, token: stored, ...overrides })
       .returning({ id: apiTokens.id });
     return row!.id;
   }
 
-  it("counts the ones a key change would break, in both kinds of run", async () => {
+  /** As the app stored one before hashing, under the active key. */
+  const seedOldToken = (
+    name: string,
+    raw: string,
+    overrides: Partial<typeof apiTokens.$inferInsert> = {},
+  ) => seedStoredToken(name, encryptionService.encrypt(raw), overrides);
+
+  async function seedTokenUnder(
+    key: string,
+    name: string,
+    raw: string,
+  ): Promise<number> {
+    const before = process.env.ENCRYPTION_KEY!;
+    restartWith(key);
+    const id = await seedOldToken(name, raw);
+    restartWith(before);
+    return id;
+  }
+
+  async function storedToken(id: number) {
+    const [row] = await db.select().from(apiTokens).where(eq(apiTokens.id, id));
+    return row!;
+  }
+
+  const allTokens = () => db.select().from(apiTokens).orderBy(apiTokens.id);
+
+  it("is right to hash them: without that, the old key going loses one", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    await seedOldToken("unused", "raw-unused");
+
+    restartWith(KEY_NEW);
+
+    expect(await authenticateApiToken("raw-unused")).toBeNull();
+  });
+
+  it("authenticates one nobody has used, once the old key is gone", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const id = await seedOldToken("unused", "raw-unused", {
+      scopes: ["events:read"],
+    });
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    const report = await rotateAllSecrets();
+    expect(surface(report, TOKENS)).toMatchObject({ hashed: 1, legacy: 0 });
+    expect(report.totalHashed).toBe(1);
+    expect((await storedToken(id)).token).toBe(hashApiToken("raw-unused"));
+
+    restartWith(KEY_NEW);
+    expect(await authenticateApiToken("raw-unused")).toEqual({
+      userId: OWNER,
+      tokenId: id,
+      scopes: ["events:read"],
+    });
+    expect((await storedToken(id)).lastUsed).not.toBeNull();
+    expect(await authenticateApiToken("raw-other")).toBeNull();
+    // Nothing is left for the lookup to try, so nothing fails to decrypt.
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("only counts in a dry run, then hashes what it counted and nothing else", async () => {
     const unused = await seedOldToken("deploy bot", "raw-unused-canary");
-    const bad = await seedOldToken("bad\u001b[2Jname", "raw-bad-name");
     const expiresLater = await seedOldToken("later", "raw-later", {
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt: new Date(Date.now() + 3_600_000),
+      scopes: ["events:read"],
+      lastUsed: new Date("2026-01-02T03:04:05Z"),
+      updatedAt: new Date("2026-01-02T03:04:05Z"),
     });
     await seedOldToken("revoked", "raw-revoked", {
       status: TokenStatus.REVOKED,
@@ -418,56 +482,376 @@ describe("API tokens from before hashing", () => {
       name: "hashed",
       token: "raw-hashed",
     });
-    const before = await db.select().from(apiTokens);
+    const before = await allTokens();
+    const unusedCiphertext = (await storedToken(unused)).token;
     restartWith(KEY_NEW, [KEY_OLD]);
 
-    for (const dryRun of [true, false]) {
-      const report = await rotateAllSecrets({ dryRun });
-      const tokens = surface(report, TOKENS);
-      expect(tokens).toMatchObject({
-        scanned: 6,
-        reencrypted: 0,
-        skipped: 3,
-        legacy: 3,
-        errors: 0,
-      });
-      expect(tokens.legacyNames).toEqual([
-        `id=${unused} "deploy bot"`,
-        // A name can't move the operator's cursor or clear their screen.
-        `id=${bad} "bad\\u001b[2Jname"`,
-        `id=${expiresLater} "later"`,
-      ]);
-      expect(report.totalLegacy).toBe(3);
-      expect(JSON.stringify(report)).not.toContain("raw-unused-canary");
-      expect(JSON.stringify(report)).not.toContain(before[0]!.token);
+    const dryRun = await rotateAllSecrets({ dryRun: true });
+    expect(surface(dryRun, TOKENS)).toMatchObject({
+      scanned: 5,
+      reencrypted: 0,
+      hashed: 2,
+      skipped: 3,
+      legacy: 0,
+      errors: 0,
+      legacyNames: [],
+    });
+    expect(dryRun.totalHashed).toBe(2);
+    expect(dryRun.totalLegacy).toBe(0);
+    expect(dryRun.remaining).toBe(2);
+    expect(await allTokens()).toEqual(before);
+
+    const real = await rotateAllSecrets();
+    expect(surface(real, TOKENS)).toMatchObject({
+      scanned: 5,
+      reencrypted: 0,
+      hashed: 2,
+      skipped: 3,
+      legacy: 0,
+      errors: 0,
+    });
+    expect(real.totalHashed).toBe(2);
+    expect(real.remaining).toBe(0);
+    for (const report of [dryRun, real]) {
+      for (const value of ["raw-unused-canary", unusedCiphertext]) {
+        expect(JSON.stringify(report)).not.toContain(value);
+      }
+      expect(JSON.stringify(report)).not.toContain(hashApiToken("raw-later"));
     }
-    expect(await db.select().from(apiTokens)).toEqual(before);
+
+    // Only the token column of those two moved, and none of the others.
+    const expected = before.map((row) => {
+      if (row.id === unused) {
+        return { ...row, token: hashApiToken("raw-unused-canary") };
+      }
+      if (row.id === expiresLater) {
+        return { ...row, token: hashApiToken("raw-later") };
+      }
+      return row;
+    });
+    expect(await allTokens()).toEqual(expected);
+
+    const again = await rotateAllSecrets();
+    expect(surface(again, TOKENS)).toMatchObject({ hashed: 0, skipped: 5 });
+    expect(again.totalHashed).toBe(0);
+    const check = await rotateAllSecrets({ dryRun: true });
+    expect(check.remaining).toBe(0);
+    expect(await allTokens()).toEqual(expected);
   });
 
-  it("stops counting one that gets used, and it survives the key change", async () => {
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
-    await seedOldToken("used", "raw-used");
-    await seedOldToken("unused", "raw-unused");
+  it("opens a token under any key in the ring", async () => {
+    const underActive = await seedTokenUnder(KEY_NEW, "active", "raw-active");
+    const underOld = await seedTokenUnder(KEY_OLD, "old", "raw-old");
+    const underOlder = await seedTokenUnder(KEY_OLDER, "older", "raw-older");
+    restartWith(KEY_NEW, [KEY_OLD, KEY_OLDER]);
 
+    expect(
+      surface(await rotateAllSecrets({ dryRun: true }), TOKENS),
+    ).toMatchObject({ hashed: 3, legacy: 0 });
+    expect(surface(await rotateAllSecrets(), TOKENS)).toMatchObject({
+      hashed: 3,
+      legacy: 0,
+    });
+
+    restartWith(KEY_NEW);
+    for (const [id, raw] of [
+      [underActive, "raw-active"],
+      [underOld, "raw-old"],
+      [underOlder, "raw-older"],
+    ] as const) {
+      expect(await authenticateApiToken(raw)).toMatchObject({ tokenId: id });
+    }
+  });
+
+  it("leaves one no key in the ring opens as legacy, and names it", async () => {
+    const lost = await seedTokenUnder(KEY_LOST, "bad\u001b[2Jname", "raw-lost");
+    // Long and base64-shaped, so it looks like ciphertext and fails to open.
+    const lookalike = await seedStoredToken("lookalike", "A".repeat(88));
+    // Never ciphertext at all, so it's under no key either.
+    const plain = await seedStoredToken("plain", "a-plaintext-token");
+    const opens = await seedOldToken("opens", "raw-opens");
+    const before = await allTokens();
+    const lostCiphertext = (await storedToken(lost)).token;
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    const dryRun = await rotateAllSecrets({ dryRun: true });
+    const real = await rotateAllSecrets();
+
+    for (const report of [dryRun, real]) {
+      expect(surface(report, TOKENS)).toMatchObject({
+        scanned: 4,
+        hashed: 1,
+        skipped: 0,
+        legacy: 3,
+        errors: 0,
+        legacyNames: [
+          // A name can't move the operator's cursor or clear their screen.
+          `id=${lost} "bad\\u001b[2Jname"`,
+          `id=${lookalike} "lookalike"`,
+          `id=${plain} "plain"`,
+        ],
+      });
+      expect(report.totalLegacy).toBe(3);
+      expect(JSON.stringify(report)).not.toContain(lostCiphertext);
+    }
+    const unopened = (rows: Awaited<ReturnType<typeof allTokens>>) =>
+      rows.filter((row) => row.id !== opens);
+    expect(unopened(await allTokens())).toEqual(unopened(before));
+  });
+
+  it("hashes one it couldn't open once its key is back in the ring", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const lost = await seedTokenUnder(KEY_LOST, "lost", "raw-lost");
+    restartWith(KEY_NEW, [KEY_OLD]);
+    expect(surface(await rotateAllSecrets(), TOKENS).legacy).toBe(1);
+    expect(await authenticateApiToken("raw-lost")).toBeNull();
+
+    restartWith(KEY_NEW, [KEY_OLD, KEY_LOST]);
+    expect(surface(await rotateAllSecrets(), TOKENS)).toMatchObject({
+      hashed: 1,
+      legacy: 0,
+    });
+
+    restartWith(KEY_NEW);
+    expect(await authenticateApiToken("raw-lost")).toMatchObject({
+      tokenId: lost,
+    });
+  });
+
+  it("gets a 401 from the restart until a pass reaches it, then works", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const used = await seedOldToken("used", "raw-used");
+    const unused = await seedOldToken("unused", "raw-unused");
     expect(await authenticateApiToken("raw-used")).toMatchObject({
-      userId: OWNER,
+      tokenId: used,
     });
 
     restartWith(KEY_NEW, [KEY_OLD]);
-    const report = await rotateAllSecrets({ dryRun: true });
-    expect(surface(report, TOKENS).legacyNames).toEqual([
-      expect.stringContaining('"unused"'),
-    ]);
-
-    // Step 3 of the runbook: this is the 401 the report warned about.
+    expect(
+      surface(await rotateAllSecrets({ dryRun: true }), TOKENS),
+    ).toMatchObject({ scanned: 2, hashed: 1, skipped: 1 });
     expect(await authenticateApiToken("raw-used")).toMatchObject({
-      userId: OWNER,
+      tokenId: used,
     });
     expect(await authenticateApiToken("raw-unused")).toBeNull();
 
+    await rotateAllSecrets();
+    expect(await authenticateApiToken("raw-unused")).toMatchObject({
+      tokenId: unused,
+    });
+
     restartWith(KEY_NEW);
     expect(await authenticateApiToken("raw-used")).toMatchObject({
+      tokenId: used,
+    });
+    expect(await authenticateApiToken("raw-unused")).toMatchObject({
+      tokenId: unused,
+    });
+  });
+
+  it("closes that gap if it runs on the current key alone before the restart", async () => {
+    const value = encryptEnvVarValue("env-canary", eventId, "TOKEN");
+    await db.insert(envVars).values({ eventId, key: "TOKEN", value });
+    const id = await seedOldToken("unused", "raw-unused");
+
+    const report = await rotateAllSecrets();
+
+    expect(surface(report, TOKENS)).toMatchObject({ hashed: 1 });
+    expect(report.totalReencrypted).toBe(0);
+    const [row] = await db.select().from(envVars);
+    expect(row!.value).toBe(value);
+
+    restartWith(KEY_NEW, [KEY_OLD]);
+    expect(await authenticateApiToken("raw-unused")).toMatchObject({
+      tokenId: id,
+    });
+  });
+
+  it("survives a rollback, because a hash needs no key", async () => {
+    const id = await seedOldToken("unused", "raw-unused");
+    restartWith(KEY_NEW, [KEY_OLD]);
+    await rotateAllSecrets();
+    const hashed = await storedToken(id);
+
+    restartWith(KEY_OLD, [KEY_NEW]);
+    expect(surface(await rotateAllSecrets(), TOKENS)).toMatchObject({
+      hashed: 0,
+      skipped: 1,
+    });
+    expect(await storedToken(id)).toEqual(hashed);
+
+    restartWith(KEY_OLD);
+    expect(await authenticateApiToken("raw-unused")).toMatchObject({
+      tokenId: id,
+    });
+  });
+
+  it("reports a row it can't write, with no token in the log, and hashes the rest", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const stuck = await seedOldToken("stuck", "raw-stuck-canary");
+    const fine = await seedOldToken("fine", "raw-fine");
+    // Token values are unique, so this row stops the write of the other's hash.
+    await db.insert(apiTokens).values({
       userId: OWNER,
+      name: "same value",
+      token: hashApiToken("raw-stuck-canary"),
+      status: TokenStatus.REVOKED,
+    });
+    const ciphertext = (await storedToken(stuck)).token;
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    const report = await rotateAllSecrets();
+
+    expect(surface(report, TOKENS)).toMatchObject({
+      hashed: 1,
+      skipped: 1,
+      legacy: 0,
+      errors: 1,
+    });
+    expect(report.totalErrors).toBe(1);
+    expect((await storedToken(stuck)).token).toBe(ciphertext);
+    expect((await storedToken(fine)).token).toBe(hashApiToken("raw-fine"));
+
+    // format, because joining the arguments would hide an error object's own fields.
+    const logged = consoleError.mock.calls
+      .map((args) => format(...args))
+      .join("\n");
+    expect(logged).toContain(`api_tokens.token id=${stuck} column=token`);
+    expect(logged).toContain("23505");
+    for (const text of [logged, JSON.stringify(report)]) {
+      expect(text).not.toContain("raw-stuck-canary");
+      expect(text).not.toContain(ciphertext);
+      expect(text).not.toContain(hashApiToken("raw-stuck-canary"));
+    }
+  });
+
+  describe("while the token's row is busy", () => {
+    /** Each write waits on the row in the order given, so `first` goes first. */
+    async function raceForRow<First, Second>(
+      id: number,
+      first: () => Promise<First>,
+      second: () => Promise<Second>,
+    ): Promise<[First, Second]> {
+      let firstRun: Promise<First> | undefined;
+      let secondRun: Promise<Second> | undefined;
+      await withRowHeld("api_tokens", id, async () => {
+        firstRun = first();
+        await untilWritesAreBlocked("api_tokens", 1);
+        secondRun = second();
+        await untilWritesAreBlocked("api_tokens", 2);
+      });
+      return Promise.all([firstRun!, secondRun!]);
+    }
+
+    it("skips a token the lookup hashes first", async () => {
+      // Still under the active key, so the lookup can open it too.
+      const id = await seedOldToken("racing", "raw-racing");
+
+      const [auth, report] = await raceForRow(
+        id,
+        () => authenticateApiToken("raw-racing"),
+        () => rotateAllSecrets(),
+      );
+
+      expect(auth).toMatchObject({ userId: OWNER, tokenId: id });
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 0,
+        skipped: 1,
+        errors: 0,
+      });
+      expect((await storedToken(id)).token).toBe(hashApiToken("raw-racing"));
+    });
+
+    it("hashes a token first and the lookup still works after it", async () => {
+      const id = await seedOldToken("racing", "raw-racing");
+
+      const [report, auth] = await raceForRow(
+        id,
+        () => rotateAllSecrets(),
+        () => authenticateApiToken("raw-racing"),
+      );
+
+      expect(auth).toMatchObject({ userId: OWNER, tokenId: id });
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 1,
+        skipped: 0,
+        errors: 0,
+      });
+      expect((await storedToken(id)).token).toBe(hashApiToken("raw-racing"));
+
+      restartWith(KEY_NEW);
+      expect(await authenticateApiToken("raw-racing")).toMatchObject({
+        tokenId: id,
+      });
+    });
+
+    it("doesn't overwrite a token replaced under it", async () => {
+      const id = await seedOldToken("replaced", "raw-replaced");
+      restartWith(KEY_NEW, [KEY_OLD]);
+
+      let run: Promise<RotationReport> | undefined;
+      await withRowHeld("api_tokens", id, async (client) => {
+        run = rotateAllSecrets();
+        await untilWritesAreBlocked("api_tokens");
+        await client.query(`UPDATE api_tokens SET token = $2 WHERE id = $1`, [
+          id,
+          hashApiToken("raw-newer"),
+        ]);
+      });
+      const report = await run!;
+
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 0,
+        skipped: 1,
+        errors: 0,
+      });
+      expect(await authenticateApiToken("raw-newer")).toMatchObject({
+        tokenId: id,
+      });
+      expect(await authenticateApiToken("raw-replaced")).toBeNull();
+    });
+
+    it("keeps a revocation it had to wait for", async () => {
+      const id = await seedOldToken("revoked now", "raw-revoked-now");
+      restartWith(KEY_NEW, [KEY_OLD]);
+
+      let run: Promise<RotationReport> | undefined;
+      await withRowHeld("api_tokens", id, async (client) => {
+        run = rotateAllSecrets();
+        await untilWritesAreBlocked("api_tokens");
+        await client.query(
+          `UPDATE api_tokens SET status = $2, updated_at = now() WHERE id = $1`,
+          [id, TokenStatus.REVOKED],
+        );
+      });
+      const report = await run!;
+
+      // What it read is still there, so it hashes it, and the status isn't its to change.
+      expect(surface(report, TOKENS)).toMatchObject({ hashed: 1, errors: 0 });
+      expect((await storedToken(id)).status).toBe(TokenStatus.REVOKED);
+      expect(await authenticateApiToken("raw-revoked-now")).toBeNull();
+    });
+
+    it("gets past a token deleted under it", async () => {
+      const id = await seedOldToken("deleted", "raw-deleted");
+      restartWith(KEY_NEW, [KEY_OLD]);
+
+      let run: Promise<RotationReport> | undefined;
+      await withRowHeld("api_tokens", id, async (client) => {
+        run = rotateAllSecrets();
+        await untilWritesAreBlocked("api_tokens");
+        await client.query(`DELETE FROM api_tokens WHERE id = $1`, [id]);
+      });
+      const report = await run!;
+
+      expect(surface(report, TOKENS)).toMatchObject({
+        hashed: 0,
+        skipped: 1,
+        errors: 0,
+      });
+      expect(await allTokens()).toEqual([]);
     });
   });
 });
@@ -729,9 +1113,9 @@ describe("env var copies in jobs that haven't finished", () => {
       restartWith(KEY_NEW, [KEY_OLD]);
 
       let run: Promise<RotationReport> | undefined;
-      await withRowHeld(id, async (client) => {
+      await withRowHeld("jobs", id, async (client) => {
         run = rotateAllSecrets();
-        await untilJobWriteIsBlocked();
+        await untilWritesAreBlocked("jobs");
         await client.query(
           `UPDATE jobs
            SET status = 'claimed', orchestrator_id = 'orch-2',
@@ -757,9 +1141,9 @@ describe("env var copies in jobs that haven't finished", () => {
       restartWith(KEY_NEW, [KEY_OLD]);
 
       let run: Promise<RotationReport> | undefined;
-      await withRowHeld(id, async (client) => {
+      await withRowHeld("jobs", id, async (client) => {
         run = rotateAllSecrets();
-        await untilJobWriteIsBlocked();
+        await untilWritesAreBlocked("jobs");
         await client.query(
           `UPDATE jobs SET payload = payload || '{"retries": 3}'::jsonb WHERE id = $1`,
           [id],
@@ -781,9 +1165,9 @@ describe("env var copies in jobs that haven't finished", () => {
       restartWith(KEY_NEW, [KEY_OLD]);
 
       let run: Promise<RotationReport> | undefined;
-      await withRowHeld(id, async (client) => {
+      await withRowHeld("jobs", id, async (client) => {
         run = rotateAllSecrets();
-        await untilJobWriteIsBlocked();
+        await untilWritesAreBlocked("jobs");
         await client.query(
           `UPDATE jobs
            SET payload = jsonb_set(payload, '{environment,TOKEN}', to_jsonb($2::text))
@@ -907,9 +1291,15 @@ describe("what an operator sees from the CLI", () => {
     const smtp = encryptionService.encrypt("smtp-canary");
     await seedSetting("smtpPassword", smtp);
     const oldToken = encryptionService.encrypt("raw-token-canary");
+    await db
+      .insert(apiTokens)
+      .values({ userId: OWNER, name: "old bot", token: oldToken });
+    restartWith(KEY_LOST);
+    const lostToken = encryptionService.encrypt("lost-token-canary");
+    restartWith(KEY_OLD);
     const [token] = await db
       .insert(apiTokens)
-      .values({ userId: OWNER, name: "deploy bot", token: oldToken })
+      .values({ userId: OWNER, name: "deploy bot", token: lostToken })
       .returning({ id: apiTokens.id });
     const moved = await seedJobWith(eventId, {
       TOKEN: encryptEnvVarValue("job-canary", eventId, "TOKEN"),
@@ -918,6 +1308,7 @@ describe("what an operator sees from the CLI", () => {
       OLD: encryptionService.encrypt("old-job-canary"),
     });
     const before = await storedJob(moved);
+    const tokensBefore = await db.select().from(apiTokens);
     restartWith(KEY_NEW, [KEY_OLD]);
 
     const { code, output } = await runCli("--dry-run");
@@ -931,14 +1322,15 @@ describe("what an operator sees from the CLI", () => {
       "system_settings.value: scanned=1 re-encrypted=0 skipped=0 legacy=1 errors=0",
     );
     expect(output).toContain(
-      "api_tokens.token: scanned=1 re-encrypted=0 skipped=0 legacy=1 errors=0",
+      "api_tokens.token: scanned=2 hashed=1 skipped=0 legacy=1 errors=0",
     );
-    expect(output).toContain("Total to re-encrypt: 1; errors: 0");
+    expect(output).toContain("Total to re-encrypt: 1; to hash: 1; errors: 0");
 
     expect(output).toContain("WARNING: 1 sensitive setting(s)");
     expect(output).toContain("  smtpPassword\n");
     expect(output).toContain("WARNING: 1 API token(s)");
     expect(output).toContain(`  id=${token!.id} "deploy bot"\n`);
+    expect(output).not.toContain('"old bot"');
     expect(output).toContain("WARNING: 1 env var value(s)");
     expect(output).toContain(`  ${legacy}\n`);
 
@@ -947,8 +1339,11 @@ describe("what an operator sees from the CLI", () => {
     expect(output).not.toContain("canary");
     expect(output).not.toContain(smtp);
     expect(output).not.toContain(oldToken);
+    expect(output).not.toContain(lostToken);
+    expect(output).not.toContain(hashApiToken("raw-token-canary"));
 
     expect(await storedJob(moved)).toEqual(before);
+    expect(await db.select().from(apiTokens)).toEqual(tokensBefore);
   });
 
   it("keeps the save-it-again warning to the rows saving fixes", async () => {
@@ -967,6 +1362,7 @@ describe("what an operator sees from the CLI", () => {
   });
 
   it("cuts a long list short", async () => {
+    restartWith(KEY_LOST);
     await db.insert(apiTokens).values(
       Array.from({ length: 23 }, (_, i) => ({
         userId: OWNER,
@@ -999,6 +1395,91 @@ describe("what an operator sees from the CLI", () => {
 
     const second = await runCli();
     expect(second.output).toContain("Total re-encrypted: 0; errors: 0");
+  });
+
+  it("hashes old tokens in a real run, and only then prints the line that says it's done", async () => {
+    const oldToken = encryptionService.encrypt("raw-token-canary");
+    const [token] = await db
+      .insert(apiTokens)
+      .values({ userId: OWNER, name: "old bot", token: oldToken })
+      .returning({ id: apiTokens.id });
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    // A token is all that's left, and this still isn't the line step 5 of the runbook
+    // waits for.
+    const preview = await runCli("--dry-run");
+    expect(preview.code).toBe(0);
+    expect(preview.output).toContain(
+      "Total to re-encrypt: 0; to hash: 1; errors: 0",
+    );
+    expect(preview.output).not.toContain("Total to re-encrypt: 0; errors: 0");
+
+    const first = await runCli();
+    expect(first.code).toBe(0);
+    expect(first.output).toContain(
+      "api_tokens.token: scanned=1 hashed=1 skipped=0 legacy=0 errors=0",
+    );
+    expect(first.output).toContain(
+      "Total re-encrypted: 0; hashed: 1; errors: 0",
+    );
+    expect(first.output).not.toContain("API token(s)");
+
+    const second = await runCli();
+    expect(second.output).toContain("Total re-encrypted: 0; errors: 0");
+    const check = await runCli("--dry-run");
+    expect(check.output).toContain("Total to re-encrypt: 0; errors: 0");
+
+    for (const { output } of [preview, first, second, check]) {
+      expect(output).not.toContain("canary");
+      expect(output).not.toContain(oldToken);
+      expect(output).not.toContain(hashApiToken("raw-token-canary"));
+    }
+
+    restartWith(KEY_NEW);
+    expect(await authenticateApiToken("raw-token-canary")).toMatchObject({
+      tokenId: token!.id,
+    });
+  });
+
+  it("hashes old tokens on the current key alone, and moves nothing else", async () => {
+    const value = encryptEnvVarValue("env-canary", eventId, "TOKEN");
+    await db.insert(envVars).values({ eventId, key: "TOKEN", value });
+    await db.insert(apiTokens).values({
+      userId: OWNER,
+      name: "old bot",
+      token: encryptionService.encrypt("raw-token-canary"),
+    });
+
+    const { code, output } = await runCli();
+
+    expect(code).toBe(0);
+    expect(output).toContain("Total re-encrypted: 0; hashed: 1; errors: 0");
+    const [row] = await db.select().from(envVars);
+    expect(row!.value).toBe(value);
+  });
+
+  it("exits non-zero when a token can't be written, with nothing to read in the output", async () => {
+    const oldToken = encryptionService.encrypt("raw-token-canary");
+    const [token] = await db
+      .insert(apiTokens)
+      .values({ userId: OWNER, name: "old bot", token: oldToken })
+      .returning({ id: apiTokens.id });
+    await db.insert(apiTokens).values({
+      userId: OWNER,
+      name: "same value",
+      token: hashApiToken("raw-token-canary"),
+      status: TokenStatus.REVOKED,
+    });
+    restartWith(KEY_NEW, [KEY_OLD]);
+
+    const { code, output } = await runCli();
+
+    expect(code).toBe(1);
+    expect(output).toContain("Total re-encrypted: 0; errors: 1");
+    expect(output).toContain(`api_tokens.token id=${token!.id} column=token`);
+    expect(output).not.toContain("canary");
+    expect(output).not.toContain(oldToken);
+    expect(output).not.toContain(hashApiToken("raw-token-canary"));
   });
 
   it("exits non-zero when a job's copy can't be read", async () => {

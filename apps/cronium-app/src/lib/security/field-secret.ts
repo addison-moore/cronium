@@ -94,6 +94,23 @@ export function isLegacyCiphertextUnderKey(
   }
 }
 
+/**
+ * The plaintext of legacy ciphertext, under whichever key in the ring authenticates
+ * it, or null if none does. Unlike a read, this tries more than the active key, and
+ * null also covers a value that was never ciphertext, which a read passes through.
+ */
+export function openLegacyCiphertextInRing(stored: string): string | null {
+  if (!looksLikeLegacyCiphertext(stored)) return null;
+  for (const { key } of getSecretVault().keyIds()) {
+    try {
+      return openLegacyCiphertext(stored, key);
+    } catch {
+      // Not under this key.
+    }
+  }
+  return null;
+}
+
 /* ---- servers.sshKey / servers.password (bound to userId + column) ----
  *
  * Bound to the owning tenant and the column, which is available at both create

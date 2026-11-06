@@ -630,10 +630,16 @@ docker compose exec postgres psql -U cronium -d cronium -c \
   and uses the ciphertext as the value, so an SMTP login fails with only a log line to
   show for it. Enter each one it names again in the admin settings. Saving with the field
   blank keeps the old value, so it has to be typed.
-- **It warns about API tokens.** These are from before tokens were hashed. Each is hashed
-  the first time it's used. One nobody has used since stops working at step 3, with a
-  401, and has to be replaced. Use each one it names once first, or issue a new one. It
-  doesn't count revoked or expired tokens.
+- **It warns about API tokens.** Tokens from before hashing stay encrypted until they're
+  used, and the app can read them only with the active key. You don't need to use or
+  replace them: step 4 hashes each one a key in the ring can open, and the dry run's
+  `hashed` count says how many. A hash needs no key, so rolling back doesn't affect them.
+  Until step 4 reaches it, each one gets a 401 from step 3 on. To avoid that, run the
+  driver once before step 2 with no keys on the command, as in step 4: with only the
+  current key it has nothing else to move, so it only hashes them. The warning names any
+  token no key in the ring can open, which gets a 401 already and can't be hashed. Add
+  the key it was saved under to `ENCRYPTION_KEYS_RETIRED`, in step 1's command and at
+  step 3, or issue a new one. It doesn't count revoked or expired tokens.
 - **It warns about env var values copied into unfinished jobs.** Each job it names was
   queued with a copy of an env var from before the vault. The driver can't move that copy,
   so the job fails at step 3 with `Could not prepare this job to run`. Let the job finish

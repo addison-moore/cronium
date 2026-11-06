@@ -2,8 +2,8 @@
  * Secret key-rotation driver (security plan Phase 2.1: 559/565).
  *
  * Re-encrypts every at-rest secret from a retired key onto the active key, along
- * with the env var copies held by jobs that haven't finished. It is SAFE and
- * RESUMABLE by construction:
+ * with the env var copies held by jobs that haven't finished, and hashes API tokens
+ * from before tokens were hashed. It is SAFE and RESUMABLE by construction:
  *
  *   - Both keys stay in the ring during rotation (active = ENCRYPTION_KEY,
  *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout, for a
@@ -29,7 +29,9 @@
  * counts it as `legacy`: `legacy-secrets.ts` encrypts it.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { hashApiToken } from "@/lib/api-token-hash";
 import { isSystemSettingSensitive } from "@/lib/encryption-service";
+import { describeFailure } from "@/lib/pg-errors";
 import { NON_TERMINAL_JOB_STATUSES } from "@/lib/scheduling/job-transition";
 import { db } from "@/server/db";
 import {
@@ -56,6 +58,7 @@ import {
   encryptMfaSecret,
   decryptMfaSecret,
   looksLikeLegacyCiphertext,
+  openLegacyCiphertextInRing,
 } from "@/lib/security/field-secret";
 import {
   encryptVariableValue,
@@ -77,6 +80,11 @@ export interface SurfaceResult {
   surface: string;
   scanned: number;
   reencrypted: number;
+  /**
+   * Only on API tokens, in place of `reencrypted`: values hashed, or in a dry run the
+   * values that would be. A hash needs no key, so nothing ever re-encrypts them.
+   */
+  hashed?: number;
   skipped: number;
   errors: number;
   // Non-null values in an always-secret column that are NOT vault envelopes. On
@@ -100,6 +108,7 @@ export interface RotationReport {
   dryRun: boolean;
   surfaces: SurfaceResult[];
   totalReencrypted: number;
+  totalHashed: number;
   totalErrors: number;
   totalLegacy: number;
   /** The part of totalLegacy that is plaintext `--encrypt-legacy` can encrypt. */
@@ -601,22 +610,28 @@ const HASHED_API_TOKEN = /^[0-9a-f]{64}$/;
 /**
  * API tokens from before hashing are ciphertext, hashed the first time each is used.
  * That lookup decrypts with the active key alone, so one nobody has used by the time
- * the key changes gets a 401 from then on. Only reports them, so it writes nothing.
+ * the key changes would get a 401 for good. This hashes them while the old key is in
+ * the ring, so nobody has to use or replace one.
  *
- * Revoked and expired tokens get a 401 either way, so they aren't counted.
+ * The lookup can hash the same row at the same moment, so this writes only over what
+ * it read. A miss means the row has moved on, and counts as skipped.
+ *
+ * Revoked and expired tokens get a 401 either way, and nothing makes one usable again,
+ * so they stay as they are and aren't counted.
  */
-async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
-  const unhashed: string[] = [];
-  const r: SurfaceResult = {
+async function hashLegacyApiTokens(dryRun: boolean): Promise<SurfaceResult> {
+  const unopened: string[] = [];
+  const r: SurfaceResult & { hashed: number } = {
     surface: "api_tokens.token",
     scanned: 0,
     reencrypted: 0,
+    hashed: 0,
     skipped: 0,
     errors: 0,
     legacy: 0,
     legacyAdvice:
-      "API token(s) haven't been used since tokens began to be stored hashed, and get a 401 once ENCRYPTION_KEY isn't the key they were saved under. Use each one once before the key changes, which hashes it, or issue a new one:",
-    legacyNames: unhashed,
+      "API token(s) from before tokens were hashed can't be hashed now, because no key in the ring opens them, and they get a 401. Add the key each was saved under to ENCRYPTION_KEYS_RETIRED and run this again, or issue a new one:",
+    legacyNames: unopened,
   };
   const rows = await db
     .select({
@@ -634,12 +649,31 @@ async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
     const usable =
       row.status === TokenStatus.ACTIVE &&
       !(row.expiresAt && row.expiresAt.getTime() < now);
-    if (usable && !HASHED_API_TOKEN.test(row.token)) {
+    if (!usable || HASHED_API_TOKEN.test(row.token)) {
+      r.skipped++;
+      continue;
+    }
+    const raw = openLegacyCiphertextInRing(row.token);
+    if (raw === null) {
       r.legacy++;
       // Stringified because a name can hold anything, and this goes to a terminal.
-      unhashed.push(`id=${row.id} ${JSON.stringify(row.name)}`);
-    } else {
-      r.skipped++;
+      unopened.push(`id=${row.id} ${JSON.stringify(row.name)}`);
+      continue;
+    }
+    if (dryRun) {
+      r.hashed++;
+      continue;
+    }
+    try {
+      const written = await db
+        .update(apiTokens)
+        .set({ token: hashApiToken(raw) })
+        .where(and(eq(apiTokens.id, row.id), eq(apiTokens.token, row.token)));
+      if ((written.rowCount ?? 0) > 0) r.hashed++;
+      else r.skipped++;
+    } catch (e) {
+      r.errors++;
+      logRowError(r.surface, String(row.id), "token", e);
     }
   }
   return r;
@@ -651,11 +685,10 @@ function logRowError(
   column: string,
   e: unknown,
 ): void {
-  // Never log the secret value — only the location and error class.
+  // Never log the secret value — only the location and error class. A failed write's
+  // own message would repeat it, because Drizzle's ends with every bound value.
   console.error(
-    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${
-      e instanceof Error ? e.message : String(e)
-    }`,
+    `[secret-rotation] ${surface} id=${id} column=${column} failed: ${describeFailure(e)}`,
   );
 }
 
@@ -682,17 +715,19 @@ export async function rotateAllSecrets(
   surfaces.push(webhookResult);
   surfaces.push(await rotateToolCredentials(dryRun));
   surfaces.push(await rotateOauthTokens(dryRun));
-  surfaces.push(await reportUnhashedApiTokens());
+  surfaces.push(await hashLegacyApiTokens(dryRun));
 
   const totalReencrypted = surfaces.reduce((n, s) => n + s.reencrypted, 0);
+  const totalHashed = surfaces.reduce((n, s) => n + (s.hashed ?? 0), 0);
   const totalErrors = surfaces.reduce((n, s) => n + s.errors, 0);
   const totalLegacy = surfaces.reduce((n, s) => n + s.legacy, 0);
   // In a dry run the "remaining" count is what still needs rotating.
-  const remaining = dryRun ? totalReencrypted : totalErrors;
+  const remaining = dryRun ? totalReencrypted + totalHashed : totalErrors;
   return {
     dryRun,
     surfaces,
     totalReencrypted,
+    totalHashed,
     totalErrors,
     totalLegacy,
     plaintextLegacy: userVariableResult.legacy + webhookResult.legacy,

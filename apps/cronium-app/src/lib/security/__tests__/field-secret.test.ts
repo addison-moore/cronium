@@ -11,6 +11,7 @@ import {
   decryptMfaSecret,
   isLegacyCiphertextUnderKey,
   looksLikeLegacyCiphertext,
+  openLegacyCiphertextInRing,
 } from "@/lib/security/field-secret";
 import { __resetSecretVaultForTests } from "@/lib/security/secret-vault";
 
@@ -171,6 +172,52 @@ describe("field-secret record-bound migration (2.1)", () => {
       expect(decryptServerSecret("plainkey", "sshKey", "user-1")).toBe(
         "plainkey",
       );
+    });
+
+    describe("opening it under the ring", () => {
+      function restartWithRetired(retired: string) {
+        process.env.ENCRYPTION_KEYS_RETIRED = retired;
+        __resetSecretVaultForTests();
+      }
+
+      afterEach(() => {
+        delete process.env.ENCRYPTION_KEYS_RETIRED;
+        __resetSecretVaultForTests();
+      });
+
+      it("opens it under the active key or any retired one", () => {
+        const THIRD_KEY = "66".repeat(32);
+        restartWithRetired(JSON.stringify([OTHER_KEY, THIRD_KEY]));
+
+        for (const keyHex of [KEY, OTHER_KEY, THIRD_KEY]) {
+          expect(
+            openLegacyCiphertextInRing(legacyEncrypt("an old token", keyHex)),
+          ).toBe("an old token");
+        }
+      });
+
+      it("returns null for a key that isn't in the ring, or tampering", () => {
+        expect(
+          openLegacyCiphertextInRing(legacyEncrypt("an old token", OTHER_KEY)),
+        ).toBeNull();
+
+        const bytes = Buffer.from(legacyEncrypt("an old token"), "base64");
+        bytes[20] = bytes[20]! ^ 0xff;
+        expect(openLegacyCiphertextInRing(bytes.toString("base64"))).toBeNull();
+      });
+
+      it("returns null for what a read passes through or fails on", () => {
+        for (const stored of ["", "plainkey", "A".repeat(64)]) {
+          expect(openLegacyCiphertextInRing(stored)).toBeNull();
+        }
+      });
+
+      it("fails on a broken ring, which isn't the same as no key opening it", () => {
+        restartWithRetired("not json");
+        expect(() =>
+          openLegacyCiphertextInRing(legacyEncrypt("an old token")),
+        ).toThrow();
+      });
     });
   });
 });
