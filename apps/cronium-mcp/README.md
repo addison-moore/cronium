@@ -108,6 +108,12 @@ restarts, the client gets `Got HTTP 502, not Cronium's answer` and possible caus
 the bridge's log gets the start of what came back. A tool call also says it may still
 have gone through, unless the answer was a 3xx or 4xx, so check before repeating it.
 
+When no whole answer comes, it says how far it can tell the request got. A refused
+connection, a failed name lookup, a refused certificate or an address it can't use read
+`Could not reach Cronium`, because nothing went out. A connection that closes, an answer
+cut off part way and the bridge's own 120-second limit can all come after Cronium acted on
+the request, so a tool call says it may still have gone through there too.
+
 ## Remote endpoint (claude.ai web app & other HTTP MCP clients)
 
 Cronium serves the **same tools over HTTP** at **`/api/mcp`** (in the app itself — no
