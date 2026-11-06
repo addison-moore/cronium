@@ -1,4 +1,7 @@
-import { CredentialEncryption } from "../credential-encryption";
+import {
+  CredentialEncryption,
+  parseEncryptedData,
+} from "../credential-encryption";
 
 /**
  * Phase 2.1 rotation: credential-encryption must decrypt values written under a
@@ -68,5 +71,29 @@ describe("CredentialEncryption key rotation", () => {
     expect(() => svc.decrypt(underA)).toThrow(
       /failed authenticated decryption/,
     );
+  });
+});
+
+describe("parseEncryptedData", () => {
+  it("reads back what encrypt stores", () => {
+    const svc = CredentialEncryption.getInstance();
+    svc.initialize(KEY_A);
+    const encrypted = svc.encrypt({ token: "s3cr3t" });
+
+    expect(parseEncryptedData(JSON.stringify(encrypted))).toEqual(encrypted);
+  });
+
+  it.each([
+    ["nothing", null],
+    ["undefined", undefined],
+    ["an empty string", ""],
+    ["plaintext", "xoxb-plain-token"],
+    ["a JSON number", "5"],
+    ["JSON null", "null"],
+    ["a JSON array", "[]"],
+    ["credentials as plain JSON", '{"token":"s3cr3t"}'],
+    ["a partial shape", '{"encrypted":"a","iv":"b","authTag":"c"}'],
+  ])("treats %s as not encrypted", (_name, stored) => {
+    expect(parseEncryptedData(stored)).toBeNull();
   });
 });
