@@ -143,7 +143,9 @@ import {
   webhookEvents,
 } from "@/shared/schema";
 import { db } from "@/server/db";
+import { RateLimitService } from "@/lib/rate-limit-service";
 import { WebhookManager } from "@/lib/webhooks";
+import { WebhookPreconditionError } from "@/lib/webhooks/webhook-errors";
 import { encryptWebhookSecret } from "@/lib/webhooks/webhook-secret";
 
 // Mount under its production name so enforceRouteCapability sees the same
@@ -633,20 +635,86 @@ describe("webhookSystem.getStats", () => {
 });
 
 describe("webhookSystem.retryDelivery", () => {
-  it("retries a delivery owned by the caller", async () => {
-    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
-    managerMock.retryDelivery.mockResolvedValue({ queued: true });
+  const attempt = (overrides: Record<string, unknown>) => ({
+    id: "dl_new",
+    webhookId: 42,
+    duration: 12,
+    ...overrides,
+  });
 
-    const result = await userCaller().webhookSystem.retryDelivery({
-      deliveryId: "dl_123",
-    });
+  async function retryOwned(result: Record<string, unknown>) {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockResolvedValue(result);
+    return userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" });
+  }
+
+  it("reports success when the receiver took a delivery owned by the caller", async () => {
+    const delivered = attempt({ success: true, statusCode: 200 });
+
+    const result = await retryOwned(delivered);
 
     expect(managerMock.retryDelivery).toHaveBeenCalledWith("dl_123");
     expect(result).toEqual({
       success: true,
-      data: { queued: true },
-      message: "Webhook delivery retry initiated",
+      data: delivered,
+      message: "Webhook delivery retry succeeded",
     });
+  });
+
+  it("reports failure when the receiver answered with an error", async () => {
+    const refused = attempt({ success: false, statusCode: 500 });
+
+    expect(await retryOwned(refused)).toEqual({
+      success: false,
+      data: refused,
+      message: "Webhook delivery retry failed: HTTP 500",
+    });
+  });
+
+  it("reports why when the attempt got no answer at all", async () => {
+    const unreachable = attempt({
+      success: false,
+      error: "connect ECONNREFUSED",
+    });
+
+    expect(await retryOwned(unreachable)).toEqual({
+      success: false,
+      data: unreachable,
+      message: "Webhook delivery retry failed: connect ECONNREFUSED",
+    });
+  });
+
+  it("passes on a refusal to send, with its message", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockRejectedValue(
+      new WebhookPreconditionError("Webhook is disabled"),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Webhook is disabled",
+    });
+  });
+
+  it("is limited per user, and past the limit does nothing", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    const checkLimit = RateLimitService.checkLimit as jest.Mock;
+    checkLimit.mockRejectedValueOnce(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Slow down" }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    expect(checkLimit).toHaveBeenCalledWith(
+      USER_ID,
+      "webhookSystem.retryDelivery",
+      { maxRequests: 10, windowMs: 60000 },
+    );
+    expect(managerMock.retryDelivery).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND when the delivery belongs to another tenant", async () => {

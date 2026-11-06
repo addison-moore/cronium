@@ -3,6 +3,7 @@ import {
   decryptWebhookSecret,
   encryptWebhookHeaders,
   decryptWebhookHeaders,
+  isLegacyWebhookHeaders,
 } from "@/lib/webhooks/webhook-secret";
 import { __resetSecretVaultForTests } from "@/lib/security/secret-vault";
 
@@ -31,6 +32,31 @@ describe("webhook secret encryption (HI-09)", () => {
     expect(decryptWebhookSecret("plainsecret", "wh_abc", "user-1")).toBe(
       "plainsecret",
     );
+  });
+});
+
+describe("isLegacyWebhookHeaders", () => {
+  it("is true for a plaintext header object, whatever its headers are called", () => {
+    expect(isLegacyWebhookHeaders({ Authorization: "Bearer x" })).toBe(true);
+    expect(isLegacyWebhookHeaders({ __enc: "not an envelope" })).toBe(true);
+    expect(isLegacyWebhookHeaders({ __enc: 5 })).toBe(true);
+  });
+
+  it("is false for what the app writes and for anything with nothing to encrypt", () => {
+    expect(
+      isLegacyWebhookHeaders(
+        encryptWebhookHeaders({ A: "b" }, "wh_abc", "user-1"),
+      ),
+    ).toBe(false);
+    for (const empty of [{}, [], null, undefined]) {
+      expect(isLegacyWebhookHeaders(empty)).toBe(false);
+    }
+  });
+
+  it("is false for shapes that aren't headers", () => {
+    for (const other of ["Bearer x", 5, true, ["Bearer x"]]) {
+      expect(isLegacyWebhookHeaders(other)).toBe(false);
+    }
   });
 });
 

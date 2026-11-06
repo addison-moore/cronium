@@ -219,8 +219,9 @@ wait_http "http://127.0.0.1:${ORCH_PORT}/health" '' "Orchestrator" 30
 # 6. Run the E2E Jest project.
 # ---------------------------------------------------------------------------
 log "Running E2E tests…"
+# HOST_ENV: tests/e2e/audit-log-stop.test.ts starts Next servers of its own.
 (cd "${REPO_ROOT}" && env \
-  "DATABASE_URL=${DATABASE_URL}" \
+  "${HOST_ENV[@]}" \
   "E2E_APP_URL=${APP_URL}" \
   "NODE_ENV=test" \
   pnpm --filter @cronium/app exec jest \

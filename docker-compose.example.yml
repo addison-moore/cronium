@@ -97,6 +97,9 @@ services:
 
   cronium-app:
     image: ghcr.io/addison-moore/cronium-app:${CRONIUM_IMAGE_TAG:-latest}
+    # Time to finish requests (up to 10s) and write the last audit log entries (up
+    # to 5s more) before Docker kills it.
+    stop_grace_period: 20s
     env_file:
       - path: .env
         required: false # missing values fail below with instructions
@@ -143,6 +146,9 @@ services:
   cronium-worker:
     image: ghcr.io/addison-moore/cronium-app:${CRONIUM_IMAGE_TAG:-latest}
     command: ["apps/cronium-app/scripts/start-worker.sh"]
+    # Time to finish running jobs (up to 30s) and write their audit log entries (up
+    # to 5s more) before Docker kills it.
+    stop_grace_period: 40s
     env_file:
       - path: .env
         required: false # missing values fail below with instructions
