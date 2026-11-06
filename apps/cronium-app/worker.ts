@@ -41,6 +41,7 @@ import {
 import { serverCleanupService } from "./src/lib/services/server-cleanup-service";
 import { legacySecretsBootWarning } from "./src/lib/security/legacy-secrets";
 import { initializePlugins } from "./src/tools/plugins";
+import { auditLogger } from "./src/lib/security/audit-logger";
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT ?? 5003);
@@ -335,11 +336,13 @@ async function shutdown(signal: string): Promise<void> {
   stopCleanupService();
   serverCleanupService.stop?.();
   healthServer.close();
-  if (listenClient) {
-    await listenClient.end().catch(() => undefined);
-  }
+  // Not awaited: end() waits for Postgres to close the connection, which a hung
+  // database never does, and exiting closes it anyway.
+  void listenClient?.end().catch(() => undefined);
 
   await pool.drain(30_000);
+  // After the drain: the jobs it waited for write audit entries as they finish.
+  await auditLogger.shutdown();
   console.log("[Worker] Shutdown complete");
   process.exit(0);
 }
