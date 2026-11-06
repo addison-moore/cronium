@@ -84,11 +84,11 @@ Execute pre-built integrations with third-party services:
 
 #### 🔄 Runtime Features
 
-- **Environment Variables**: Pass configuration securely to scripts. A value can be up to 128 KB and an event's variables up to 1 MB in total, because Linux won't start a process with more, and an event can have up to 1,000 of them. The form's value field holds one line, so set a value with line breaks, like a PEM key, through the REST API
+- **Environment Variables**: Pass configuration securely to scripts. A value can be up to 128 KB and an event's variables up to 1 MB in total, because Linux won't start a process with more, and an event can have up to 1,000 of them
 - **Timeout Controls**: Prevent runaway executions
 - **Retry Logic**: Automatic retries on failure (0-10 attempts)
 - **Execution Logs**: Complete stdout/stderr capture with timestamps
-- **Script Length**: A script can be up to about 10 MB, the most one save request can carry
+- **Script Length**: One save can carry at most 10 MB (10,485,760 bytes), counting the script and every other field as they're sent. A line break or a quote in a script takes 2 bytes, so a script of many short lines reaches the limit well before its own length does. The form says so before sending anything, and the API answers 413. A reverse proxy in front of Cronium can have a lower limit of its own, such as nginx's `client_max_body_size`, which [DEPLOYMENT.md](DEPLOYMENT.md) covers
 - **Real-time Monitoring**: Watch executions as they happen
 
 #### 🔗 Chaining events (Workflows)

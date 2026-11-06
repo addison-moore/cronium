@@ -12,9 +12,6 @@ jest.mock("@/server/storage", () => ({
   storage: {
     createScript: jest.fn(),
     updateScript: jest.fn(),
-    createEnvVar: jest.fn(),
-    deleteEnvVarsByEventId: jest.fn(),
-    setEventServers: jest.fn(),
     getEvent: jest.fn(),
     getEventWithRelations: jest.fn(),
     getAllEvents: jest.fn(),
@@ -46,6 +43,10 @@ import { storage } from "@/server/storage";
 import { scheduler } from "@/lib/scheduler";
 import { resourceAccessHttpStatus } from "@/server/security/resource-access";
 import { TRPCError } from "@trpc/server";
+import {
+  EVENT_TOO_LONG_MESSAGE,
+  MAX_REQUEST_BODY_BYTES,
+} from "@/shared/request-limits";
 
 const s = storage as unknown as Record<string, jest.Mock>;
 const USER = "user-1";
@@ -187,15 +188,11 @@ describe("POST /api/events", () => {
       expect(created().triggerType).toBe("MANUAL");
     });
 
-    it("materializes the schedule only after env vars and servers exist", async () => {
+    it("materializes the schedule only after the event, its env vars and servers exist", async () => {
       const order: string[] = [];
-      s.createEnvVar!.mockImplementation(() => {
-        order.push("env");
-        return Promise.resolve({});
-      });
-      s.setEventServers!.mockImplementation(() => {
-        order.push("servers");
-        return Promise.resolve();
+      s.createScript!.mockImplementation(() => {
+        order.push("event");
+        return Promise.resolve({ id: 1 });
       });
       (scheduler.updateScript as jest.Mock).mockImplementation(() => {
         order.push("schedule");
@@ -209,7 +206,29 @@ describe("POST /api/events", () => {
         selectedServerIds: [3],
       });
 
-      expect(order).toEqual(["env", "servers", "schedule"]);
+      expect(order).toEqual(["event", "schedule"]);
+      // In the same call, so a failure can't leave an event without them.
+      expect(s.createScript!.mock.calls[0]![1]).toEqual({
+        envVars: [{ key: "A", value: "1" }],
+        serverIds: [3],
+      });
+    });
+
+    it("answers 500 and schedules nothing when the event can't be created", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.createScript!.mockRejectedValueOnce(new Error("insert failed"));
+
+      const res = await post({
+        ...baseEvent,
+        scheduleNumber: 5,
+        envVars: [{ key: "A", value: "1" }],
+      });
+
+      expect(res.status).toBe(500);
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
     });
 
     it.each([
@@ -255,6 +274,61 @@ describe("PATCH /api/events/[id]", () => {
     await patch({ name: "renamed" });
     expect(scheduler.updateScript).not.toHaveBeenCalled();
   });
+
+  describe("saving the fields, env vars and servers", () => {
+    const envVars = [{ key: "B", value: "2" }];
+
+    it("does it in one call", async () => {
+      const res = await patch({
+        name: "renamed",
+        envVars,
+        selectedServerIds: [3],
+      });
+
+      expect(res.status).toBe(200);
+      expect(s.updateScript).toHaveBeenCalledTimes(1);
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { envVars, serverIds: [3], userId: USER },
+      );
+    });
+
+    it("clears the env vars when given an empty list", async () => {
+      await patch({ envVars: [] });
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        {},
+        { envVars: [], userId: USER },
+      );
+    });
+
+    it("leaves the env vars and servers alone when the body has neither", async () => {
+      await patch({ name: "renamed" });
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { userId: USER },
+      );
+    });
+
+    it("answers 500 and leaves the schedule alone when the save fails", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.updateScript!.mockRejectedValueOnce(new Error("save failed"));
+
+      const res = await patch({
+        status: "PAUSED",
+        envVars,
+        selectedServerIds: [3],
+      });
+
+      expect(res.status).toBe(500);
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
+  });
 });
 
 describe("env vars too long to deliver", () => {
@@ -268,7 +342,6 @@ describe("env vars too long to deliver", () => {
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
     expect(s.createScript).not.toHaveBeenCalled();
-    expect(s.createEnvVar).not.toHaveBeenCalled();
   });
 
   it("PATCH answers 400 with the reason, and leaves the variables alone", async () => {
@@ -276,8 +349,7 @@ describe("env vars too long to deliver", () => {
 
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
-    expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
-    expect(s.createEnvVar).not.toHaveBeenCalled();
+    expect(s.updateScript).not.toHaveBeenCalled();
   });
 
   // What a body over the proxy's 10 MB cap looks like by the time it arrives.
@@ -314,7 +386,7 @@ describe("env vars too long to deliver", () => {
       expect(await res.json()).toEqual({
         error: "Request body must be a JSON object under 10 MB",
       });
-      expect(s.deleteEnvVarsByEventId).not.toHaveBeenCalled();
+      expect(s.updateScript).not.toHaveBeenCalled();
     },
   );
 
@@ -323,7 +395,8 @@ describe("env vars too long to deliver", () => {
 
     expect((await post({ ...baseEvent, ...long })).status).toBe(201);
     expect((await patch(long)).status).toBe(200);
-    expect(s.createEnvVar).toHaveBeenCalledTimes(2);
+    expect(s.createScript!.mock.calls[0]![1]).toMatchObject(long);
+    expect(s.updateScript!.mock.calls[0]![2]).toMatchObject(long);
   });
 });
 
@@ -359,5 +432,150 @@ describe("env var values over REST", () => {
       envVars: Array<{ key: string; value: string }>;
     };
     expect(body.envVars).toEqual([{ key: "TOKEN", value: "" }]);
+  });
+});
+
+describe("a save past what one request can carry", () => {
+  /** A JSON body of exactly `bytes` bytes, with the event's script making up the room. */
+  const eventOfSize = (bytes: number, fields: object) => {
+    const shell = JSON.stringify({ ...fields, content: "" }).length;
+    return JSON.stringify({ ...fields, content: "x".repeat(bytes - shell) });
+  };
+  const OVER = MAX_REQUEST_BODY_BYTES + 1;
+
+  /** A body sent in pieces, with no declared length, counting what's read. */
+  function streamed(chunks: Iterable<Uint8Array>) {
+    const source = chunks[Symbol.iterator]();
+    const seen = { pulls: 0, cancelled: false };
+    const stream = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          seen.pulls++;
+          const next = source.next();
+          if (next.done) controller.close();
+          else controller.enqueue(next.value);
+        },
+        cancel() {
+          seen.cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    return { stream, seen };
+  }
+
+  type Body = string | ReadableStream<Uint8Array>;
+  const sendPost = (body: Body, headers: Record<string, string> = {}) =>
+    POST(
+      new NextRequest("http://localhost:5001/api/events", {
+        method: "POST",
+        headers,
+        body,
+        duplex: "half",
+      } as ConstructorParameters<typeof NextRequest>[1]),
+    );
+  const sendPatch = (body: Body, headers: Record<string, string> = {}) =>
+    PATCH(
+      new NextRequest("http://localhost:5001/api/events/1", {
+        method: "PATCH",
+        headers,
+        body,
+        duplex: "half",
+      } as ConstructorParameters<typeof NextRequest>[1]),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+
+  describe.each([
+    ["POST", sendPost, baseEvent, "createScript"],
+    ["PATCH", sendPatch, {}, "updateScript"],
+  ] as const)("%s", (_method, send, fields, writes) => {
+    it("saves a body of exactly the limit", async () => {
+      const res = await send(eventOfSize(MAX_REQUEST_BODY_BYTES, fields));
+
+      expect(res.status).toBeLessThan(300);
+      expect(s[writes]).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a body one byte over, says why, and saves nothing", async () => {
+      const res = await send(eventOfSize(OVER, fields));
+
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual({ error: EVENT_TOO_LONG_MESSAGE });
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("refuses a declared oversize body without reading any of it", async () => {
+      const { stream, seen } = streamed([new TextEncoder().encode("{}")]);
+
+      const res = await send(stream, {
+        "content-length": String(OVER),
+      });
+
+      expect(res.status).toBe(413);
+      expect(seen.pulls).toBe(0);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("stops reading an undeclared body as soon as it passes the limit", async () => {
+      const chunkSize = 2 * 1024 * 1024;
+      // Bounded, so a regression fails the assertion below instead of running the test
+      // process out of memory.
+      function* farTooMuch() {
+        for (let i = 0; i < 64; i++) yield new Uint8Array(chunkSize);
+      }
+      const { stream, seen } = streamed(farTooMuch());
+
+      const res = await send(stream);
+
+      expect(res.status).toBe(413);
+      // Five chunks reach the limit exactly, and the sixth passes it.
+      expect(seen.pulls).toBe(6);
+      expect(seen.cancelled).toBe(true);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("counts what's sent, so a script's line breaks count twice", async () => {
+      // 6 MB of script, under the limit, and 12 MB of JSON, over it.
+      const content = `echo hi${"\n".repeat(6 * 1024 * 1024)}`;
+
+      const res = await send(JSON.stringify({ ...fields, content }));
+
+      expect(res.status).toBe(413);
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+
+    it("answers 400, not 500, to a body that isn't JSON", async () => {
+      const res = await send('{"name":"e","content":"xxxxxxx');
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: "Request body must be a JSON object under 10 MB",
+      });
+      expect(s[writes]).not.toHaveBeenCalled();
+    });
+  });
+
+  it("POST checks who's asking before the body", async () => {
+    (authenticateRestPrincipal as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+    });
+    const { restPrincipalErrorResponse } =
+      jest.requireMock<typeof import("@/lib/api-auth")>("@/lib/api-auth");
+    (restPrincipalErrorResponse as jest.Mock).mockReturnValue(
+      new Response(null, { status: 401 }),
+    );
+
+    const res = await sendPost(eventOfSize(OVER, baseEvent));
+
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH checks the event exists before the body", async () => {
+    s.getEvent!.mockResolvedValue(undefined);
+
+    const res = await sendPatch(eventOfSize(OVER, {}));
+
+    expect(res.status).toBe(404);
   });
 });

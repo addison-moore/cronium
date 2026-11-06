@@ -58,7 +58,12 @@ const EVENT_PROPS: Record<string, unknown> = {
     enum: ["NODEJS", "PYTHON", "BASH", "HTTP_REQUEST", "TOOL_ACTION"],
   },
   description: { type: "string" },
-  content: { type: "string", description: "Script body (NODEJS/PYTHON/BASH)." },
+  content: {
+    type: "string",
+    description:
+      "Script body (NODEJS/PYTHON/BASH). One request can carry at most 10 MB, counted " +
+      "as JSON, where each line break or quote takes 2 bytes.",
+  },
   httpMethod: { type: "string" },
   httpUrl: { type: "string" },
   httpBody: { type: "string" },
