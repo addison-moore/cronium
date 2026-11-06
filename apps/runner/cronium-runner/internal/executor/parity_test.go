@@ -217,8 +217,6 @@ func runInContainerSDK(t *testing.T, interpreter types.ScriptType, script string
 	case types.ScriptTypeBash:
 		sdkScript := filepath.Join(sdk, "bash", "cronium.sh")
 		cmd = exec.Command("bash", "-c", "source "+sdkScript+" 2>/dev/null || true\n"+script)
-		// The image sets this, which is how a subshell gets the SDK there.
-		env = append(env, "BASH_ENV="+sdkScript)
 	case types.ScriptTypePython:
 		cmd = exec.Command("python3", "-c", "import cronium\n"+script)
 		env = append(env, "PYTHONPATH="+filepath.Join(sdk, "python"), "PYTHONDONTWRITEBYTECODE=1")
