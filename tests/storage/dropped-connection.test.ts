@@ -40,8 +40,8 @@ jest.setTimeout(60_000);
 const KILLS_OWN_CONNECTION =
   "SELECT pg_terminate_backend(pg_backend_pid()), pg_sleep(5)";
 
-/** Which of these a closed socket gives depends on what was still unread. */
-const CONNECTION_LOST = /Connection terminated unexpectedly|ECONNRESET/;
+/** Which of these a closed socket gives depends on what was unread or being sent. */
+const CONNECTION_LOST = /Connection terminated unexpectedly|ECONNRESET|EPIPE/;
 
 /** Closes the socket as the pool hands the client out, before anything is sent. */
 const dropConnectionOf = (client: PoolClient) => {
@@ -265,7 +265,7 @@ describe("the SQL tool's connection to someone's own database", () => {
   it("rejects a read the server ends, rather than waiting for the cursor to close", async () => {
     await expect(
       postgresDriver.query(
-        credentialsFor(database.url),
+        credentialsFor(process.env.DATABASE_URL!),
         KILLS_OWN_CONNECTION,
         {},
         readOptions,
