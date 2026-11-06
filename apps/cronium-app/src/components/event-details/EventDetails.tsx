@@ -71,6 +71,15 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     validTabs: ["overview", "edit", "logs"],
   });
 
+  // Radix unmounts an inactive tab's content, and a new form starts from the stored
+  // event, so going to Logs and back would put back every field that had been edited,
+  // with nothing to say so. So the form mounts the first time this tab opens, and stays
+  // until a save.
+  const [editFormMounted, setEditFormMounted] = useState(false);
+  if (activeTab === "edit" && !editFormMounted) {
+    setEditFormMounted(true);
+  }
+
   const router = useRouter();
 
   // tRPC queries
@@ -416,6 +425,9 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     void refetchEvent();
     // Switch back to overview tab after successful edit
     changeTab("overview");
+    // Every field in this form still counts as edited, so it would ignore what the
+    // server stored from here on. The next visit starts a new one.
+    setEditFormMounted(false);
   };
 
   // Early return for invalid event ID
@@ -562,24 +574,33 @@ export function EventDetails({ eventId }: EventDetailsProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="edit" className="mt-6">
-          {transformedEvent && event.userId === user?.id ? (
-            <EventEditTab
-              event={transformedEvent}
-              onEventUpdate={handleEventUpdateSuccess}
-              onRefreshLogs={(): void => {
-                void refetchEvent();
-              }}
-            />
-          ) : (
-            <div className="bg-muted/50 rounded-lg p-8 text-center">
-              <Lock className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
-              <h3 className="mb-2 text-lg font-semibold">
-                {copy.cannotEditShared}
-              </h3>
-              <p className="text-muted-foreground">{copy.sharedDescription}</p>
-            </div>
-          )}
+        <TabsContent
+          value="edit"
+          className="mt-6"
+          forceMount
+          hidden={activeTab !== "edit"}
+        >
+          {editFormMounted &&
+            (transformedEvent && event.userId === user?.id ? (
+              <EventEditTab
+                event={transformedEvent}
+                onEventUpdate={handleEventUpdateSuccess}
+                onRefreshLogs={(): void => {
+                  void refetchEvent();
+                }}
+                active={activeTab === "edit"}
+              />
+            ) : (
+              <div className="bg-muted/50 rounded-lg p-8 text-center">
+                <Lock className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+                <h3 className="mb-2 text-lg font-semibold">
+                  {copy.cannotEditShared}
+                </h3>
+                <p className="text-muted-foreground">
+                  {copy.sharedDescription}
+                </p>
+              </div>
+            ))}
         </TabsContent>
 
         <TabsContent value="logs" className="mt-6">

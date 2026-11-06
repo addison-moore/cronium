@@ -58,6 +58,8 @@ export interface ToolActionConfig {
 interface ToolActionSectionProps {
   value: ToolActionConfig | null;
   onChange: (config: ToolActionConfig | null) => void;
+  // False while the form this is part of is out of sight, as EventForm's `active`.
+  active?: boolean;
   availableTools: Tool[];
 }
 
@@ -105,6 +107,7 @@ const getActionTypeColor = (action: ToolAction): string => {
 export default function ToolActionSection({
   value,
   onChange,
+  active = true,
   availableTools,
 }: ToolActionSectionProps) {
   const { toast } = useToast();
@@ -134,7 +137,7 @@ export default function ToolActionSection({
         actionId: selectedAction?.id ?? "",
       },
       {
-        enabled: !!selectedPlugin && !!selectedAction,
+        enabled: active && !!selectedPlugin && !!selectedAction,
       },
     );
 
