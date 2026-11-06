@@ -41,6 +41,7 @@ import {
 import { serverCleanupService } from "./src/lib/services/server-cleanup-service";
 import { initializePlugins } from "./src/tools/plugins";
 import { auditLogger } from "./src/lib/security/audit-logger";
+import { driverError } from "./src/lib/pg-errors";
 
 const WORKER_ID = process.env.WORKER_ID ?? `worker-${os.hostname()}`;
 const HEALTH_PORT = Number(process.env.WORKER_HEALTH_PORT ?? 5003);
@@ -90,9 +91,11 @@ function startLoop(
         await fn();
       } while (pokedWhileRunning && !shuttingDown);
     } catch (error) {
+      // The driver's words: a transaction that lost its connection otherwise
+      // reads only "Failed query: rollback", and other statements list their values.
       console.error(
         `[Worker] ${name} loop error:`,
-        error instanceof Error ? error.message : String(error),
+        driverError(error).message ?? String(error),
       );
     } finally {
       running = false;
@@ -188,6 +191,27 @@ async function startListener(): Promise<void> {
   const client = new PgClient({
     connectionString: process.env.DATABASE_URL?.replace(/^"|"$/g, ""),
   });
+
+  let reconnecting = false;
+  const reconnect = (delayMs: number): void => {
+    reconnecting = true;
+    listenClient = null;
+    client.end().catch(() => undefined);
+    if (!shuttingDown) setTimeout(() => void startListener(), delayMs);
+  };
+
+  // Listening before anything can go wrong: a connection lost during the statements
+  // below rejects them but also emits this, and with nothing listening that would
+  // end the process, on the reconnect path as much as at boot.
+  client.on("error", (error) => {
+    if (reconnecting) return;
+    console.warn(
+      "[Worker] LISTEN connection error; reconnecting in 5s:",
+      error.message,
+    );
+    reconnect(5_000);
+  });
+
   try {
     await client.connect();
     await client.query("LISTEN schedule_changed");
@@ -220,22 +244,13 @@ async function startListener(): Promise<void> {
           break;
       }
     });
-    client.on("error", (error) => {
-      console.warn(
-        "[Worker] LISTEN connection error; reconnecting in 5s:",
-        error.message,
-      );
-      listenClient = null;
-      client.end().catch(() => undefined);
-      if (!shuttingDown) setTimeout(() => void startListener(), 5_000);
-    });
   } catch (error) {
+    if (reconnecting) return;
     console.warn(
       "[Worker] LISTEN unavailable (polling covers it); retrying in 30s:",
       error instanceof Error ? error.message : String(error),
     );
-    client.end().catch(() => undefined);
-    if (!shuttingDown) setTimeout(() => void startListener(), 30_000);
+    reconnect(30_000);
   }
 }
 
