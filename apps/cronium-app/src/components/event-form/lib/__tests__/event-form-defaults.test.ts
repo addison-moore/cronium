@@ -255,27 +255,92 @@ describe("linkedServers", () => {
     ).toEqual([retired]);
   });
 
-  it("leaves out a direct server that is active, or on a LOCAL event", () => {
-    expect(
+  describe("with an active direct server", () => {
+    const other = { id: 8, name: "other-box", address: "192.0.2.30" };
+
+    it("adds it when an event has no links", () => {
+      for (const runLocation of [
+        RunLocation.REMOTE,
+        RunLocation.LOCAL_AND_REMOTE,
+      ]) {
+        expect(
+          linkedServers({ runLocation, server: live, servers: [] }),
+        ).toEqual([live]);
+      }
+    });
+
+    it("lists a server once when it's also a link", () => {
+      const onBoth = { server: live, servers: [live, other] };
+      expect(
+        linkedServers({ ...onBoth, runLocation: RunLocation.REMOTE }),
+      ).toEqual([live, other]);
+      expect(
+        linkedServers({
+          runLocation: RunLocation.LOCAL_AND_REMOTE,
+          server: live,
+          servers: [live],
+        }),
+      ).toEqual([live]);
+    });
+
+    // Where a job really goes: tests/storage/event-save-direct-server.test.ts.
+    it("takes it over a lone link on a REMOTE event, where a run goes to it", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [other],
+        }),
+      ).toEqual([live]);
+    });
+
+    it("leaves it out when a run fans out to the links without it", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [other, retired],
+        }),
+      ).toEqual([other, retired]);
+      expect(
+        linkedServers({
+          runLocation: RunLocation.LOCAL_AND_REMOTE,
+          server: live,
+          servers: [other],
+        }),
+      ).toEqual([other]);
+    });
+
+    it("keeps an archived link beside it, because that link stops the event", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [retired],
+        }),
+      ).toEqual([live, retired]);
+    });
+  });
+
+  it("leaves out a direct server on a LOCAL event, active or archived", () => {
+    for (const server of [live, retired]) {
+      expect(
+        linkedServers({ runLocation: RunLocation.LOCAL, server, servers: [] }),
+      ).toEqual([]);
+      expect(linkedServers({ server, servers: [] })).toEqual([]);
+    }
+  });
+
+  it("reads a location stored in lowercase by older rows", () => {
+    const stored = (runLocation: string) =>
       linkedServers({
-        runLocation: RunLocation.REMOTE,
+        runLocation: runLocation as RunLocation,
         server: live,
         servers: [],
-      }),
-    ).toEqual([]);
-    expect(
-      linkedServers({
-        runLocation: RunLocation.LOCAL,
-        server: retired,
-        servers: [],
-      }),
-    ).toEqual([]);
-    expect(
-      linkedServers({
-        server: retired,
-        servers: [],
-      }),
-    ).toEqual([]);
+      });
+
+    expect(stored("local")).toEqual([]);
+    expect(stored("remote")).toEqual([live]);
   });
 });
 
