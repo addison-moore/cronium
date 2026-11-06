@@ -523,6 +523,7 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
 6. **Proxies**: HTTP request events, outbound webhooks and user-supplied AI endpoints ignore `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` and always connect directly, because a proxy would resolve the target itself and bypass the SSRF guard. These features need direct outbound access from the app and worker.
+7. **Name resolution**: HTTP request events, outbound webhooks and user-supplied AI endpoints read `/etc/hosts`, then ask the name servers in `/etc/resolv.conf` directly, so a host whose name server hangs can't hold up anything else in the process. They don't try search domains, so give these a fully qualified name. A host is refused if its name server doesn't answer for IPv4 or for IPv6, even if it answered for the other.
 
 ## Key rotation (`ENCRYPTION_KEY`)
 

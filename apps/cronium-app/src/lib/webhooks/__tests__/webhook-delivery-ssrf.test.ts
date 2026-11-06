@@ -6,7 +6,7 @@
  * lives in the agents and in the redirect setting passed to axios, so a suite
  * that mocks axios can't tell whether delivery still uses them.
  */
-jest.mock("dns/promises", () => ({ lookup: jest.fn() }));
+jest.mock("@/lib/resolve-host", () => ({ resolveHost: jest.fn() }));
 // Same exemption as ssrf-guard.test.ts: the guard refuses loopback, so a test
 // exempts its own server's address and everything else gets the real check.
 jest.mock("@/lib/tools/safe-fetch", () => {
@@ -30,13 +30,13 @@ jest.mock("../WebhookSecurity", () => ({
 }));
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-id" }));
 
-import { lookup } from "dns/promises";
 import http from "http";
 import type { AddressInfo } from "net";
 import { WebhookManager } from "../WebhookManager";
+import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp } from "@/lib/tools/safe-fetch";
 
-const mockLookup = lookup as jest.MockedFunction<typeof lookup>;
+const mockResolveHost = resolveHost as jest.MockedFunction<typeof resolveHost>;
 const mockIsDisallowedIp = isDisallowedIp as jest.MockedFunction<
   typeof isDisallowedIp
 >;
@@ -45,11 +45,11 @@ const realIsDisallowedIp = jest.requireActual<
 >("@/lib/tools/safe-fetch").isDisallowedIp;
 
 function resolvesTo(...addresses: string[]) {
-  mockLookup.mockResolvedValue(
+  mockResolveHost.mockResolvedValue(
     addresses.map((address) => ({
       address,
       family: address.includes(":") ? 6 : 4,
-    })) as never,
+    })),
   );
 }
 
@@ -75,7 +75,7 @@ describe("webhook delivery behind the SSRF guard", () => {
     );
 
   beforeEach(async () => {
-    mockLookup.mockReset();
+    mockResolveHost.mockReset();
     mockIsDisallowedIp.mockImplementation(realIsDisallowedIp);
     connections = 0;
     paths = [];
@@ -143,7 +143,7 @@ describe("webhook delivery behind the SSRF guard", () => {
       response: "x".repeat(1000),
     });
     expect(result.error).toBeUndefined();
-    expect(mockLookup).toHaveBeenCalledTimes(1);
+    expect(mockResolveHost).toHaveBeenCalledTimes(1);
   });
 
   it("reads an answer that drops through the guarded agent", async () => {
@@ -193,6 +193,6 @@ describe("webhook delivery behind the SSRF guard", () => {
 
     expect(result).toMatchObject({ success: false, statusCode: 302 });
     expect(paths).toEqual(["/redirect"]);
-    expect(mockLookup).toHaveBeenCalledTimes(1);
+    expect(mockResolveHost).toHaveBeenCalledTimes(1);
   });
 });
