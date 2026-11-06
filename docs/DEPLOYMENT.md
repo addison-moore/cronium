@@ -263,8 +263,9 @@ when the orchestrator returns.
   locally and remotely, and jobs still starting. If one is still going after that, it's
   stopped, and failed or re-queued once its lease runs out. The compose files give the
   orchestrator 40 seconds to stop, for this. If you run it another way, allow it the same.
-- **A script calling `cronium.*` helpers while the app restarts** can see those calls
-  fail. The job itself isn't affected unless the script stops on the error.
+- **A script calling `cronium.*` helpers while the app restarts** waits on retries, which
+  covered a 27-second restart when tested. A much longer one can make a call fail, and
+  what happens next is up to the script.
 - **Changing `ORCHESTRATOR_ID`** hands nothing over: the new ID doesn't own the old
   jobs, and their containers stay until you remove them.
 

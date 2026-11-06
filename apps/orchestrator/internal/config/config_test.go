@@ -74,10 +74,11 @@ func TestComposeFileOnlyPassesSettingsTheOrchestratorReads(t *testing.T) {
 	var keys bytes.Buffer
 	require.NoError(t, envconfig.Usagef("CRONIUM", &Config{}, &keys, "{{range .}}{{.Key}}\n{{end}}"))
 	known := map[string]bool{
-		// Read directly, by LoadTimeoutConfig.
-		"CRONIUM_SETUP_TIMEOUT":         true,
-		"CRONIUM_CLEANUP_TIMEOUT":       true,
-		"CRONIUM_MAX_EXECUTION_TIMEOUT": true,
+		// Read directly, by LoadTimeoutConfig and validateDockerEndpoint.
+		"CRONIUM_SETUP_TIMEOUT":                  true,
+		"CRONIUM_CLEANUP_TIMEOUT":                true,
+		"CRONIUM_MAX_EXECUTION_TIMEOUT":          true,
+		"CRONIUM_ALLOW_INSECURE_DOCKER_ENDPOINT": true,
 	}
 	for _, key := range strings.Fields(keys.String()) {
 		known[key] = true
