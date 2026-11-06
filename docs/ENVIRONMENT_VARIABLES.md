@@ -617,6 +617,17 @@ docker compose exec postgres psql -U cronium -d cronium -c \
   "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
 ```
 
+An API token keeps its value when it's hashed. So if you're rotating because the old key
+may have leaked, anyone holding it and a copy of the database from before a token was
+hashed can still use that token after the rotation. This revokes the ones not hashed yet
+and names them, so you can issue new ones. Run it before the driver's first real pass,
+because after that they can't be told apart:
+
+```bash
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "UPDATE api_tokens SET status = 'REVOKED', updated_at = now() WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$' RETURNING id, name;"
+```
+
 ### Before step 3
 
 - **`errors` isn't 0 in the dry run, or it warns about values still bound to the current
@@ -631,15 +642,17 @@ docker compose exec postgres psql -U cronium -d cronium -c \
   show for it. Enter each one it names again in the admin settings. Saving with the field
   blank keeps the old value, so it has to be typed.
 - **It warns about API tokens.** Tokens from before hashing stay encrypted until they're
-  used, and the app can read them only with the active key. You don't need to use or
-  replace them: step 4 hashes each one a key in the ring can open, and the dry run's
-  `hashed` count says how many. A hash needs no key, so rolling back doesn't affect them.
+  used, and the app can read them only with the active key. Unless the old key may have
+  leaked, as above, you don't need to use or replace them: step 4 hashes each one a key in
+  the ring can open, and the dry run's `hashed` count says how many. A hash needs no key,
+  so rolling back doesn't affect them.
   Until step 4 reaches it, each one gets a 401 from step 3 on. To avoid that, run the
   driver once before step 2 with no keys on the command, as in step 4: with only the
   current key it has nothing else to move, so it only hashes them. The warning names any
   token no key in the ring can open, which gets a 401 already and can't be hashed. Add
   the key it was saved under to `ENCRYPTION_KEYS_RETIRED`, in step 1's command and at
-  step 3, or issue a new one. It doesn't count revoked or expired tokens.
+  step 3, or issue a new one. Revoked and expired tokens get a 401 either way, so it
+  leaves them alone and doesn't count them.
 - **It warns about env var values copied into unfinished jobs.** Each job it names was
   queued with a copy of an env var from before the vault. The driver can't move that copy,
   so the job fails at step 3 with `Could not prepare this job to run`. Let the job finish

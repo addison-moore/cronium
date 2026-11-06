@@ -14,6 +14,7 @@
  */
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { format, promisify } from "node:util";
 import { eq } from "drizzle-orm";
@@ -683,6 +684,45 @@ describe("API tokens from before hashing", () => {
     restartWith(KEY_OLD);
     expect(await authenticateApiToken("raw-unused")).toMatchObject({
       tokenId: id,
+    });
+  });
+
+  it("stops the ones not hashed yet with the runbook's statement for a leaked key", async () => {
+    const runbook = readFileSync(
+      path.resolve(__dirname, "../../docs/ENVIRONMENT_VARIABLES.md"),
+      "utf8",
+    );
+    const statement = /"(UPDATE api_tokens [^"]+)"/.exec(runbook)?.[1];
+    if (!statement) throw new Error("no such statement in the runbook");
+    const old = await seedOldToken("old", "raw-old");
+    const { id: newer } = await storage.createApiToken({
+      userId: OWNER,
+      name: "newer",
+      token: "raw-newer",
+    });
+    const alreadyRevoked = await seedOldToken("gone", "raw-gone", {
+      status: TokenStatus.REVOKED,
+      updatedAt: new Date("2026-01-02T03:04:05Z"),
+    });
+    const untouched = await storedToken(alreadyRevoked);
+
+    const { rows } = await pool.query(statement);
+
+    // It names what it revoked, so someone can issue new ones.
+    expect(rows).toEqual([{ id: old, name: "old" }]);
+    expect(await storedToken(alreadyRevoked)).toEqual(untouched);
+
+    restartWith(KEY_NEW, [KEY_OLD]);
+    expect(surface(await rotateAllSecrets(), TOKENS)).toMatchObject({
+      hashed: 0,
+      skipped: 3,
+      legacy: 0,
+    });
+
+    restartWith(KEY_NEW);
+    expect(await authenticateApiToken("raw-old")).toBeNull();
+    expect(await authenticateApiToken("raw-newer")).toMatchObject({
+      tokenId: newer,
     });
   });
 
