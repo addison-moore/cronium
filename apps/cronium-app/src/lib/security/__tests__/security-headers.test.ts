@@ -19,8 +19,9 @@ describe("buildContentSecurityPolicy", () => {
     expect(csp).toContain("base-uri 'self'");
   });
 
-  it("allows Monaco workers and Socket.IO connections", () => {
-    expect(csp).toContain("worker-src 'self' blob:");
+  it("keeps workers on our own origin and allows Socket.IO connections", () => {
+    // Monaco's workers are bundled chunks, so nothing needs blob: workers.
+    expect(csp).toContain("worker-src 'self';");
     expect(csp).toContain("connect-src 'self' ws: wss:");
   });
 });

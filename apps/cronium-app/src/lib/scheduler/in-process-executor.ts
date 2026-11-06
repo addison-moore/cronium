@@ -31,9 +31,17 @@ export async function runInProcessJob(
 ): Promise<void> {
   const startedAt = Date.now();
   try {
-    await jobService.updateJobStatus(job.id, JobStatus.RUNNING, {
-      startedAt: new Date(),
-    });
+    const started = await jobService.updateJobStatus(
+      job.id,
+      JobStatus.RUNNING,
+      { startedAt: new Date() },
+    );
+    // Rejected: since it was claimed, the job was cancelled or its workflow run
+    // timed out. These actions send things and can't be taken back, so stop.
+    if (started === null) {
+      console.log(`[InProcess] Job ${job.id} ended before it started`);
+      return;
+    }
 
     const result =
       job.type === JobType.HTTP_REQUEST

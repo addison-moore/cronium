@@ -10,6 +10,7 @@ import {
   computeCanvasBounds,
   deriveNodeStatuses,
   getNodeStatusClasses,
+  isFinishedRunStatus,
   parseNodeNumericId,
 } from "../execution-graph";
 
@@ -304,4 +305,24 @@ describe("getNodeStatusClasses", () => {
   ])("$name", ({ node, expected }) => {
     expect(getNodeStatusClasses(node)).toBe(expected);
   });
+});
+
+describe("isFinishedRunStatus", () => {
+  it.each([
+    [LogStatus.SUCCESS],
+    [LogStatus.FAILURE],
+    [LogStatus.TIMEOUT],
+    [LogStatus.PARTIAL],
+    ["completed"],
+    ["failed"],
+  ])("treats %s as finished", (status) => {
+    expect(isFinishedRunStatus(status)).toBe(true);
+  });
+
+  it.each([[LogStatus.RUNNING], [LogStatus.PENDING], ["running"]])(
+    "treats %s as not finished",
+    (status) => {
+      expect(isFinishedRunStatus(status)).toBe(false);
+    },
+  );
 });

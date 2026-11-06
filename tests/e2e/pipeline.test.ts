@@ -20,6 +20,9 @@
  * Scenario 4 — CSP: every page's scripts carry the request's nonce. A prerendered page
  * has none, so the browser blocks all of its JavaScript while the server still answers
  * 200. Only a production build shows this, which is what this stack runs.
+ *
+ * Scenario 5 — triggering from CI: the REST run routes, over HTTP with a bearer token.
+ * Only this stack shows the proxy letting them through and the run actually finishing.
  */
 import {
   APP_URL,
@@ -318,5 +321,171 @@ describe("scenario 4 — production CSP", () => {
       // A stylesheet listed as a script is a SyntaxError on every page.
       expect(tag).not.toMatch(/src="[^"]*\.css/);
     }
+  });
+});
+
+describe("scenario 5 — triggering runs from CI over REST", () => {
+  const post = (path: string, body?: unknown) =>
+    fetch(`${APP_URL}${path}`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { authorization: `Bearer ${token}` },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+
+  it("runs an event with its input, and the log reports how it went", async () => {
+    const marker = `e2e-rest-${Date.now().toString(36)}`;
+    const event = await trpc<EventDto>(token, "events.create", {
+      name: `e2e-rest-${marker}`,
+      type: "BASH",
+      content: `data="$(cronium_input)"\necho "REST_GOT:$data"`,
+      triggerType: "MANUAL",
+      status: "DRAFT",
+    });
+
+    const res = await post(`/api/events/${event.id}/execute`, {
+      input: { marker },
+    });
+    expect(res.status).toBe(202);
+    const { logId, jobId } = (await res.json()) as {
+      logId: number;
+      jobId: string;
+    };
+
+    // The documented way for a job to wait for the result.
+    const log = await poll<{ status: string; output: string; jobId: string }>(
+      `log ${logId} to finish`,
+      async () => {
+        const logRes = await fetch(`${APP_URL}/api/logs/${logId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        expect(logRes.status).toBe(200);
+        const body = (await logRes.json()) as {
+          status: string;
+          output: string;
+          jobId: string;
+        };
+        if (["FAILURE", "TIMEOUT", "PARTIAL"].includes(body.status)) {
+          throw new FatalPollError(`run ended: ${JSON.stringify(body)}`);
+        }
+        return body.status === "SUCCESS" ? body : undefined;
+      },
+      { timeoutMs: 150_000 },
+    );
+
+    expect(log.jobId).toBe(jobId);
+    expect(log.output).toContain("REST_GOT:");
+    expect(log.output).toContain(marker);
+
+    const { rows } = await pool.query<{ orchestrator_id: string }>(
+      `SELECT orchestrator_id FROM jobs WHERE id = $1`,
+      [jobId],
+    );
+    expect(rows[0]?.orchestrator_id).toBe("e2e-orchestrator");
+  });
+
+  it("refuses an oversized body, declared or chunked, before running anything", async () => {
+    const marker = `e2e-rest-big-${Date.now().toString(36)}`;
+    const event = await trpc<EventDto>(token, "events.create", {
+      name: marker,
+      type: "BASH",
+      content: `echo "${marker}"`,
+      triggerType: "MANUAL",
+      status: "DRAFT",
+    });
+    const url = `${APP_URL}/api/events/${event.id}/execute`;
+    const headers = { authorization: `Bearer ${token}` };
+    const twoMegabytes = "x".repeat(2 * 1024 * 1024);
+
+    const declared = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ input: { a: twoMegabytes } }),
+    });
+    expect(declared.status).toBe(413);
+
+    const chunk = new TextEncoder().encode(twoMegabytes.slice(0, 256 * 1024));
+    let sent = 0;
+    const chunked = await fetch(url, {
+      method: "POST",
+      headers,
+      duplex: "half",
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent++ >= 8) controller.close();
+          else controller.enqueue(chunk);
+        },
+      }),
+    } as RequestInit);
+    expect(chunked.status).toBe(413);
+
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM jobs WHERE event_id = $1`,
+      [event.id],
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("runs a workflow to completion", async () => {
+    const marker = `e2e-rest-wf-${Date.now().toString(36)}`;
+    const step = await trpc<EventDto>(token, "events.create", {
+      name: marker,
+      type: "BASH",
+      content: `echo "${marker}"`,
+      triggerType: "MANUAL",
+      status: "ACTIVE",
+    });
+    const created = await trpc<{ success: boolean; data: WorkflowDto }>(
+      token,
+      "workflows.create",
+      {
+        name: marker,
+        triggerType: "MANUAL",
+        status: "ACTIVE",
+        nodes: [
+          {
+            id: "n1",
+            type: "eventNode",
+            position: { x: 0, y: 0 },
+            data: {
+              eventId: step.id,
+              label: "step",
+              type: "BASH",
+              eventTypeIcon: "bash",
+            },
+          },
+        ],
+        edges: [],
+      },
+    );
+
+    const res = await post(`/api/workflows/${created.data.id}/execute`);
+    expect(res.status).toBe(202);
+    const { executionId } = (await res.json()) as { executionId: number };
+
+    const finalStatus = await poll<string>(
+      `workflow execution ${executionId} to finish`,
+      async () => {
+        const { rows } = await pool.query<{ status: string }>(
+          `SELECT status FROM workflow_executions WHERE id = $1`,
+          [executionId],
+        );
+        const status = rows[0]?.status;
+        return status && status !== "RUNNING" ? status : undefined;
+      },
+      { timeoutMs: 150_000 },
+    );
+    expect(finalStatus).toBe("SUCCESS");
+  });
+
+  it("answers an unauthenticated run request with a 401, not a redirect", async () => {
+    const res = await fetch(`${APP_URL}/api/events/1/execute`, {
+      method: "POST",
+      redirect: "manual",
+    });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "Unauthorized",
+    );
   });
 });

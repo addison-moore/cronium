@@ -128,7 +128,7 @@ This checklist tracks the implementation of security enhancements for Tool Actio
 
 - [ ] Security architecture document
 - [ ] Encryption key management guide
-- [ ] Audit log retention policy
+- [x] Audit log retention policy (`docs/DEPLOYMENT.md#data-retention`)
 - [ ] Rate limiting configuration guide
 - [ ] Security best practices for users
 - [ ] Incident response procedures

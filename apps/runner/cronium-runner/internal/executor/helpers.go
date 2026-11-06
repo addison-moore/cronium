@@ -10,6 +10,10 @@ import (
 	"github.com/addison-moore/cronium/apps/runner/cronium-runner/pkg/types"
 )
 
+// extractHelpers writes the helper binaries to a directory. A variable so tests
+// can run the rest of SetupHelpers in a build with no helpers embedded.
+var extractHelpers = helpers.ExtractAllHelpers
+
 // SetupHelpers prepares the runtime helpers for execution
 func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 	e.log.Info("Setting up runtime helpers")
@@ -90,7 +94,7 @@ func (e *Executor) SetupHelpers(manifest *types.Manifest) error {
 
 	// Extract helper binaries
 	helpersDir := filepath.Join(e.workDir, ".cronium", "bin")
-	if err := helpers.ExtractAllHelpers(helpersDir); err != nil {
+	if err := extractHelpers(helpersDir); err != nil {
 		return fmt.Errorf("failed to extract helpers: %w", err)
 	}
 
@@ -174,4 +178,18 @@ func (e *Executor) CollectHelperOutput() (interface{}, error) {
 	}
 
 	return output.Data, nil
+}
+
+// CollectHelperCondition returns the condition a script set in bundled mode, or
+// nil if it set none.
+func (e *Executor) CollectHelperCondition() (*bool, error) {
+	var condition helpers.ConditionData
+	if err := helpers.ReadJSON(filepath.Join(e.workDir, ".cronium", "condition.json"), &condition); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read condition: %w", err)
+	}
+
+	return &condition.Condition, nil
 }

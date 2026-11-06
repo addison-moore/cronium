@@ -10,7 +10,7 @@
  *   - script-src uses a per-request nonce + `strict-dynamic`, so Next's own
  *     bundled scripts run (Next injects the nonce) but injected inline scripts
  *     do not.
- *   - worker-src allows `blob:` for the Monaco editor's web workers.
+ *   - worker-src allows our own origin only. Monaco's workers are bundled chunks.
  *   - connect-src allows same-origin plus ws/wss for Socket.IO live logs and
  *     the terminal (proxied to the page origin in production).
  *   - style-src allows `unsafe-inline`: Next/Tailwind inject style attributes
@@ -28,7 +28,7 @@ export function buildContentSecurityPolicy(nonce: string): string {
     `img-src 'self' data: blob: https:`,
     `font-src 'self' data:`,
     `connect-src 'self' ws: wss:`,
-    `worker-src 'self' blob:`,
+    `worker-src 'self'`,
     `frame-src 'self'`,
     `frame-ancestors 'none'`,
     `object-src 'none'`,
