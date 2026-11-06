@@ -41,8 +41,11 @@ export function JobStatusCard({ job }: JobStatusCardProps) {
         </div>
 
         {job.lastError && (
-          <div className="bg-destructive/10 rounded-md p-3">
-            <p className="text-destructive text-sm">{job.lastError}</p>
+          // Reversed so a long one opens at its end, where a traceback says what went wrong.
+          <div className="bg-destructive/10 flex max-h-64 flex-col-reverse overflow-auto rounded-md p-3">
+            <p className="text-destructive text-sm break-words whitespace-pre-wrap">
+              {job.lastError}
+            </p>
           </div>
         )}
 

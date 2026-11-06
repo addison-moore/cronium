@@ -46,7 +46,7 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 	executorMgr := executors.NewManager()
 
 	// Register container executor
-	containerExec, err := container.NewExecutor(cfg.Container, apiClient, log)
+	containerExec, err := container.NewExecutor(cfg.Container, orchestratorID, apiClient, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create container executor: %w", err)
 	}
@@ -107,6 +107,7 @@ func NewSimpleOrchestrator(cfg *config.Config, log *logrus.Logger) (*SimpleOrche
 		api:      apiClient,
 		executor: executorMgr,
 		metrics:  metricsCollector,
+		recovery: containerExec,
 	}, daemonConfig{
 		orchestratorID: orchestratorID,
 		spoolDir:       spoolDir,
@@ -129,9 +130,10 @@ func (o *SimpleOrchestrator) Run(ctx context.Context) error {
 	o.log.Info("Starting orchestrator")
 	defer close(o.core.done)
 
-	// No startup "orphan recovery": ownership is a lease in the database, and
-	// the app's sweeper re-queues or fails anything whose lease expired. This
-	// orchestrator's only recovery duty is retrying its own spooled results.
+	// Ownership is a lease in the database, and the app's sweeper re-queues or fails
+	// anything whose lease expired. This process's recovery duties are to retry its
+	// spooled results and to pick up or remove the containers an earlier process
+	// left: the core does both before it claims anything.
 
 	// Start periodic cleanup if we have a container executor
 	if o.containerExec != nil {

@@ -340,6 +340,7 @@ func (m *MultiServerExecutor) executeLocally(ctx context.Context, job *types.Job
 	// shared, so build a fresh one without the multi-server keys.
 	localJob := *job
 	localJob.Type = types.JobTypeContainer
+	localJob.LocalBranch = true
 	localJob.Execution.Target = types.Target{Type: types.TargetTypeLocal}
 	meta := make(map[string]any, len(job.Metadata))
 	for k, v := range job.Metadata {

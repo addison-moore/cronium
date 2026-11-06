@@ -9,6 +9,7 @@ import (
 
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/api"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors"
+	"github.com/addison-moore/cronium/apps/orchestrator/internal/executors/container"
 	"github.com/addison-moore/cronium/apps/orchestrator/internal/metrics"
 	"github.com/addison-moore/cronium/apps/orchestrator/pkg/types"
 	"github.com/sirupsen/logrus"
@@ -35,6 +36,22 @@ type jobExecutor interface {
 	Execute(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error)
 }
 
+// jobRecovery is what lets a job outlive the process that started it. An executor
+// with no such jobs needs no implementation; the core then waits for every job it
+// holds before stopping, and has nothing to find when it starts.
+type jobRecovery interface {
+	// FindLeftoverJobs lists what an earlier process left on this host.
+	FindLeftoverJobs(ctx context.Context) ([]types.LeftoverJob, error)
+	// ResumeJob follows a found job to its end, like Execute does a new one.
+	ResumeJob(ctx context.Context, job *types.Job) (<-chan types.ExecutionUpdate, error)
+	// RemoveLeftoverJob removes a found job's containers and network.
+	RemoveLeftoverJob(ctx context.Context, jobID string) error
+	// CanHandOver reports whether a job can be left running for the next process.
+	CanHandOver(jobID string) bool
+	// ReleaseJob says a job's result is safe, so its containers can go.
+	ReleaseJob(jobID string)
+}
+
 // jobMetrics is the subset of *metrics.Collector the daemon core uses.
 type jobMetrics interface {
 	RecordJobReceived(jobType string)
@@ -49,7 +66,11 @@ var (
 	_ jobAPI      = (*api.Client)(nil)
 	_ jobExecutor = (*executors.Manager)(nil)
 	_ jobMetrics  = (*metrics.Collector)(nil)
+	_ jobRecovery = (*container.Executor)(nil)
 )
+
+// cancelReasonShutdown marks a job this process gave up on because it is stopping.
+const cancelReasonShutdown = "shutdown"
 
 // daemonDeps are the injectable collaborators of the daemon core.
 type daemonDeps struct {
@@ -57,6 +78,8 @@ type daemonDeps struct {
 	api      jobAPI
 	executor jobExecutor
 	metrics  jobMetrics
+	// recovery is optional; see jobRecovery.
+	recovery jobRecovery
 }
 
 // daemonConfig carries the config knobs the daemon core actually uses.
@@ -78,6 +101,7 @@ type daemonCore struct {
 	api      jobAPI
 	executor jobExecutor
 	metrics  jobMetrics
+	recovery jobRecovery
 
 	orchestratorID string
 	spoolDir       string
@@ -96,7 +120,8 @@ type daemonCore struct {
 	leaseHBTimeout      time.Duration // per lease-heartbeat request timeout
 	reportTimeout       time.Duration // detached completion/failure report timeout
 	spoolReportTimeout  time.Duration // per spooled-completion retry timeout
-	shutdownWait        time.Duration // graceful shutdown bound
+	shutdownWait        time.Duration // how long stopping waits for jobs it can't leave running
+	shutdownSettle      time.Duration // how long it then gives those jobs to clean up
 	shutdownTick        time.Duration // graceful shutdown poll interval
 
 	// Per-stream in-memory output cap (see cappedCapture).
@@ -119,8 +144,12 @@ type daemonCore struct {
 	mu             sync.RWMutex
 	activeJobs     map[string]*types.Job
 	activeCancels  map[string]context.CancelFunc
-	cancelReasons  map[string]string // jobID -> "requested" | "fenced"
+	cancelReasons  map[string]string // jobID -> "requested" | "fenced" | cancelReasonShutdown
 	isShuttingDown bool
+
+	// leftoversResolved is set once what an earlier process left has been dealt
+	// with, which comes before the first claim. Only the poll loop touches it.
+	leftoversResolved bool
 
 	// Lifetime counters (atomic) for heartbeat/metrics reporting
 	jobsProcessed atomic.Int64
@@ -136,6 +165,7 @@ func newDaemonCore(deps daemonDeps, cfg daemonConfig) *daemonCore {
 		api:      deps.api,
 		executor: deps.executor,
 		metrics:  deps.metrics,
+		recovery: deps.recovery,
 
 		orchestratorID: cfg.orchestratorID,
 		spoolDir:       cfg.spoolDir,
@@ -152,8 +182,11 @@ func newDaemonCore(deps daemonDeps, cfg daemonConfig) *daemonCore {
 		leaseHBTimeout:      15 * time.Second,
 		reportTimeout:       60 * time.Second,
 		spoolReportTimeout:  30 * time.Second,
-		shutdownWait:        30 * time.Second,
-		shutdownTick:        1 * time.Second,
+		// The compose files' stop_grace_period for the orchestrator must clear
+		// shutdownWait + shutdownSettle.
+		shutdownWait:   30 * time.Second,
+		shutdownSettle: 5 * time.Second,
+		shutdownTick:   1 * time.Second,
 
 		outputCapBytes: outputStreamCapBytes,
 		now:            time.Now,
@@ -227,6 +260,20 @@ func (c *daemonCore) pollAndProcessJobs(ctx context.Context) error {
 	if shuttingDown {
 		return nil
 	}
+
+	// Deal with what an earlier process left before taking on anything new. The app
+	// being unreachable blocks this and claiming alike, so nothing is lost by
+	// waiting, and adopted jobs count towards the limit below.
+	if !c.leftoversResolved {
+		if err := c.resolveLeftovers(ctx); err != nil {
+			return fmt.Errorf("failed to resolve jobs left by an earlier process: %w", err)
+		}
+		c.leftoversResolved = true
+		c.mu.RLock()
+		activeCount = len(c.activeJobs)
+		c.mu.RUnlock()
+	}
+
 	if activeCount >= c.maxConcurrent {
 		c.log.Debug("At maximum concurrent jobs, skipping poll")
 		return nil
@@ -252,34 +299,115 @@ func (c *daemonCore) pollAndProcessJobs(ctx context.Context) error {
 		// Record job received
 		c.metrics.RecordJobReceived(string(job.Type))
 
-		// Per-job cancellable context: the lease heartbeat loop cancels it on
-		// cancelRequested or when self-fencing
-		jobCtx, cancel := context.WithCancel(ctx)
-
-		// Add to active jobs
-		c.mu.Lock()
-		c.activeJobs[job.ID] = job
-		c.activeCancels[job.ID] = cancel
-		c.mu.Unlock()
-
-		// Update active jobs metric
-		c.metrics.IncActiveJobs()
-
 		// Process job in goroutine
-		go c.processJob(jobCtx, job)
+		go c.processJob(c.trackJob(ctx, job), job)
 	}
 
 	return nil
 }
 
-// processJob handles a single job execution. Reporting uses a background
-// context: a produced result must be deliverable even while the job's own
-// context (timeout, cancellation, shutdown) is already dead — the old code
+// trackJob registers a job as active and returns its context, which the lease
+// heartbeat loop cancels on cancelRequested or when self-fencing. It isn't tied to
+// ctx, so this process stopping doesn't by itself end the job: a container left
+// running is the next process's to pick up, and cancelling it here would kill it.
+func (c *daemonCore) trackJob(ctx context.Context, job *types.Job) context.Context {
+	jobCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+
+	c.mu.Lock()
+	c.activeJobs[job.ID] = job
+	c.activeCancels[job.ID] = cancel
+	c.mu.Unlock()
+
+	c.metrics.IncActiveJobs()
+	return jobCtx
+}
+
+// resolveLeftovers decides what happens to jobs an earlier process left on this
+// host. A lease is what says whether a job is still this orchestrator's, so asking
+// to renew them settles it in one step: a job whose lease renews is followed to its
+// end, and one whose lease doesn't has been failed or re-queued by the sweeper, or
+// finished, so its containers are removed. Nothing is touched until the app has
+// answered. On an error, this is tried again on the next poll.
+func (c *daemonCore) resolveLeftovers(ctx context.Context) error {
+	if c.recovery == nil {
+		return nil
+	}
+	leftovers, err := c.recovery.FindLeftoverJobs(ctx)
+	if err != nil {
+		return err
+	}
+	if len(leftovers) == 0 {
+		return nil
+	}
+
+	resumable := make([]string, 0, len(leftovers))
+	for _, leftover := range leftovers {
+		if leftover.Job != nil {
+			resumable = append(resumable, leftover.ID)
+		}
+	}
+	extended := make(map[string]bool, len(resumable))
+	cancelRequested := make(map[string]bool)
+	for start := 0; start < len(resumable); start += leftoverHeartbeatBatch {
+		end := min(start+leftoverHeartbeatBatch, len(resumable))
+		hbCtx, cancel := context.WithTimeout(ctx, c.leaseHBTimeout)
+		resp, err := c.api.JobsHeartbeat(hbCtx, resumable[start:end])
+		cancel()
+		if err != nil {
+			return err
+		}
+		for _, id := range resp.Extended {
+			extended[id] = true
+		}
+		for _, id := range resp.CancelRequested {
+			cancelRequested[id] = true
+		}
+	}
+
+	for _, leftover := range leftovers {
+		log := c.log.WithField("jobID", leftover.ID)
+		if !extended[leftover.ID] {
+			if leftover.Job != nil {
+				log.Warn("Removing a job left by an earlier process: its lease is gone, so the sweeper has failed or re-queued it, or it already finished")
+			} else {
+				log.Warn("Removing what an earlier process left of a job with no script to follow: if the job hasn't ended, the sweeper will fail or re-queue it when its lease runs out")
+			}
+			if err := c.recovery.RemoveLeftoverJob(ctx, leftover.ID); err != nil {
+				log.WithError(err).Error("Could not remove what an earlier process left; the periodic cleanup will try again")
+			}
+			continue
+		}
+		log.Info("Picking up a job left running by an earlier process")
+		go c.resumeJob(c.trackJob(ctx, leftover.Job), leftover.Job)
+		if cancelRequested[leftover.ID] {
+			c.cancelJob(leftover.ID, "requested")
+		}
+	}
+	return nil
+}
+
+// leftoverHeartbeatBatch keeps a renewal under the 200 jobs the app reads from one
+// heartbeat: past that it would answer as if the rest weren't ours to renew.
+const leftoverHeartbeatBatch = 100
+
+// processJob handles a single job execution.
+func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
+	c.log.WithField("jobID", job.ID).Info("Starting job execution")
+	c.runJob(ctx, job, c.executor.Execute)
+}
+
+// resumeJob follows a job an earlier process started and reports it the same way.
+func (c *daemonCore) resumeJob(ctx context.Context, job *types.Job) {
+	c.runJob(ctx, job, c.recovery.ResumeJob)
+}
+
+// runJob follows a job's updates and reports its result. Reporting uses a
+// background context: a produced result must be deliverable even while the job's
+// own context (timeout, cancellation, shutdown) is already dead — the old code
 // reported with the cancelled context and lost every in-flight completion on
 // SIGTERM (review C5).
-func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
+func (c *daemonCore) runJob(ctx context.Context, job *types.Job, start func(context.Context, *types.Job) (<-chan types.ExecutionUpdate, error)) {
 	log := c.log.WithField("jobID", job.ID)
-	log.Info("Starting job execution")
 
 	// Carry the per-job capability token (HI-10) on every context derived from
 	// here — including the detached completion/report contexts, which use
@@ -323,6 +451,13 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 		c.metrics.DecActiveJobs()
 	}()
 
+	// The result is safe by the time this runs, reported or spooled, so the job's
+	// containers can go. Registered after the block above so the slot is freed once
+	// they have.
+	if c.recovery != nil {
+		defer c.recovery.ReleaseJob(job.ID)
+	}
+
 	// Create job context with timeout
 	jobCtx := ctx
 	if job.Timeout > 0 {
@@ -331,11 +466,14 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 		defer cancel()
 	}
 
-	// Track job start time
+	// Track job start time. A job found after a restart started before this process.
 	jobStartTime := time.Now()
+	if job.StartedAt != nil {
+		jobStartTime = *job.StartedAt
+	}
 
 	// Execute job using executor manager
-	updates, err := c.executor.Execute(jobCtx, job)
+	updates, err := start(jobCtx, job)
 	if err != nil {
 		log.WithError(err).Error("Failed to start job execution")
 		c.jobsProcessed.Add(1)
@@ -366,6 +504,9 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 	stdout := newCappedCapture(c.outputCapBytes)
 	stderr := newCappedCapture(c.outputCapBytes)
 	startTime := time.Now()
+	if job.StartedAt != nil {
+		startTime = *job.StartedAt
+	}
 
 	for update := range updates {
 		switch update.Type {
@@ -416,6 +557,14 @@ func (c *daemonCore) processJob(ctx context.Context, job *types.Job) {
 	c.mu.RLock()
 	cancelReason := c.cancelReasons[job.ID]
 	c.mu.RUnlock()
+
+	// This process gave up on the job only because it is stopping, and nobody chose
+	// that. Whether to run it again is the job's lease-loss policy's call, which the
+	// sweeper applies when the lease runs out, so report nothing that would pre-empt it.
+	if cancelReason == cancelReasonShutdown {
+		log.Warn("Job abandoned because the orchestrator is stopping; the sweeper will fail or re-queue it when its lease runs out")
+		return
+	}
 
 	// Determine final status. Exit code -1 = timeout, -2 = cancelled — both
 	// real statuses now, not overloaded failure codes (review H8).
@@ -696,41 +845,80 @@ func (c *daemonCore) metricsLoop(ctx context.Context) {
 	}
 }
 
-// gracefulShutdown performs a graceful shutdown
+// gracefulShutdown stops taking on work and exits as soon as nothing here depends
+// on this process. A container job whose script is running doesn't: the next process
+// picks it up, and waiting for it would cost the whole stack, because on a recreate
+// Compose stops the app first and starts nothing until this process has stopped.
+// That wait also eats the lease that lets the next process pick the job up. So only
+// jobs that can't be left are waited for, and the rest stay running.
 func (c *daemonCore) gracefulShutdown() error {
 	c.log.Info("Starting graceful shutdown")
 
 	c.mu.Lock()
 	c.isShuttingDown = true
-	activeCount := len(c.activeJobs)
 	c.mu.Unlock()
 
-	if activeCount > 0 {
-		c.log.WithField("count", activeCount).Info("Waiting for active jobs to complete")
-
-		// Wait for jobs to complete with timeout
-		timeout := time.After(c.shutdownWait)
-		ticker := time.NewTicker(c.shutdownTick)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timeout:
-				c.log.Warn("Timeout waiting for jobs to complete")
-				return nil
-			case <-ticker.C:
-				c.mu.RLock()
-				remaining := len(c.activeJobs)
-				c.mu.RUnlock()
-
-				if remaining == 0 {
-					c.log.Info("All jobs completed")
-					return nil
-				}
-				c.log.WithField("remaining", remaining).Debug("Waiting for jobs")
-			}
-		}
+	if remaining := c.jobsToWaitFor(); len(remaining) > 0 {
+		c.log.WithField("count", len(remaining)).Info("Waiting for active jobs to complete")
+		c.waitForJobs(remaining)
 	}
 
+	if left := c.activeJobCount(); left > 0 {
+		c.log.WithField("count", left).Info("Leaving running jobs for the next orchestrator process to pick up")
+	}
 	return nil
+}
+
+// waitForJobs waits for jobs that can't be left running, then gives up on any that
+// outlast the wait, so they clean up after themselves rather than being cut off.
+func (c *daemonCore) waitForJobs(jobs []string) {
+	timeout := time.After(c.shutdownWait)
+	ticker := time.NewTicker(c.shutdownTick)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			c.log.WithField("count", len(jobs)).Warn("Timeout waiting for jobs to complete")
+			for _, id := range jobs {
+				c.cancelJob(id, cancelReasonShutdown)
+			}
+			settled := time.After(c.shutdownSettle)
+			for len(jobs) > 0 {
+				select {
+				case <-settled:
+					return
+				case <-ticker.C:
+					jobs = c.jobsToWaitFor()
+				}
+			}
+			return
+		case <-ticker.C:
+			jobs = c.jobsToWaitFor()
+			if len(jobs) == 0 {
+				c.log.Info("All jobs completed")
+				return
+			}
+			c.log.WithField("remaining", len(jobs)).Debug("Waiting for jobs")
+		}
+	}
+}
+
+// jobsToWaitFor lists the active jobs this process can't stop and leave running.
+func (c *daemonCore) jobsToWaitFor() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	jobs := make([]string, 0, len(c.activeJobs))
+	for id := range c.activeJobs {
+		if c.recovery == nil || !c.recovery.CanHandOver(id) {
+			jobs = append(jobs, id)
+		}
+	}
+	return jobs
+}
+
+func (c *daemonCore) activeJobCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.activeJobs)
 }

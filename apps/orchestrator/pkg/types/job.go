@@ -42,12 +42,27 @@ type Job struct {
 	// this job. Not persisted or logged.
 	CapabilityToken string `json:"-"`
 
+	// LocalBranch marks the local half of a job that also runs on remote servers.
+	// Its result only counts together with the other halves, which end with the
+	// process that started them, so a later process can't finish it.
+	LocalBranch bool `json:"-"`
+
 	// Runtime fields
-	AcknowledgedAt *time.Time    `json:"-"`
-	StartedAt      *time.Time    `json:"-"`
-	CompletedAt    *time.Time    `json:"-"`
-	LeaseExpiry    *time.Time    `json:"-"`
-	Timeout        time.Duration `json:"-"`
+	AcknowledgedAt *time.Time `json:"-"`
+	// StartedAt is when the script started, set on a job found running after a
+	// restart so that its reported duration covers the whole run.
+	StartedAt   *time.Time    `json:"-"`
+	CompletedAt *time.Time    `json:"-"`
+	LeaseExpiry *time.Time    `json:"-"`
+	Timeout     time.Duration `json:"-"`
+}
+
+// LeftoverJob is what an earlier orchestrator process left on this host for one
+// job. Job is nil when the job's script never started, so there is no result to
+// wait for and only its containers and network to remove.
+type LeftoverJob struct {
+	ID  string
+	Job *Job
 }
 
 // ExecutionConfig contains the job execution configuration

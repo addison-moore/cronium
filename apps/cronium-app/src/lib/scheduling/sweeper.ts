@@ -45,6 +45,25 @@ export const CLAIM_STALL_MS = 10 * 60_000;
 
 const SWEEP_BATCH = 100;
 
+/**
+ * How long a worker that just started holds off sweeping: one claim lease
+ * (DEFAULT_CLAIM_LEASE_MS). A worker starting usually means the stack restarted.
+ * An orchestrator can only renew a lease through the app, so a lease that ran out
+ * while the app was down says nothing about whether its owner is alive, and that
+ * owner's job may be running fine. The orchestrator also starts after the worker,
+ * so sweeping straight away would fail every job a slow restart outlasted the lease
+ * of, just before its owner could renew it.
+ */
+export const SWEEP_START_GRACE_MS = 60_000;
+
+/** Whether a worker started at `startedAtMs` may sweep yet. */
+export function sweepGraceOver(
+  startedAtMs: number,
+  nowMs: number = Date.now(),
+): boolean {
+  return nowMs - startedAtMs >= SWEEP_START_GRACE_MS;
+}
+
 export interface SweepResult {
   requeued: number;
   failed: number;

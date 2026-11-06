@@ -27,6 +27,10 @@ services:
       context: ../../apps/orchestrator
       dockerfile: Dockerfile.dev
     container_name: cronium-orchestrator-dev
+    # It exits at once when only container jobs are running: they carry on, and the
+    # next orchestrator process picks them up. This is for what can't be left running
+    # (remote jobs, and jobs still starting), which get up to 30s, plus 5s to clean up.
+    stop_grace_period: 40s
     environment:
       # Configuration file path
       CONFIG_FILE: /app/config/cronium-orchestrator.yaml
@@ -38,6 +42,8 @@ services:
 
       # Server Configuration
       CRONIUM_SERVER_ID: ${ORCHESTRATOR_ID:-dev-orchestrator-01}
+      # Must outlive the container: it owns this stack's job leases and containers.
+      CRONIUM_ORCHESTRATOR_ID: ${ORCHESTRATOR_ID:-dev-orchestrator-01}
       CRONIUM_SERVER_PORT: 8080
       CRONIUM_SERVER_METRICS_ENABLED: true
       CRONIUM_SERVER_METRICS_PORT: 9090

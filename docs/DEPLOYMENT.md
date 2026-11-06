@@ -103,6 +103,16 @@ the event form and the JSON import dialog say that a reverse proxy refused it, a
 callers of the REST API and `/api/mcp` get the proxy's own 413, which may not be
 JSON.
 
+Anything else in front of the app can also answer in its place. When that happens,
+the app names the status and says it isn't Cronium's answer, as in `Got HTTP 502,
+not Cronium's answer` while Cronium restarts behind a proxy. A sign-in proxy's
+redirect reads `Got a redirect, not Cronium's answer`, and signing in again in a
+new tab keeps what's in the form. A web application firewall needs an exception for
+`/api/trpc/` and the event routes of the REST API: at its default settings,
+ModSecurity with the OWASP Core Rule Set refuses ordinary scripts, such as one with
+`rm -rf /tmp/build` or `curl ... | bash` in it, with a 403, and any request over
+128 KB with a 400.
+
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
 origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list
@@ -239,13 +249,61 @@ docker compose up -d
   `failed to attach to container: unable to upgrade to tcp, received 403`, with whatever
   status your proxy answers, and its container is never started. Remote jobs don't use
   this endpoint.
+- **`docker compose pull` updates the images, not `docker-compose.yml`.** Re-running the
+  installer replaces the file and keeps the old one as `docker-compose.yml.bak`. Since
+  November 2026 the file gives the orchestrator and runtime only the variables it lists,
+  not all of `.env`, and gives the orchestrator 40 seconds to stop. With an older file, any
+  `.env` change still recreates both, and a remote job gets 10 seconds when they stop, not 30.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
+- **Running jobs carry on.** See [Jobs during a restart](#jobs-during-a-restart).
 
 Both compose files give `cronium-app` 20 seconds to stop and `cronium-worker` 40, so
 requests and jobs can finish and the last tool audit log entries can be written. If you
 run the images another way, allow them the same: a process killed sooner loses the
 entries it hadn't written.
+
+### Jobs during a restart
+
+A container job keeps running while the orchestrator restarts, whether for an upgrade, a
+`.env` change or a crash. The orchestrator exits as soon as it's told to stop and leaves
+the job's containers in place, and its next process picks them up. It follows the script
+to its end and reports the result, including for a script that ended while no
+orchestrator was running. A script that passed its timeout in the meantime is stopped
+when the orchestrator returns.
+
+- **If only the orchestrator is down, for longer than a job's lease,** which is about 60
+  to 90 seconds, the worker fails the job with `Lease expired`, or re-queues it if it has
+  retries left. The next orchestrator process removes the old containers, script
+  included. When the whole stack restarts this doesn't apply: a worker that has just
+  started waits a lease's length before failing anything, however long the restart took.
+- **If the app stays down for more than a minute while the orchestrator stays up,** running
+  jobs are stopped, and failed or re-queued, because their leases can't be renewed.
+- **What can't be left running gets up to 30 seconds:** remote jobs, jobs that run both
+  locally and remotely, and jobs still starting. If one is still going after that, it's
+  stopped, and failed or re-queued once its lease runs out. The compose files give the
+  orchestrator 40 seconds to stop, for this. If you run it another way, allow it the same.
+- **A script calling `cronium.*` helpers while the app restarts** waits on retries, which
+  covered a 27-second restart when tested. A much longer one can make a call fail, and
+  what happens next is up to the script.
+- **Changing `ORCHESTRATOR_ID`** hands nothing over: the new ID doesn't own the old
+  jobs, and their containers stay until you remove them.
+
+Changing `.env` only recreates the services that read what changed, so a value only the
+app and worker read doesn't touch the orchestrator at all.
+
+`docker compose stop` and `docker compose down` leave running jobs in place too. After
+`down`, Compose reports `Resource is still in use` for the network, because those jobs'
+sidecars are attached to it. This is harmless if you bring the stack back up, and the
+next orchestrator process deals with them: after `down -v` the database that knew them
+is gone, so they're removed. To remove them yourself, including when you won't bring the
+stack back (`install.sh --uninstall` does this for you):
+
+```bash
+docker ps -aq --filter label=cronium.managed=true --filter label=cronium.stack=cronium | xargs -r docker rm -f
+docker network ls -q --filter label=cronium.managed=true --filter label=cronium.stack=cronium | xargs -r docker network rm
+docker network rm cronium
+```
 
 ## Backup and Restore
 
