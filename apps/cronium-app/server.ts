@@ -16,6 +16,7 @@ import {
   closeSocketSecurityStore,
   subscribeToSocketSecurityEvents,
 } from "./src/server/socket-security-store";
+import { SHUTDOWN_TIMEOUT_MS } from "./src/server/socket-server-shutdown";
 import { socketUserAuthorizationFingerprint } from "./src/lib/socket-ticket";
 import { storage } from "./src/server/storage";
 import { UserStatus, type Job, type Log } from "./src/shared/schema";
@@ -249,10 +250,6 @@ if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) {
   throw new Error("SOCKET_PORT must be an integer between 0 and 65535");
 }
 
-// There is nothing to save when this process stops, so all this limits is the wait
-// for a peer that has stopped answering: Valkey, or a client partway through a request.
-const SHUTDOWN_TIMEOUT_MS = 3_000;
-
 let unsubscribeSecurityEvents: (() => Promise<void>) | null = null;
 let revalidationInterval: NodeJS.Timeout | null = null;
 let revalidationInFlight = false;
@@ -298,7 +295,10 @@ async function closeConnections(): Promise<void> {
  * its servers as a failure, so that would turn every `docker stop` into Exited (1).
  */
 function shutdown(exitCode: number): void {
-  if (shuttingDown) return;
+  // The other signal arriving during a stop. The same one again never gets here:
+  // `once` has removed its listener, so the default action kills the process, even
+  // if its event loop is stuck.
+  if (shuttingDown) process.exit(exitCode);
   shuttingDown = true;
 
   setTimeout(() => {
@@ -315,8 +315,8 @@ function shutdown(exitCode: number): void {
     .finally(() => process.exit(exitCode));
 }
 
-// `once`, so a second signal ends the process at once. start.sh sends one when Next
-// exits first, and it is how a second Ctrl-C gets past a stop that is taking too long.
+// A second signal ends the process at once, whichever it is. start.sh sends one when
+// Next exits first, and it is how a second Ctrl-C gets past a stop that is taking too long.
 process.once("SIGTERM", () => shutdown(143));
 process.once("SIGINT", () => shutdown(130));
 

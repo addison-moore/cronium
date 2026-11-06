@@ -6,6 +6,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { Manager } from "socket.io-client";
+import { SHUTDOWN_TIMEOUT_MS } from "../socket-server-shutdown";
 
 /**
  * Stops the bundle the image runs, as a real process, because what kept it running
@@ -20,8 +21,6 @@ jest.setTimeout(30_000);
 const APP_DIR = path.resolve(__dirname, "../../..");
 const BUNDLE = "dist/socket-server-stop-test.cjs";
 
-/** SHUTDOWN_TIMEOUT_MS in server.ts, which starts a server if it is imported. */
-const SHUTDOWN_TIMEOUT_MS = 3_000;
 /** Allows for a slow machine, and stays well inside Docker's 10 seconds. */
 const STOPPED_WITHIN_MS = SHUTDOWN_TIMEOUT_MS + 3_000;
 const OUT_OF_TIME = "exiting anyway";
@@ -287,20 +286,32 @@ describe("stopping the socket server", () => {
     expect(tookMs).toBeLessThan(STOPPED_WITHIN_MS);
   });
 
-  it("ends at once on a second signal, which start.sh sends when Next exits first", async () => {
-    await launchAndWaitUntilListening();
-    valkey.answering = false;
+  it.each([
+    // The same signal again finds no listener. This is what start.sh sends when Next
+    // exits first, and what a second Ctrl-C sends.
+    ["SIGTERM", "SIGTERM", null, "SIGTERM"],
+    ["SIGINT", "SIGINT", null, "SIGINT"],
+    // The other signal still has its listener, which has to end the process too.
+    ["SIGTERM", "SIGINT", 130, null],
+    ["SIGINT", "SIGTERM", 143, null],
+  ] as const)(
+    "ends at once on %s followed by %s, without waiting for Valkey",
+    async (first, second, status, killedBy) => {
+      await launchAndWaitUntilListening();
+      valkey.answering = false;
 
-    server?.kill("SIGTERM");
-    await waitFor("the first signal to land", () =>
-      output.includes("cleaned up"),
-    );
-    const { code, signal } = await stop("SIGTERM");
+      server?.kill(first);
+      await waitFor("the first signal to land", () =>
+        output.includes("cleaned up"),
+      );
+      const { code, signal, tookMs } = await stop(second);
 
-    expect(signal).toBe("SIGTERM");
-    expect(code).toBeNull();
-    expect(output).not.toContain(OUT_OF_TIME);
-  });
+      expect(code).toBe(status);
+      expect(signal).toBe(killedBy);
+      expect(output).not.toContain(OUT_OF_TIME);
+      expect(tookMs).toBeLessThan(SHUTDOWN_TIMEOUT_MS);
+    },
+  );
 
   it("reports a stop during startup as a stop, not a failed preflight", async () => {
     // The store gives up on connecting after 5 seconds, so the preflight fails while
