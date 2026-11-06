@@ -51,7 +51,13 @@ import {
   parseInitialTags,
   type EventFormInitialData,
 } from "./lib/event-form-defaults";
-import { buildEventPayload, isScriptEventType } from "./lib/event-payload";
+import {
+  buildEventPayload,
+  isScriptEventType,
+  saveRequestBytes,
+  tooLongToSaveMessage,
+} from "./lib/event-payload";
+import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
 
 const eventsCopy = {
   basicInformation: "Basic Information",
@@ -187,6 +193,7 @@ export default function EventForm({
     setValue,
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -353,6 +360,29 @@ export default function EventForm({
         // location, and normalizes schedule/content fields).
         const formData = buildEventPayload(data);
 
+        // Say so here rather than send 10 MB to be told the same thing. Beside the script
+        // and scrolled to, because the submit button is a screen or more below it.
+        const requestBytes = saveRequestBytes(
+          isEditing && eventId ? { id: eventId, ...formData } : formData,
+        );
+        if (requestBytes > MAX_REQUEST_BODY_BYTES) {
+          const message = tooLongToSaveMessage(data.type, requestBytes);
+          if (isScriptEventType(data.type)) {
+            setError(
+              "content",
+              { type: "tooLong", message },
+              { shouldFocus: true },
+            );
+          } else {
+            toast({
+              title: "Too long to save",
+              description: message,
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+
         let resultId: number | undefined;
 
         if (isEditing && eventId) {
@@ -397,6 +427,7 @@ export default function EventForm({
       eventId,
       createEventMutation,
       updateEventMutation,
+      setError,
       toast,
       onSuccess,
     ],
@@ -651,19 +682,23 @@ export default function EventForm({
                 name="content"
                 control={control}
                 render={({ field }) => (
-                  <MonacoEditor
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    language={
-                      type === EventType.PYTHON
-                        ? "python"
-                        : type === EventType.BASH
-                          ? "bash"
-                          : "javascript"
-                    }
-                    height="400px"
-                    editorSettings={editorSettings}
-                  />
+                  // Takes the focus when a submit fails on the script, as the other
+                  // fields do, which brings it into view.
+                  <div ref={field.ref} tabIndex={-1} className="outline-none">
+                    <MonacoEditor
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      language={
+                        type === EventType.PYTHON
+                          ? "python"
+                          : type === EventType.BASH
+                            ? "bash"
+                            : "javascript"
+                      }
+                      height="400px"
+                      editorSettings={editorSettings}
+                    />
+                  </div>
                 )}
               />
               {errors.content && (

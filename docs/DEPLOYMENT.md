@@ -95,6 +95,11 @@ Compose binds host port 5002 to loopback; never proxy `/broadcast/*`. Those
 routes are intended only for Cronium services and require
 `Authorization: Bearer $SOCKET_BROADCAST_KEY`.
 
+A reverse proxy in front of the app also carries saves, so let it pass request
+bodies of at least 10 MB, the most one save can carry. nginx's
+`client_max_body_size` defaults to 1 MB, and past that it refuses a script before
+Cronium sees it.
+
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
 origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list

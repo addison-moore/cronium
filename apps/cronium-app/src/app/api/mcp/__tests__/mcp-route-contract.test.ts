@@ -46,6 +46,10 @@ import { sessionFromApiToken } from "@/server/api/trpc";
 import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
 import { POST, GET } from "@/app/api/mcp/route";
 import { MCP_TOOLS } from "@/app/api/mcp/tools";
+import {
+  EVENT_TOO_LONG_MESSAGE,
+  MAX_REQUEST_BODY_BYTES,
+} from "@/shared/request-limits";
 
 const createCallerMock = createCaller as unknown as jest.Mock;
 const apiTokenMock = sessionFromApiToken as unknown as jest.Mock;
@@ -202,6 +206,62 @@ describe("JSON-RPC protocol", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: { code: number } };
     expect(body.error.code).toBe(-32700);
+  });
+
+  describe("a body past what one request can carry", () => {
+    /** A create_event call of exactly `bytes` bytes, with its script making up the room. */
+    const callOfSize = (bytes: number) => {
+      const call = (content: string) =>
+        rpc("tools/call", {
+          name: "create_event",
+          arguments: { name: "long", type: "BASH", content },
+        });
+      const shell = JSON.stringify(call("")).length;
+      return JSON.stringify(call("x".repeat(bytes - shell)));
+    };
+
+    it("413s with the reason, and runs nothing", async () => {
+      const caller = stubCaller();
+      createCallerMock.mockReturnValue(caller);
+
+      const res = await post(callOfSize(MAX_REQUEST_BODY_BYTES + 1), "t");
+
+      expect(res.status).toBe(413);
+      const body = (await res.json()) as {
+        id: unknown;
+        error: { code: number; message: string };
+      };
+      expect(body.id).toBeNull();
+      expect(body.error.code).toBe(-32600);
+      expect(body.error.message).toBe(EVENT_TOO_LONG_MESSAGE);
+      expect(caller.events.create).not.toHaveBeenCalled();
+    });
+
+    it("fits whole in what the stdio bridge quotes of a failed response", async () => {
+      const res = await post(callOfSize(MAX_REQUEST_BODY_BYTES + 1), "t");
+
+      const quoted = (await res.text()).slice(0, 300);
+      expect(quoted).toContain(EVENT_TOO_LONG_MESSAGE);
+    });
+
+    it("runs a call of exactly the limit", async () => {
+      const caller = stubCaller();
+      caller.events.create.mockResolvedValue({ id: 1, name: "long" });
+      createCallerMock.mockReturnValue(caller);
+
+      const res = await post(callOfSize(MAX_REQUEST_BODY_BYTES), "t");
+
+      expect(res.status).toBe(200);
+      expect(caller.events.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("still 401s first without a token", async () => {
+      apiTokenMock.mockResolvedValue(null);
+
+      const res = await post(callOfSize(MAX_REQUEST_BODY_BYTES + 1));
+
+      expect(res.status).toBe(401);
+    });
   });
 
   it("rejects GET (no server-initiated stream)", () => {
