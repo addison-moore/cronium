@@ -36,7 +36,7 @@ curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/addison-moore
 docker compose up -d   # tells you exactly which .env values to generate
 ```
 
-Full instructions, upgrades, and backups: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+Full instructions, upgrades, backups, and data retention: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 or https://cronium.app/docs/self-hosting. For local development, see
 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). For a public deployment,
 route only `/api/socketio` through your TLS proxy to the loopback-bound port 5002. Cronium applies exact origin checks, shared one-time tickets, and active

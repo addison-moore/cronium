@@ -1,10 +1,10 @@
 # Cronium Bash SDK
 
-Runtime SDK for Cronium containerized script execution in Bash.
+Runtime SDK for bash scripts in Cronium, in a container or on a remote server.
 
 ## Installation
 
-The SDK is automatically available in Cronium containers at `/usr/local/bin/cronium.sh`.
+Nothing to install or load: the functions are already there when a script starts, in a container and on a remote server. A remote server has no `/usr/local/bin/cronium.sh`, so a script that sources it runs in a container but fails on a remote server under `set -e`.
 
 For local development:
 
@@ -16,7 +16,6 @@ source /path/to/cronium.sh
 
 ```bash
 #!/bin/bash
-source /usr/local/bin/cronium.sh
 
 # Get input data
 input=$(cronium_input)
@@ -38,9 +37,6 @@ if [ "$result" -gt 0 ]; then
 else
     cronium_set_condition false
 fi
-
-# Send notifications
-cronium_send_email "admin@example.com" "Task Complete" "Processed $result items"
 ```
 
 ## Functions Reference
@@ -49,19 +45,18 @@ cronium_send_email "admin@example.com" "Task Complete" "Processed $result items"
 
 - `cronium_input` - Get execution input data
 - `cronium_output <data>` - Set execution output data
-- `cronium_get_variable <key>` - Get variable value
-- `cronium_set_variable <key> <value>` - Set variable value
+- `cronium_get_variable <key>` - Print the variable's bare value
+- `cronium_set_variable <key> <value>` - Set a variable. Variables are stored as strings, so `42` and `{"a":1}` read back as that text
 - `cronium_set_condition <true|false>` - Set workflow condition
 - `cronium_event` - Get full event context as JSON
 - `cronium_event_field <field>` - Get specific event field
 
 ### Tool Functions
 
-> **Note:** the tool functions below run against the tool connection of the
-> given type belonging to the event's owner. If you have more than one
-> connection of a type, the most recently created one is used.
+- `cronium_execute_tool_action <tool> <action> <config_json>` - Execute any tool action. `<tool>` is the type of a saved tool connection and `<action>` is the action's ID, for example `cronium_execute_tool_action SQL run-query '{"query":"SELECT 1"}'`. It runs against the event owner's connection of that type, and the most recently created one if there are several.
 
-- `cronium_execute_tool_action <tool> <action> <config_json>` - Execute any tool action
+These wrappers exist in a container and on a remote server, but **they currently fail in both**. They send a lowercase tool type, the action ID `send_message`, and parameter names that the email, Slack and Discord tools do not recognize. Use `cronium_execute_tool_action` until they are fixed.
+
 - `cronium_send_email <to> <subject> <body> [options]` - Send email
   - Options: `--cc <emails>`, `--bcc <emails>`, `--html`
 - `cronium_send_slack_message <channel> <text> [options]` - Send Slack message
@@ -71,7 +66,7 @@ cronium_send_email "admin@example.com" "Task Complete" "Processed $result items"
 ### Utility Functions
 
 - `cronium_variable_exists <key>` - Check if variable exists
-- `cronium_delete_variable <key>` - Delete a variable (sets to null)
+- `cronium_delete_variable <key>` - Not working yet: a variable cannot be deleted from a script, so this returns an error
 - `cronium_increment_variable <key> [increment]` - Increment numeric variable
 - `cronium_append_variable <key> <value> [separator]` - Append to string variable
 - `cronium_info` - Display SDK information
@@ -113,19 +108,21 @@ processed_count=$(process_data)
 
 if [ "$processed_count" -gt 0 ]; then
     cronium_set_condition true
-    cronium_send_slack_message "#notifications" "✅ Processed $processed_count items"
 else
     cronium_set_condition false
-    cronium_send_slack_message "#alerts" "⚠️ No items to process"
 fi
 ```
 
 ## Requirements
 
+In a container, everything is in the image. The SDK there needs:
+
 - `bash` 4.0 or higher
 - `curl` for HTTP requests
 - `jq` for JSON parsing
-- Environment variables:
+- Environment variables, which Cronium sets:
   - `CRONIUM_EXECUTION_TOKEN` - Authentication token
   - `CRONIUM_EXECUTION_ID` - Execution ID
   - `CRONIUM_RUNTIME_API` - API URL (optional, defaults to http://localhost:8081)
+
+On a remote server, the functions need only `bash`, because they run on helper binaries that the runner brings with it. A script that calls `jq` itself, like the examples above, needs `jq` installed on that server.

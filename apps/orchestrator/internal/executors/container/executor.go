@@ -646,11 +646,12 @@ func (e *Executor) readStream(reader io.Reader, stream string, updates chan<- ty
 
 	for {
 		chunk, err := buffered.ReadSlice('\n')
-		if line := strings.TrimRight(string(chunk), "\r\n"); line != "" {
+		// Only a chunk with nothing in it is skipped: a blank line is output too.
+		if len(chunk) > 0 {
 			sequence++
 			e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
 				Stream:    stream,
-				Line:      line,
+				Line:      strings.TrimRight(string(chunk), "\r\n"),
 				Timestamp: time.Now(),
 				Sequence:  sequence,
 			})

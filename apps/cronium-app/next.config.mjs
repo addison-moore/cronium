@@ -124,6 +124,15 @@ const nextConfig = {
               // Shared components chunk
               commons: {
                 name: "commons",
+                // Every page loads this chunk. Monaco's modules are shared
+                // between its main chunk and its language workers, which would
+                // otherwise pull them in here, but only editors should pay for
+                // them.
+                test(module) {
+                  return !/[\\/]node_modules[\\/]monaco-editor[\\/]/.test(
+                    module.identifier(),
+                  );
+                },
                 minChunks: 2,
                 priority: 10,
                 reuseExistingChunk: true,

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -22,6 +23,9 @@ var rootCmd = &cobra.Command{
 	Long: `Cronium runner is a secure execution environment for running scripts
 on remote servers. It extracts and verifies signed payloads, then executes
 the contained scripts with proper isolation and cleanup.`,
+	// A failing script is not a usage error, and main reports what needs reporting.
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 var runCmd = &cobra.Command{
@@ -45,12 +49,7 @@ var runCmd = &cobra.Command{
 		}()
 
 		// Execute the payload
-		if err := exec.Execute(payloadPath); err != nil {
-			log.WithError(err).Error("Execution failed")
-			return err
-		}
-
-		return nil
+		return exec.Execute(payloadPath)
 	},
 }
 
@@ -72,12 +71,20 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Log level (debug, info, warn, error)")
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	err := rootCmd.Execute()
+	if err == nil {
+		return
 	}
+	// A script's own exit code passes through, and its stderr has already said
+	// whatever it had to say.
+	var scriptExit *executor.ScriptExitError
+	if errors.As(err, &scriptExit) {
+		os.Exit(scriptExit.Code)
+	}
+	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	os.Exit(1)
 }

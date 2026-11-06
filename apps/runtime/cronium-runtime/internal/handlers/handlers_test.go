@@ -573,6 +573,65 @@ func TestVariables_RoundTripOwnerScopedAndCached(t *testing.T) {
 	}
 }
 
+// The app stores a variable only as a string, so every JSON value reaches it as one,
+// with numbers as written and object keys in their original order. The cache holds
+// the same string, so a read in this run matches a read in the next.
+func TestSetVariable_RelaysEveryValueAsAString(t *testing.T) {
+	cases := []struct {
+		body string
+		want string
+	}{
+		{`{"value":"text"}`, "text"},
+		{`{"value":""}`, ""},
+		{`{"value":42}`, "42"},
+		{`{"value":1.10}`, "1.10"},
+		{`{"value":true}`, "true"},
+		{`{"value":false}`, "false"},
+		{`{"value":{"b": 1, "a": [1, 2]}}`, `{"b":1,"a":[1,2]}`},
+		{`{"value":[1,"two"]}`, `[1,"two"]`},
+		{`{"value":"{\"not\":\"parsed\"}"}`, `{"not":"parsed"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.body, func(t *testing.T) {
+			e := newEnv(t)
+			tok := bearer(token(t))
+			base := "/executions/" + testExecutionID + "/variables/MY_KEY"
+			putKey := "PUT /api/internal/variables/" + testUserID + "/MY_KEY"
+
+			status, _ := e.call(t, http.MethodPut, base, tok, []byte(tc.body))
+			if status != http.StatusOK {
+				t.Fatalf("PUT status = %d, want 200", status)
+			}
+			if relayed := e.app.lastBody(putKey); relayed["value"] != tc.want {
+				t.Errorf("relayed value = %#v, want %q", relayed["value"], tc.want)
+			}
+
+			status, body := e.call(t, http.MethodGet, base, tok, nil)
+			if status != http.StatusOK {
+				t.Fatalf("GET status = %d, want 200", status)
+			}
+			if data, _ := body["data"].(map[string]interface{}); data["value"] != tc.want {
+				t.Errorf("value read back = %#v, want %q", data["value"], tc.want)
+			}
+		})
+	}
+}
+
+// There is no way to delete a variable through this route, and the app would reject
+// null anyway. Say so at once, because a 500 makes every SDK retry.
+func TestSetVariable_NullIsRejected(t *testing.T) {
+	for _, body := range []string{`{"value":null}`, `{}`} {
+		e := newEnv(t)
+		status, _ := e.call(t, http.MethodPut, "/executions/"+testExecutionID+"/variables/MY_KEY", bearer(token(t)), []byte(body))
+		if status != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", body, status)
+		}
+		if got := e.app.hitCount("PUT /api/internal/variables/" + testUserID + "/MY_KEY"); got != 0 {
+			t.Errorf("%s: backend PUTs = %d, want 0", body, got)
+		}
+	}
+}
+
 // Backend failures surface as a clean script-facing 500, not a panic or a
 // leaked backend body.
 func TestBackendOutage_MapsTo500(t *testing.T) {

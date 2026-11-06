@@ -34,6 +34,12 @@ type RunnerInfo struct {
 	Checksum string
 }
 
+// maxLogLineBytes bounds how much of one line of a remote script's output is
+// buffered. A longer line arrives in pieces of this size, the same as from a
+// container (container.maxLogLineBytes), so nothing is lost and a script can always
+// finish writing.
+const maxLogLineBytes = 64 * 1024
+
 // Executor implements SSH-based job execution using the runner binary
 type Executor struct {
 	config        config.SSHConfig
@@ -927,39 +933,49 @@ func copyRunnerFile(conn *ssh.Client, localPath, remotePath string) error {
 
 // streamOutputWithContextAndCollect reads from a reader, sends log updates, and collects output
 func (e *Executor) streamOutputWithContextAndCollect(ctx context.Context, reader io.Reader, stream string, updates chan<- types.ExecutionUpdate, sequence *int64, sequenceMu *sync.Mutex, buffer *strings.Builder, bufferMu *sync.Mutex) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		// Check if context is cancelled
+	buffered := bufio.NewReaderSize(reader, maxLogLineBytes)
+	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		line := scanner.Text()
+		chunk, err := buffered.ReadSlice('\n')
+		if len(chunk) > 0 {
+			line := strings.TrimRight(string(chunk), "\r\n")
 
-		// Collect output
-		bufferMu.Lock()
-		buffer.WriteString(line)
-		buffer.WriteString("\n")
-		bufferMu.Unlock()
+			// Collect output
+			bufferMu.Lock()
+			buffer.WriteString(line)
+			buffer.WriteString("\n")
+			bufferMu.Unlock()
 
-		// Send log entry
-		sequenceMu.Lock()
-		*sequence++
-		seq := *sequence
-		sequenceMu.Unlock()
+			// Send log entry
+			sequenceMu.Lock()
+			*sequence++
+			seq := *sequence
+			sequenceMu.Unlock()
 
-		e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
-			Stream:    stream,
-			Line:      line,
-			Timestamp: time.Now(),
-			Sequence:  seq,
-		})
-	}
+			e.sendUpdate(updates, types.UpdateTypeLog, &types.LogEntry{
+				Stream:    stream,
+				Line:      line,
+				Timestamp: time.Now(),
+				Sequence:  seq,
+			})
+		}
 
-	if err := scanner.Err(); err != nil && !stderrors.Is(err, context.Canceled) {
-		e.log.WithError(err).Errorf("Error reading %s stream", stream)
+		switch err {
+		case nil, bufio.ErrBufferFull:
+			continue
+		case io.EOF:
+			return
+		default:
+			if !stderrors.Is(err, context.Canceled) {
+				e.log.WithError(err).Errorf("Error reading %s stream", stream)
+			}
+			return
+		}
 	}
 }
 
