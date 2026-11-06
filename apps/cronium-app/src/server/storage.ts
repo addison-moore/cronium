@@ -1157,11 +1157,15 @@ class DatabaseStorage implements IStorage {
     // Get events that are associated with the specified server with all eventServers in a single query
     const eventsWithRelations = await db.query.events.findMany({
       where: and(
-        sql`${events.id} IN (
-          SELECT ${eventServers.eventId} 
-          FROM ${eventServers} 
-          WHERE ${eventServers.serverId} = ${serverId}
-        )`,
+        // A subquery builder, not raw sql: the relational API rewrites every
+        // column in a sql`` template to the events table, event_id included.
+        inArray(
+          events.id,
+          db
+            .select({ id: eventServers.eventId })
+            .from(eventServers)
+            .where(eq(eventServers.serverId, serverId)),
+        ),
         or(eq(events.userId, userId), eq(events.shared, true)),
       ),
       orderBy: [desc(events.updatedAt)],
