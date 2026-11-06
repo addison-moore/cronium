@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import { z } from "zod";
 import axios from "axios";
-import { TRPCError } from "@trpc/server";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -21,6 +20,7 @@ import {
   splitCustomHeaders,
   webhookCustomHeadersSchema,
 } from "./custom-headers";
+import { WebhookPreconditionError } from "./webhook-errors";
 
 // Cap the response body we buffer from a webhook target.
 const MAX_WEBHOOK_RESPONSE_BYTES = 1 * 1024 * 1024;
@@ -514,7 +514,7 @@ export class WebhookManager {
    * stays out of the queue, which could only say the attempt was queued, and which
    * would repeat a failure on its own schedule after the caller had moved on.
    *
-   * @throws TRPCError `PRECONDITION_FAILED` when it won't send. Nothing is sent or
+   * @throws WebhookPreconditionError when it won't send. Nothing is sent or
    * recorded then. A failed attempt isn't thrown: it comes back with
    * `success: false`, recorded like any other.
    */
@@ -528,31 +528,30 @@ export class WebhookManager {
 
     const { webhook, event } = result;
 
+    // Whether the webhook still subscribes to this event isn't checked, on purpose.
+    // Subscriptions decide what fan-out sends. A retry is the owner asking for one
+    // delivery by id, and test deliveries go out whatever the webhook subscribes
+    // to, so they couldn't be retried otherwise.
+
     // Disabled means nothing goes to this URL, as with `triggerEvent`.
     if (!webhook.active) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Webhook is disabled",
-      });
+      throw new WebhookPreconditionError("Webhook is disabled");
     }
 
     // An event only ever goes to its own tenant's webhooks (HI-01). A delivery
     // from before fan-out was scoped can break that, and one from before events
     // were stamped can't show it doesn't, so neither goes out again.
     if (event.userId !== webhook.userId) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "This delivery's event isn't recorded under this webhook's owner",
-      });
+      throw new WebhookPreconditionError(
+        "This delivery's event isn't recorded under this webhook's owner",
+      );
     }
 
     const content = storedEventContentSchema.safeParse(event.payload);
     if (!content.success) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "This delivery's stored event can't be sent again",
-      });
+      throw new WebhookPreconditionError(
+        "This delivery's stored event can't be sent again",
+      );
     }
 
     // Decrypt the HMAC secret and custom headers at this delivery-signing

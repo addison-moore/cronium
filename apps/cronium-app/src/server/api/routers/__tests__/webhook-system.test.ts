@@ -145,7 +145,9 @@ import {
   webhookEvents,
 } from "@/shared/schema";
 import { db } from "@/server/db";
+import { RateLimitService } from "@/lib/rate-limit-service";
 import { WebhookManager } from "@/lib/webhooks";
+import { WebhookPreconditionError } from "@/lib/webhooks/webhook-errors";
 import { encryptWebhookSecret } from "@/lib/webhooks/webhook-secret";
 
 // Mount under its production name so enforceRouteCapability sees the same
@@ -712,10 +714,7 @@ describe("webhookSystem.retryDelivery", () => {
   it("passes on a refusal to send, with its message", async () => {
     mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
     managerMock.retryDelivery.mockRejectedValue(
-      new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Webhook is disabled",
-      }),
+      new WebhookPreconditionError("Webhook is disabled"),
     );
 
     await expect(
@@ -724,6 +723,25 @@ describe("webhookSystem.retryDelivery", () => {
       code: "PRECONDITION_FAILED",
       message: "Webhook is disabled",
     });
+  });
+
+  it("is limited per user, and past the limit does nothing", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    const checkLimit = RateLimitService.checkLimit as jest.Mock;
+    checkLimit.mockRejectedValueOnce(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Slow down" }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    expect(checkLimit).toHaveBeenCalledWith(
+      USER_ID,
+      "webhookSystem.retryDelivery",
+      { maxRequests: 10, windowMs: 60000 },
+    );
+    expect(managerMock.retryDelivery).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND when the delivery belongs to another tenant", async () => {

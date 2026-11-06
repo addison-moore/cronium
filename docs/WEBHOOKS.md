@@ -170,7 +170,7 @@ An event can reach you more than once, so handle deliveries with the steps above
 
 **Automatic retries** follow a failed attempt, on the webhook's `retryConfig`. `maxRetries` counts every attempt including the first, so the default of 3 means up to three requests, the second about 1 second after the first fails and the third about 2 seconds after the second fails (`retryDelay`, multiplied by `backoffMultiplier` each time). These retries are held in memory, so a restart of the app loses any that are waiting.
 
-**A manual retry** is one call to `webhookSystem.retryDelivery`. It makes one attempt and reports what the receiver answered, and a failure isn't repeated. It works on any recorded delivery, including one that succeeded, until the record is removed after `CRONIUM_WEBHOOK_RETENTION_DAYS` (30 days by default). It is refused if the webhook is disabled or the event isn't recorded under the webhook's owner.
+**A manual retry** is one call to `webhookSystem.retryDelivery`. It makes one attempt and reports what the receiver answered, and a failure isn't repeated. It works on any recorded delivery, including one that succeeded or one for an event the webhook no longer subscribes to, until the record is removed after `CRONIUM_WEBHOOK_RETENTION_DAYS` (30 days by default). It is refused if the webhook is disabled or the event isn't recorded under the webhook's owner. Each user can make 10 of these calls a minute, though calls made at the same moment can get past that limit.
 
 ## Answering a delivery
 
