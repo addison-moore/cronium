@@ -524,6 +524,7 @@ export const eventsRouter = createTRPCRouter({
           return {
             format: "json",
             filename: `${String(event.name ?? "event")}.json`,
+            eventCount: 1,
             data: JSON.stringify(
               toEventApiDto(event, userId, {
                 revealEnvVarValues: canReadEnvVarValues(ctx.tokenScopes),
@@ -544,6 +545,8 @@ export const eventsRouter = createTRPCRouter({
         return {
           format: "json",
           filename: "events.json",
+          // What was asked for, less anything this user can't see or that's gone.
+          eventCount: events.filter(Boolean).length,
           data: JSON.stringify(
             events.map((event) =>
               event
