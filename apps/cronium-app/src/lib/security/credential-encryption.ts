@@ -9,6 +9,7 @@ import {
   randomBytes,
   scryptSync,
 } from "crypto";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export interface EncryptedData {
   encrypted: string;
@@ -390,6 +391,9 @@ if (encryptionKey) {
   try {
     credentialEncryption.initialize(encryptionKey);
   } catch (error) {
-    console.error("Failed to initialize credential encryption:", error);
+    console.error(
+      "Failed to initialize credential encryption:",
+      failureWithStack(error),
+    );
   }
 }

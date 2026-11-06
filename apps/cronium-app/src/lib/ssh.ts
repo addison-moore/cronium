@@ -6,6 +6,7 @@ import {
 import { createHostVerifier } from "@/lib/ssh/host-verifier";
 import { Client } from "ssh2"; // Import Client from ssh2
 import type { ClientChannel } from "ssh2";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 /**
  * SSH connection debug logging is gated behind CRONIUM_SSH_DEBUG because the
@@ -83,7 +84,7 @@ export class SSHService {
         } catch (error) {
           console.error(
             `Failed to close SSH connection for key ${key}:`,
-            error,
+            failureWithStack(error),
           );
           // Ignore cleanup errors
         }
@@ -150,7 +151,7 @@ export class SSHService {
           return connection;
         } catch (error) {
           console.log(
-            `Existing connection to ${connectionKey ?? ""} failed test: ${error instanceof Error ? error.message : "Unknown error"}`,
+            `Existing connection to ${connectionKey ?? ""} failed test: ${describeFailure(error)}`,
           );
           // Connection is dead, remove it
           try {
@@ -158,7 +159,7 @@ export class SSHService {
           } catch (error) {
             console.error(
               `Failed to dispose dead SSH connection for ${connectionKey}:`,
-              error,
+              failureWithStack(error),
             );
             // Ignore disposal errors
           }
@@ -234,7 +235,7 @@ export class SSHService {
         clearTimeout(connectionTimeout);
         console.error(
           `Failed to create SSH connection to ${connectionKey ?? ""}:`,
-          err,
+          failureWithStack(err),
         );
 
         // Provide more specific error messages
@@ -645,11 +646,13 @@ export class SSHService {
                 oldConnection.ssh.end();
               }
             } catch (e) {
-              console.error(`Error cleaning up old connection: ${String(e)}`);
+              console.error(
+                `Error cleaning up old connection: ${describeFailure(e)}`,
+              );
             }
           }, 5000);
         } catch (e) {
-          console.error(`Error handling old connection: ${String(e)}`);
+          console.error(`Error handling old connection: ${describeFailure(e)}`);
         }
       }
     }

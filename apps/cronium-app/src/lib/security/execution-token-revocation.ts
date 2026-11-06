@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { describeFailure } from "@/lib/pg-errors";
 
 /**
  * Revocation of per-job execution tokens (HI-14). When a job reaches a terminal
@@ -46,7 +47,7 @@ function newClient(url: string): RedisClient {
   client.on("error", (error) => {
     console.error(
       "Execution-token revocation store Valkey error:",
-      error.message || String(error),
+      describeFailure(error),
     );
   });
   return client;
@@ -105,7 +106,7 @@ export async function revokeJobExecutionTokens(
   } catch (error) {
     console.error(
       `Failed to write execution-token revocation for job ${jobId} (token still expires at its hard cap):`,
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
   }
 }

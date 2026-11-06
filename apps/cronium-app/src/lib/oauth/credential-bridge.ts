@@ -13,6 +13,7 @@
 import { TokenManager } from "./TokenManager";
 import { createProviderFromEnv } from "./providers";
 import { getOAuthConfig } from "@/lib/tools/tool-registry";
+import { describeFailure } from "@/lib/pg-errors";
 
 export interface OAuthBridgeTarget {
   userId: string;
@@ -58,7 +59,7 @@ export async function injectOAuthToken(
   } catch (error) {
     console.warn(
       `Failed to obtain OAuth access token for tool ${target.toolId} (${target.toolType}):`,
-      error instanceof Error ? error.message : error,
+      describeFailure(error),
     );
     return credentials;
   }

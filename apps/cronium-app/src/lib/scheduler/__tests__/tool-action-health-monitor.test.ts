@@ -519,7 +519,7 @@ describe("startMonitoring / stopMonitoring", () => {
     expect(() => monitor.startMonitoring(1000)).not.toThrow();
     expect(errorSpy).toHaveBeenCalledWith(
       "Error updating health metrics:",
-      expect.any(Error),
+      expect.stringContaining("Error: summary exploded"),
     );
   });
 });

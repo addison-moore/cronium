@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { describeFailure } from "@/lib/pg-errors";
 
 /**
  * Atomic single-use consumption of inbound webhook delivery IDs, so a captured
@@ -32,10 +33,7 @@ function newClient(url: string): RedisClient {
     maxRetriesPerRequest: 1,
   });
   client.on("error", (error) => {
-    console.error(
-      "Webhook replay store Valkey error:",
-      error.message || String(error),
-    );
+    console.error("Webhook replay store Valkey error:", describeFailure(error));
   });
   return client;
 }
@@ -96,7 +94,7 @@ export async function consumeWebhookDeliveryOnce(
   } catch (error) {
     console.error(
       "Webhook replay store unavailable — rejecting delivery (fail closed):",
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
     return false;
   }

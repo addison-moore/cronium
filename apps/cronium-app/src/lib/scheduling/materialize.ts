@@ -25,6 +25,7 @@ import {
   specFromEvent,
   specFromWorkflow,
 } from "./schedule-math";
+import { describeFailure } from "@/lib/pg-errors";
 
 /**
  * Whether an event update touches anything next_run_at depends on. A refresh
@@ -63,7 +64,7 @@ export async function notifyScheduleChanged(eventId: number): Promise<void> {
     // Notification is an accelerant only; the dispatcher polls regardless.
     console.warn(
       `[Materialize] pg_notify failed for event ${eventId}:`,
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
   }
 }

@@ -354,6 +354,7 @@ func newCoreFixture(t *testing.T, mutate func(cfg *daemonConfig)) *coreFixture {
 	c.reportTimeout = 2 * time.Second
 	c.spoolReportTimeout = time.Second
 	c.shutdownWait = 500 * time.Millisecond
+	c.shutdownSettle = 50 * time.Millisecond
 	c.shutdownTick = 5 * time.Millisecond
 
 	return &coreFixture{core: c, api: fapi, exec: exec, metrics: met, hook: hook}

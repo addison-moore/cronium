@@ -1,10 +1,14 @@
+import { format } from "node:util";
 import { TRPCError } from "@trpc/server";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import {
+  QUERY_FAILED_MESSAGE,
   describeFailure,
   driverError,
   failureWithStack,
   isQueryFailure,
+  messageForCaller,
+  messageForJobLog,
   pgErrorCode,
   stackFrames,
 } from "@/lib/pg-errors";
@@ -303,4 +307,136 @@ describe("isQueryFailure", () => {
   ])("is false of %s", (_, error) => {
     expect(isQueryFailure(error)).toBe(false);
   });
+});
+
+describe("messageForJobLog", () => {
+  const lostConnection = new Error("Connection terminated unexpectedly");
+
+  it.each([
+    ["Postgres's answer", failedQuery(postgresError("refused", "P0001"))],
+    ["Postgres's answer with no wrapper", postgresError("duplicate key")],
+    ["a wrapper with no cause", failedQuery(undefined)],
+    ["a wrapper whose cause isn't an error", failedQuery("text")],
+    ["a cause with no message", failedQuery(new Error(""))],
+    ["a message built from Drizzle's", new Error(`Failed query: ${SECRET}`)],
+  ])("gives the fixed message for %s", (_, error) => {
+    expect(messageForJobLog(error)).toBe(QUERY_FAILED_MESSAGE);
+  });
+
+  it("says a connection was lost, in words holding nothing of the query", () => {
+    expect(messageForJobLog(failedQuery(lostConnection))).toBe(
+      "Connection terminated unexpectedly",
+    );
+  });
+
+  it("keeps any other error's message, and the text of what isn't an error", () => {
+    expect(messageForJobLog(new Error("Action timed out"))).toBe(
+      "Action timed out",
+    );
+    expect(messageForJobLog("text")).toBe("text");
+  });
+});
+
+describe("messageForCaller", () => {
+  let logError: jest.SpyInstance;
+
+  beforeEach(() => {
+    logError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
+  });
+
+  it.each([
+    ["Drizzle's wrapper", failedQuery(postgresError("duplicate key"))],
+    ["a wrapper with no cause", failedQuery(undefined)],
+    [
+      "tRPC's wrapper around it, which repeats the message",
+      new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        cause: failedQuery(new Error("x")),
+      }),
+    ],
+    [
+      "a message a router chose, with the failed query as its cause",
+      new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch event",
+        cause: failedQuery(new Error("x")),
+      }),
+    ],
+    [
+      "a message built from Drizzle's",
+      new Error(
+        `Failed to store tokens: ${failedQuery(new Error("x")).message}`,
+      ),
+    ],
+    [
+      "an error Postgres sent directly, which can quote a value",
+      postgresError(`invalid input syntax: "${SECRET}"`, "22P02"),
+    ],
+  ])("gives a fixed line for %s", (_, error) => {
+    expect(messageForCaller(error)).toBe(QUERY_FAILED_MESSAGE);
+  });
+
+  it("gives that line whatever the fallback is", () => {
+    expect(messageForCaller(failedQuery(new Error("x")), "Unknown error")).toBe(
+      QUERY_FAILED_MESSAGE,
+    );
+  });
+
+  it("logs the reason, since the caller no longer gets it, without the values", () => {
+    messageForCaller(failedQuery(postgresError("duplicate key")));
+
+    expect(logError).toHaveBeenCalledTimes(1);
+    const logged = format(...(logError.mock.calls[0] as unknown[]));
+    expect(logged).toContain("23505: duplicate key");
+    expect(logged).not.toContain(SECRET);
+    expect(logged).not.toContain("Failed query");
+  });
+
+  it.each([
+    [
+      "an ordinary error",
+      new Error("Workflow not found"),
+      "Workflow not found",
+    ],
+    [
+      "a tRPC error of its own",
+      new TRPCError({ code: "FORBIDDEN", message: "Access denied" }),
+      "Access denied",
+    ],
+    [
+      "one with a cause that isn't a failed query",
+      new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid input",
+        cause: new Error("Expected a string"),
+      }),
+      "Invalid input",
+    ],
+    ["an object with a message", { message: "Refused" }, "Refused"],
+  ])("keeps the text of %s, and logs nothing", (_, error, text) => {
+    expect(messageForCaller(error, "Unknown error")).toBe(text);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["text", "text"],
+    [undefined, "undefined"],
+    [{ code: "E_SOMETHING" }, "[object Object]"],
+  ])(
+    "prints %j when it has no message and there's no fallback",
+    (error, text) => {
+      expect(messageForCaller(error)).toBe(text);
+    },
+  );
+
+  it.each([["text"], [undefined], [{ code: "E_SOMETHING" }]])(
+    "uses the fallback for %j",
+    (error) => {
+      expect(messageForCaller(error, "Unknown error")).toBe("Unknown error");
+    },
+  );
 });

@@ -88,8 +88,9 @@ export async function transitionJob(
         ? opts.expectedFrom.filter((s) => legal.includes(s))
         : legal;
       if (!allowed.includes(current.status)) {
+        // Not the reason: a late report's is whatever the job printed to stderr.
         console.warn(
-          `[JobTransition] Rejected ${current.status} → ${to} for job ${jobId} (actor: ${opts.actor}${opts.reason ? `, reason: ${opts.reason}` : ""})`,
+          `[JobTransition] Rejected ${current.status} → ${to} for job ${jobId} (actor: ${opts.actor})`,
         );
         return {
           ok: false,

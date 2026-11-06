@@ -34,6 +34,11 @@ import { planTicks, type TickPlan } from "./plan-ticks";
 import { specFromEvent, specFromWorkflow } from "./schedule-math";
 import { refreshEventSchedule, refreshWorkflowSchedule } from "./materialize";
 import { dispatchEventJob } from "./dispatch";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 const DISPATCH_BATCH = 50;
 const MATERIALIZE_BATCH = 20;
@@ -322,8 +327,15 @@ export async function runDispatchTick(
         // the rest of the batch.
         console.error(
           `[Dispatcher] Failed to dispatch event ${eventId} tick ${tick.at.toISOString()}:`,
-          error instanceof Error ? error.message : String(error),
+          describeFailure(error),
         );
+        // Shown with the event's incidents, and the job's payload has its script or
+        // its request's headers.
+        const reason = isQueryFailure(error)
+          ? QUERY_FAILED_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : String(error);
         await db
           .insert(scheduleIncidents)
           .values({
@@ -331,7 +343,7 @@ export async function runDispatchTick(
             kind: ScheduleIncidentKind.MISSED,
             details: {
               scheduledFor: tick.at.toISOString(),
-              reason: `dispatch failed: ${error instanceof Error ? error.message : String(error)}`,
+              reason: `dispatch failed: ${reason}`,
             },
           })
           .catch(() => undefined);
@@ -375,7 +387,7 @@ export async function runDispatchTick(
       } catch (error) {
         console.error(
           `[Dispatcher] Failed to start scheduled workflow ${workflowId}:`,
-          error instanceof Error ? error.message : String(error),
+          describeFailure(error),
         );
       }
     }

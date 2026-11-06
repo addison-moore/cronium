@@ -12,6 +12,7 @@ import {
   TimeUnit,
 } from "@shared/schema";
 import { nanoid } from "nanoid";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * This script seeds the database with sample workflows
@@ -398,7 +399,7 @@ if (require.main === module) {
   seedWorkflows()
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error("Error seeding workflows:", error);
+      console.error("Error seeding workflows:", failureWithStack(error));
       process.exit(1);
     });
 }

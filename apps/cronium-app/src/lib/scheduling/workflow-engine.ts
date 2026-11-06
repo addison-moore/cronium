@@ -42,7 +42,11 @@ import {
 } from "@/shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
-import { describeFailure, isQueryFailure } from "@/lib/pg-errors";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 import { dispatchEventJob } from "./dispatch";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
 
@@ -492,8 +496,15 @@ export async function advanceWorkflowRun(runId: number): Promise<void> {
           "execute",
         );
       } catch (error) {
-        const message =
+        let message =
           error instanceof Error ? error.message : "Authorization changed";
+        if (isQueryFailure(error)) {
+          console.error(
+            `[WorkflowEngine] Couldn't check authorization for run ${runId}:`,
+            describeFailure(error),
+          );
+          message = QUERY_FAILED_MESSAGE;
+        }
         await Promise.all(
           claimed.map(({ step }) =>
             failClaimedStep(
@@ -946,11 +957,16 @@ async function dispatchClaimedStep(
 
     await cleanUpIfRunTimedOut(step.workflowExecutionId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     console.error(
       `[WorkflowEngine] Failed to dispatch step ${step.id}:`,
-      message,
+      describeFailure(error),
     );
+    // A run's history shows this, and the job's payload has the script and the input.
+    const message = isQueryFailure(error)
+      ? QUERY_FAILED_MESSAGE
+      : error instanceof Error
+        ? error.message
+        : String(error);
     await failClaimedStep(
       step,
       `Dispatch failed: ${message}`,
@@ -987,7 +1003,7 @@ async function cleanUpIfRunTimedOut(runId: number): Promise<void> {
   } catch (error) {
     console.error(
       `[WorkflowEngine] Failed to check run ${runId} for a timeout after dispatch:`,
-      error instanceof Error ? error.message : String(error),
+      describeFailure(error),
     );
   }
 }
@@ -1038,7 +1054,7 @@ export async function advanceRunsForJob(jobId: string): Promise<void> {
     await advanceWorkflowRun(row.runId).catch((error) => {
       console.error(
         `[WorkflowEngine] advance failed for run ${row.runId}:`,
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
     });
   }
@@ -1059,7 +1075,7 @@ export async function reconcileWorkflowRuns(limit = 100): Promise<number> {
     await advanceWorkflowRun(run.id).catch((error) => {
       console.error(
         `[WorkflowEngine] reconcile failed for run ${run.id}:`,
-        error instanceof Error ? error.message : String(error),
+        describeFailure(error),
       );
     });
   }

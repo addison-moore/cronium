@@ -14,6 +14,7 @@
  * - Every tool carries MCP annotations (readOnlyHint/destructiveHint/…) so
  *   clients can gate approval appropriately.
  */
+import { messageForCaller } from "@/lib/pg-errors";
 import type { createCaller } from "@/server/api/root";
 import {
   MAX_ENV_VAR_VALUE_BYTES,
@@ -167,10 +168,7 @@ function ok(text: string): McpToolResult {
   return { text };
 }
 function errText(err: unknown): McpToolResult {
-  return {
-    text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-    isError: true,
-  };
+  return { text: `Error: ${messageForCaller(err)}`, isError: true };
 }
 function json(value: unknown): string {
   return JSON.stringify(value, null, 2);

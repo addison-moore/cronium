@@ -28,6 +28,9 @@ func newUnitExecutor() *Executor {
 		networks:     make(map[string]string),
 		tokens:       make(map[string]string),
 		executionIDs: make(map[string]string),
+		leftovers:    make(map[string]jobResources),
+		handOver:     make(map[string]bool),
+		holds:        make(map[string]*resultHold),
 	}
 	e.sidecar = NewSidecarManager(e, log)
 	return e

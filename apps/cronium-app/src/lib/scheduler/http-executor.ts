@@ -5,6 +5,7 @@ import {
   ssrfHttpsAgent,
 } from "@/lib/ssrf-guard";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 // Cap the response we buffer so a large internal/external body can't exhaust
 // memory (there is no other bound besides the timeout).
@@ -111,7 +112,10 @@ export async function executeHttpRequest(
           config.data = typeof body === "string" ? body : JSON.stringify(body);
         }
       } catch (bodyError) {
-        console.error("Error processing request body:", bodyError);
+        console.error(
+          "Error processing request body:",
+          failureWithStack(bodyError),
+        );
         config.data = body; // Use body as-is if parsing fails
       }
     }
@@ -131,7 +135,7 @@ export async function executeHttpRequest(
     // Message only. An AxiosError carries the whole request config, so logging
     // the object would write the event's Authorization headers (and any secret
     // in the URL) to the server logs.
-    console.error(`HTTP request execution error: ${error.message}`);
+    console.error(`HTTP request execution error: ${describeFailure(error)}`);
 
     // Return structured error response
     return {

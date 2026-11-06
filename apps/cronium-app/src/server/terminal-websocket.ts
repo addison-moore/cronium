@@ -10,6 +10,11 @@ import {
 import { hasServerPermission } from "@/server/permissions";
 import { UserStatus, type Server as CroniumServer } from "@/shared/schema";
 import type { ClientChannel } from "ssh2";
+import {
+  QUERY_FAILED_MESSAGE,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 interface TerminalSession {
   ptyProcess: ClientChannel;
@@ -164,9 +169,17 @@ export class TerminalWebSocketHandler {
             `Server: 'terminal-created' emitted for sessionId: ${sessionId ?? ""}`,
           );
         } catch (error) {
-          console.error("Server: Failed to create terminal session:", error);
+          console.error(
+            "Server: Failed to create terminal session:",
+            failureWithStack(error),
+          );
+          const reason = isQueryFailure(error)
+            ? QUERY_FAILED_MESSAGE
+            : error instanceof Error
+              ? (error.message ?? "")
+              : "Unknown error";
           socket.emit("terminal-error", {
-            error: `Failed to create terminal: ${error instanceof Error ? (error.message ?? "") : "Unknown error"}`,
+            error: `Failed to create terminal: ${reason}`,
           });
         } finally {
           // Clear the pending flag
@@ -325,7 +338,7 @@ export class TerminalWebSocketHandler {
     } catch (error) {
       console.error(
         `Server: SSH connection failed for sessionId ${sessionId}:`,
-        error,
+        failureWithStack(error),
       );
 
       // Provide more detailed error message
@@ -383,7 +396,10 @@ export class TerminalWebSocketHandler {
       }
     });
     shellProcess.on("error", (err: Error) => {
-      console.error(`Server: Remote shell session ${sessionId} error:`, err);
+      console.error(
+        `Server: Remote shell session ${sessionId} error:`,
+        failureWithStack(err),
+      );
       socket.emit("terminal-error", { sessionId, error: err.message });
       this.activeSessions.delete(sessionId);
       if (this.socketSessions.get(socket.id) === sessionId) {
@@ -409,7 +425,7 @@ export class TerminalWebSocketHandler {
       } catch (error) {
         console.error(
           `Server: Failed to terminate SSH shell process for sessionId ${sessionId}:`,
-          error,
+          failureWithStack(error),
         );
       }
       this.activeSessions.delete(sessionId);

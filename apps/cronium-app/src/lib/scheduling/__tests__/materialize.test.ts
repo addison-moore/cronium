@@ -102,7 +102,7 @@ describe("notifyScheduleChanged", () => {
     await expect(notifyScheduleChanged(42)).resolves.toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("pg_notify failed for event 42"),
-      "connection reset",
+      "Error: connection reset",
     );
   });
 });

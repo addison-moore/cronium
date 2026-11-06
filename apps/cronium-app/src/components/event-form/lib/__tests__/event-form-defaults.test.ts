@@ -4,6 +4,7 @@ import {
   extractServerIds,
   linkedServers,
   parseInitialEnvVars,
+  parseInitialHttpHeaders,
   parseInitialTags,
 } from "../event-form-defaults";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
@@ -97,11 +98,12 @@ describe("buildEventFormDefaults", () => {
     ).toBe(false);
   });
 
-  it("converts startTime to the datetime-local format (UTC, minute precision)", () => {
+  it("converts startTime to the datetime-local format (minute precision)", () => {
     const defaults = buildEventFormDefaults({
       startTime: new Date("2026-03-05T12:34:56.789Z"),
     });
-    expect(defaults.startTime).toBe("2026-03-05T12:34");
+    // Which time it shows depends on the zone, which start-time.test.ts sets.
+    expect(defaults.startTime).toMatch(/^2026-03-0[56]T\d{2}:\d{2}$/);
   });
 
   it("normalizes the lowercase values older rows can hold", () => {
@@ -137,6 +139,32 @@ describe("buildEventFormDefaults", () => {
     expect(defaults.selectedServerIds).toEqual([]);
     expect(defaults.envVars).toEqual([]);
     expect(defaults.tags).toEqual([]);
+  });
+});
+
+describe("parseInitialHttpHeaders", () => {
+  it("keeps headers the form can hold", () => {
+    const headers = [{ key: "X-Key", value: "v" }];
+    expect(parseInitialHttpHeaders(headers)).toEqual(headers);
+  });
+
+  it("leaves out anything the form's schema would refuse", () => {
+    expect(
+      parseInitialHttpHeaders([
+        { key: "X-Key", value: "v" },
+        { key: "X-Number", value: 1 },
+        { value: "no key" },
+        null,
+        "X-String",
+      ]),
+    ).toEqual([{ key: "X-Key", value: "v" }]);
+  });
+
+  it("gives an empty list for anything that isn't a list", () => {
+    expect(parseInitialHttpHeaders(null)).toEqual([]);
+    expect(parseInitialHttpHeaders(undefined)).toEqual([]);
+    expect(parseInitialHttpHeaders({ "X-Key": "v" })).toEqual([]);
+    expect(parseInitialHttpHeaders("[]")).toEqual([]);
   });
 });
 
@@ -255,27 +283,92 @@ describe("linkedServers", () => {
     ).toEqual([retired]);
   });
 
-  it("leaves out a direct server that is active, or on a LOCAL event", () => {
-    expect(
+  describe("with an active direct server", () => {
+    const other = { id: 8, name: "other-box", address: "192.0.2.30" };
+
+    it("adds it when an event has no links", () => {
+      for (const runLocation of [
+        RunLocation.REMOTE,
+        RunLocation.LOCAL_AND_REMOTE,
+      ]) {
+        expect(
+          linkedServers({ runLocation, server: live, servers: [] }),
+        ).toEqual([live]);
+      }
+    });
+
+    it("lists a server once when it's also a link", () => {
+      const onBoth = { server: live, servers: [live, other] };
+      expect(
+        linkedServers({ ...onBoth, runLocation: RunLocation.REMOTE }),
+      ).toEqual([live, other]);
+      expect(
+        linkedServers({
+          runLocation: RunLocation.LOCAL_AND_REMOTE,
+          server: live,
+          servers: [live],
+        }),
+      ).toEqual([live]);
+    });
+
+    // Where a job really goes: tests/storage/event-save-direct-server.test.ts.
+    it("takes it over a lone link on a REMOTE event, where a run goes to it", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [other],
+        }),
+      ).toEqual([live]);
+    });
+
+    it("leaves it out when a run fans out to the links without it", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [other, retired],
+        }),
+      ).toEqual([other, retired]);
+      expect(
+        linkedServers({
+          runLocation: RunLocation.LOCAL_AND_REMOTE,
+          server: live,
+          servers: [other],
+        }),
+      ).toEqual([other]);
+    });
+
+    it("keeps an archived link beside it, because that link stops the event", () => {
+      expect(
+        linkedServers({
+          runLocation: RunLocation.REMOTE,
+          server: live,
+          servers: [retired],
+        }),
+      ).toEqual([live, retired]);
+    });
+  });
+
+  it("leaves out a direct server on a LOCAL event, active or archived", () => {
+    for (const server of [live, retired]) {
+      expect(
+        linkedServers({ runLocation: RunLocation.LOCAL, server, servers: [] }),
+      ).toEqual([]);
+      expect(linkedServers({ server, servers: [] })).toEqual([]);
+    }
+  });
+
+  it("reads a location stored in lowercase by older rows", () => {
+    const stored = (runLocation: string) =>
       linkedServers({
-        runLocation: RunLocation.REMOTE,
+        runLocation: runLocation as RunLocation,
         server: live,
         servers: [],
-      }),
-    ).toEqual([]);
-    expect(
-      linkedServers({
-        runLocation: RunLocation.LOCAL,
-        server: retired,
-        servers: [],
-      }),
-    ).toEqual([]);
-    expect(
-      linkedServers({
-        server: retired,
-        servers: [],
-      }),
-    ).toEqual([]);
+      });
+
+    expect(stored("local")).toEqual([]);
+    expect(stored("remote")).toEqual([live]);
   });
 });
 
