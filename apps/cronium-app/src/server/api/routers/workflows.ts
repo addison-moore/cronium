@@ -44,6 +44,7 @@ import {
   toWorkflowApiDto,
   toWorkflowListApiDto,
 } from "@/server/security/api-dto";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -501,7 +502,10 @@ export const workflowsRouter = createTRPCRouter({
           };
         }
       } catch (error: unknown) {
-        console.error("Error fetching workflow executions:", error);
+        console.error(
+          "Error fetching workflow executions:",
+          failureWithStack(error),
+        );
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

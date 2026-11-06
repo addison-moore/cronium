@@ -43,6 +43,28 @@ before(async () => {
         return;
       }
       const msg = JSON.parse(body);
+      // A save that a reverse proxy refused, in the bytes real nginx sends.
+      if (msg.params?.name === "refused_by_proxy") {
+        res.writeHead(413, { "content-type": "text/html" });
+        res.end(
+          "<html>\r\n<head><title>413 Request Entity Too Large</title></head>\r\n<body>\r\n" +
+            "<center><h1>413 Request Entity Too Large</h1></center>\r\n" +
+            "<hr><center>nginx/1.31.8</center>\r\n</body>\r\n</html>\r\n",
+        );
+        return;
+      }
+      // A save that the app's route refused, which has no request id to answer with.
+      if (msg.params?.name === "refused_by_cronium") {
+        res.writeHead(413, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32600, message: "This event is too long to save." },
+          }),
+        );
+        return;
+      }
       const messages = Array.isArray(msg) ? msg : [msg];
       const responses = messages
         .filter((m) => m.id !== undefined && m.method)
@@ -176,6 +198,37 @@ test("maps a mid-session 401 (expired token) to a JSON-RPC error naming the env 
   assert.equal(res.id, 5);
   assert.equal(res.error.code, -32001);
   assert.match(res.error.message, /CRONIUM_API_TOKEN/);
+});
+
+test("says a reverse proxy refused a request, under the right id, rather than quote its page", async () => {
+  const [res] = await runBridge([
+    {
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tools/call",
+      params: { name: "refused_by_proxy" },
+    },
+  ]);
+  assert.equal(res.id, 11);
+  assert.equal(res.error.code, -32001);
+  assert.match(res.error.message, /reverse proxy in front of Cronium/);
+  assert.match(res.error.message, /client_max_body_size/);
+  assert.doesNotMatch(res.error.message, /<html>/);
+});
+
+test("passes on Cronium's own 413 as it did", async () => {
+  const [res] = await runBridge([
+    {
+      jsonrpc: "2.0",
+      id: 12,
+      method: "tools/call",
+      params: { name: "refused_by_cronium" },
+    },
+  ]);
+  assert.equal(res.id, 12);
+  assert.match(res.error.message, /returned HTTP 413/);
+  assert.match(res.error.message, /This event is too long to save/);
+  assert.doesNotMatch(res.error.message, /reverse proxy/);
 });
 
 test("fails fast at startup when the token is rejected outright", async () => {

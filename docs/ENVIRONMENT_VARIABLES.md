@@ -516,11 +516,11 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 
 ## Key rotation (`ENCRYPTION_KEY`)
 
-Rotating the data encryption key re-encrypts every at-rest secret onto a new key. It
-needs two restarts of the two services that use the key, `cronium-app` and
-`cronium-worker`, so it isn't free of downtime. See
-[What stops working](#what-stops-working) below. Between the two restarts every row
-stays readable, because both services hold both keys.
+Rotating the data encryption key re-encrypts every at-rest secret onto a new key, along
+with the env var copies held by jobs that haven't finished. It needs two restarts of the
+two services that use the key, `cronium-app` and `cronium-worker`, so it isn't free of
+downtime. See [What stops working](#what-stops-working) below. Between the two restarts
+every row stays readable, because both services hold both keys.
 
 **Every service must hold both keys before any row moves.** A service reads the keys
 when it starts, so changing them anywhere else doesn't reach it until it restarts. A
@@ -585,15 +585,15 @@ docker compose up -d --no-deps cronium-app cronium-worker
 docker compose exec cronium-app printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 docker compose exec cronium-worker printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 
-# 4. Move the rows. The worker now holds both keys, so it needs none on the command.
-#    Re-run until it prints "Total re-encrypted: 0; errors: 0", then note the time.
+# 4. Move the rows, and the env var copies in jobs that haven't finished. The worker now
+#    holds both keys, so it needs none on the command. Re-run until it prints
+#    "Total re-encrypted: 0; errors: 0".
 docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
-date -u '+%F %T'
 
-# 5. Jobs queued before then can hold their own copies of their env vars, which the
-#    driver doesn't touch and only the old key can read. Wait for this to say 0.
-docker compose exec postgres psql -U cronium -d cronium -c \
-  "SELECT count(*) FROM jobs WHERE status IN ('queued', 'claimed', 'running') AND created_at < '<time from step 4>';"
+# 5. Check that nothing still needs the old key, right before it goes. A job queued during
+#    step 4 can hold a copy of an env var from before that env var moved. This has to
+#    print "Total to re-encrypt: 0; errors: 0". If it doesn't, go back to step 4.
+docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs --dry-run
 
 # 6. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.
 docker compose up -d --no-deps cronium-app cronium-worker
@@ -607,6 +607,16 @@ docker compose up -d
 Keep the old key for as long as you keep a backup taken before the rotation. Those
 backups can't be read without it.
 
+Finished jobs keep their env var copies under the old key. Nothing decrypts them again,
+and they go with the job after `CRONIUM_JOB_RETENTION_DAYS`, 30 by default. If you're
+rotating because the old key may have leaked, anyone holding it and a copy of the
+database can read them until then. This removes them now, and touches only finished jobs:
+
+```bash
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
+```
+
 ### Before step 3
 
 - **`errors` isn't 0 in the dry run, or it warns about values still bound to the current
@@ -615,24 +625,21 @@ backups can't be read without it.
   again first, which re-encrypts them. Its other warning, about plaintext webhook and
   variable values, doesn't matter here: a key change doesn't affect them, and the next
   section encrypts them.
-- **Settings stored outside the vault.** The driver reports these as `skipped`, not
-  `legacy`. The bootstrap seed writes `SMTP_PASSWORD` this way. After step 3 the app
-  can't read it and uses the ciphertext as the password, with only a log line to show
-  for it. Save each one again in the admin settings:
-
-  ```bash
-  docker compose exec postgres psql -U cronium -d cronium -c \
-    "SELECT key FROM system_settings WHERE key IN ('smtpPassword', 'openaiApiKey', 'anthropicApiKey', 'geminiApiKey', 'customAiApiKey') AND value <> '' AND value NOT LIKE 'crn.%';"
-  ```
-
-- **API tokens from before they were hashed.** Each is hashed the first time it's used.
-  One nobody has used since stops working at step 3, with a 401, and has to be replaced.
-  Use it once first, or issue a new one:
-
-  ```bash
-  docker compose exec postgres psql -U cronium -d cronium -c \
-    "SELECT id, name FROM api_tokens WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$';"
-  ```
+- **It warns about sensitive settings.** These are stored outside the vault, which is how
+  the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app can't read them
+  and uses the ciphertext as the value, so an SMTP login fails with only a log line to
+  show for it. Enter each one it names again in the admin settings. Saving with the field
+  blank keeps the old value, so it has to be typed.
+- **It warns about API tokens.** These are from before tokens were hashed. Each is hashed
+  the first time it's used. One nobody has used since stops working at step 3, with a
+  401, and has to be replaced. Use each one it names once first, or issue a new one. It
+  doesn't count revoked or expired tokens.
+- **It warns about env var values copied into unfinished jobs.** Each job it names was
+  queued with a copy of an env var from before the vault. The driver can't move that copy,
+  so the job fails at step 3 with `Could not prepare this job to run`. Let the job finish
+  first, or cancel it and run the event again once its env var has been saved. An error on
+  `jobs.payload.environment` means a copy no key in the ring can read, and that job fails
+  too, so cancel it as well.
 
 ### What stops working
 
@@ -658,9 +665,10 @@ backups can't be read without it.
   `.env`. A script running then ends the same way and leaves its containers behind, and
   the app is down for about 17 seconds if it's recreated too, because Compose waits for
   the orchestrator to stop first.
-- **A job still queued when the old key goes fails,** with
-  `Could not prepare this job to run`, which is why step 5 waits. Running the event
-  again works.
+- **A job still queued when the old key goes keeps working.** The driver moves the env
+  var copies of every job that hasn't finished. If step 5 is skipped, a job holding a
+  copy it would have reported fails with `Could not prepare this job to run` when the
+  old key goes. Running the event again works.
 
 ### Rolling back
 
@@ -680,7 +688,7 @@ docker compose exec cronium-app printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 docker compose exec cronium-worker printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
 
 # 3. Move the rows back. Re-run until it prints "Total re-encrypted: 0; errors: 0", then
-#    wait for older jobs as in step 5.
+#    check as in step 5.
 docker compose exec cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 
 # 4. Remove the ENCRYPTION_KEYS_RETIRED line from .env and restart.

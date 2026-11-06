@@ -8,6 +8,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function POST(
   request: NextRequest,
@@ -92,7 +93,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error saving condition:", error);
+    console.error("Error saving condition:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
