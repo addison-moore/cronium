@@ -74,6 +74,8 @@ describe("webhook delivery record", () => {
     expect(sent.Authorization).toBe("Bearer SECRET-SENTINEL");
     expect(sent["X-Api-Key"]).toBe("ALSO-SECRET-SENTINEL");
     expect(sent["X-Webhook-Signature"]).toMatch(/^sha256=/);
+    expect(sent["X-Webhook-Signature-V2"]).toMatch(/^sha512=/);
+    expect(sent["X-Delivery-Timestamp"]).toBeTruthy();
 
     const recorded = inserted[0]!.headers as Record<string, string>;
     expect(JSON.stringify(recorded)).not.toContain("SENTINEL");
@@ -81,11 +83,22 @@ describe("webhook delivery record", () => {
     expect(recorded["X-Api-Key"]).toBe("[redacted]");
     expect(recorded["X-Webhook-Event"]).toBe("user.created");
     expect(recorded).not.toHaveProperty("X-Webhook-Signature");
+    expect(recorded).not.toHaveProperty("X-Webhook-Signature-V2");
+    expect(recorded).not.toHaveProperty("X-Delivery-Timestamp");
   });
 
   it("records nothing sensitive when the delivery fails", async () => {
     axiosRequest.mockRejectedValue(new Error("connect ECONNREFUSED"));
     await deliver();
     expect(JSON.stringify(inserted[0])).not.toContain("SENTINEL");
+  });
+
+  it("reports no more of a long response than it records", async () => {
+    axiosRequest.mockResolvedValue({ status: 200, data: "x".repeat(5000) });
+
+    const result = await deliver();
+
+    expect(inserted[0]!.response).toBe("x".repeat(1000));
+    expect(result.response).toBe("x".repeat(1000));
   });
 });
