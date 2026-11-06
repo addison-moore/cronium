@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
@@ -52,7 +53,14 @@ import {
 import { ToolActionTemplateForm } from "./templates/ToolActionTemplateForm";
 
 export function ModularToolsManager() {
-  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  // The OAuth callback names the tool a person was connecting, so they come back to it.
+  const [selectedTool, setSelectedTool] = useState<string | null>(() => {
+    const returningTo = searchParams.get("tool")?.toLowerCase();
+    return returningTo && ToolPluginRegistry.get(returningTo)
+      ? returningTo
+      : null;
+  });
   const [editingTool, setEditingTool] =
     useState<ToolWithParsedCredentials | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);

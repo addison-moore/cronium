@@ -37,6 +37,7 @@ import http from "http";
 import type { AddressInfo } from "net";
 import { executeHttpRequest } from "../scheduler/http-executor";
 import { ssrfGuardedFetch } from "../ssrf-guard";
+import { serializePayload } from "../webhooks/delivery-body";
 import { WebhookManager } from "../webhooks/WebhookManager";
 import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp } from "@/lib/tools/safe-fetch";
@@ -69,12 +70,12 @@ const senders: Array<[string, (url: string) => Promise<Outcome>]> = [
           url,
           "secret",
           {},
-          {
+          serializePayload({
             id: "payload-id",
             event: "test.event",
             timestamp: new Date(0),
             data: {},
-          },
+          }),
         );
       return { status: statusCode, error };
     },

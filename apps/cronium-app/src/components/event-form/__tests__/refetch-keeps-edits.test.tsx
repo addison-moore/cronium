@@ -5,6 +5,9 @@
  * masked, so a variable put back to its stored value goes unnoticed, and the next save
  * writes the old value.
  *
+ * What nobody has edited goes the other way. A save sends the whole form, so a field
+ * still showing an old value would write it over a newer one. It takes the new value.
+ *
  * React Query is real here, down to its focus handling, because this came from how it
  * behaves: `Date` fields defeat its structural sharing, so every refetch hands the form
  * a new object even when nothing changed. Only the request is a stub. Each place that
@@ -151,10 +154,18 @@ jest.mock("@cronium/ui", () => {
   };
 });
 
-jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
-  __esModule: true,
-  default: () => null,
-}));
+jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  return {
+    __esModule: true,
+    default: ({ onApplyCode }: { onApplyCode: (code: string) => void }) =>
+      ReactActual.createElement(
+        "button",
+        { type: "button", onClick: () => onApplyCode("echo from assistant") },
+        "Apply from assistant",
+      ),
+  };
+});
 
 // The rest of the details page isn't what's being tested, and needs a lot of it.
 jest.mock("@/components/event-details/EventDetailsHeader", () => ({
@@ -334,24 +345,23 @@ async function open(surface: () => React.ReactElement) {
   return userEvent.setup();
 }
 
+/** Longer than React Query's timer, which is how it tells the page about an answer. */
+const nextTimers = () => new Promise((resolve) => setTimeout(resolve, 20));
+
 /**
- * Come back to the window once the query has gone stale, and wait for its answer if
- * this surface refetches on focus. The Edit tab's `staleTime` is 30 seconds and the
- * modal's a minute. Returns how many fetches that started.
+ * Come back to the window once the query has gone stale, and wait until the page has
+ * what the fetch answered. The Edit tab's `staleTime` is 30 seconds and the modal's a
+ * minute. Returns how many fetches that started.
  */
 async function refocus() {
   const fetchesBefore = mockFetchEvent.mock.calls.length;
   const now = Date.now();
   jest.spyOn(Date, "now").mockReturnValue(now + 5 * 60 * 1000);
-  act(() => {
+  await act(async () => {
     window.dispatchEvent(new Event("visibilitychange"));
-  });
-  // React Query starts the fetch a tick later.
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  });
-  await act(async () => {
+    await nextTimers();
     await Promise.allSettled(mockFetchEvent.mock.results.map((r) => r.value));
+    await nextTimers();
   });
   return mockFetchEvent.mock.calls.length - fetchesBefore;
 }
@@ -376,9 +386,8 @@ afterEach(() => {
   window.location.hash = "";
 });
 
-// Without this the tests below could pass with nothing refetched. The modal isn't
-// here so that it's free to turn focus refetches off, which only makes it safer.
-it.each([SURFACES[0]!, SURFACES[2]!])(
+// Without this the tests below could pass with nothing refetched.
+it.each(SURFACES)(
   "coming back to the window refetches %s",
   async (_name, surface) => {
     serve(scriptEvent);
@@ -512,6 +521,80 @@ describe.each(SURFACES)("a refetch on %s", (_name, surface) => {
     expect(screen.getByLabelText("Value")).toHaveValue("typed");
     expect(await save(user)).toEqual(
       expect.objectContaining({ envVars: [{ key: "FOO", value: "typed" }] }),
+    );
+  });
+
+  it("picks up what changed in the fields nobody has edited", async () => {
+    serve(scriptEvent);
+    const user = await open(surface);
+
+    changeValue("Value", "typed");
+    serve(() =>
+      storedEvent(
+        {
+          name: "renamed elsewhere",
+          description: "described elsewhere",
+          content: "echo elsewhere",
+          tags: ["elsewhere"],
+          status: EventStatus.PAUSED,
+          retries: 3,
+          servers: [],
+        },
+        [{ key: "FOO", value: "changed elsewhere" }],
+      ),
+    );
+    await refocus();
+
+    expect(screen.getByLabelText("Event Name")).toHaveValue(
+      "renamed elsewhere",
+    );
+    expect(screen.getByLabelText("Description")).toHaveValue(
+      "described elsewhere",
+    );
+    expect(screen.getByLabelText("Script")).toHaveValue("echo elsewhere");
+    expect(screen.getByLabelText("Retries on Failure")).toHaveValue(3);
+    expect(screen.getByLabelText("Value")).toHaveValue("typed");
+    expect(await save(user)).toEqual(
+      expect.objectContaining({
+        name: "renamed elsewhere",
+        description: "described elsewhere",
+        content: "echo elsewhere",
+        tags: ["elsewhere"],
+        status: EventStatus.PAUSED,
+        retries: 3,
+        selectedServerIds: [],
+        envVars: [{ key: "FOO", value: "typed" }],
+      }),
+    );
+  });
+
+  it("picks up a changed variable nobody has edited, and doesn't write the old one back", async () => {
+    serve(scriptEvent);
+    const user = await open(surface);
+
+    changeValue("Event Name", "typed name");
+    serve(() => storedEvent({}, [{ key: "FOO", value: "changed elsewhere" }]));
+    await refocus();
+
+    expect(await save(user)).toEqual(
+      expect.objectContaining({
+        name: "typed name",
+        envVars: [{ key: "FOO", value: "changed elsewhere" }],
+      }),
+    );
+  });
+
+  it("treats a field changed back to what's stored as not edited", async () => {
+    serve(scriptEvent);
+    await open(surface);
+
+    changeValue("Event Name", "typed name");
+    changeValue("Event Name", "nightly");
+    serve(() => storedEvent({ name: "renamed elsewhere" }, []));
+    await refocus();
+
+    expect(screen.getByLabelText("Event Name")).toHaveValue(
+      "renamed elsewhere",
     );
   });
 
@@ -720,6 +803,209 @@ describe("changing the event's type", () => {
 
     expect(screen.getByLabelText("Script")).toHaveValue(
       getDefaultScriptContent(EventType.PYTHON),
+    );
+  });
+
+  it("keeps the new type's template when a refetch changes the stored script", async () => {
+    serve(scriptEvent);
+    const user = await open(page);
+
+    await chooseType(user, "Python");
+    serve(() =>
+      storedEvent({ content: "echo elsewhere" }, [
+        { key: "FOO", value: "stored" },
+      ]),
+    );
+    await refocus();
+
+    expect(screen.getByLabelText("Script")).toHaveValue(
+      getDefaultScriptContent(EventType.PYTHON),
+    );
+  });
+
+  it("stays local after a change to Tool Action when a refetch changes the stored servers", async () => {
+    const leftoverToolEvent = (servers: Server[]) => () =>
+      storedEvent(
+        {
+          servers,
+          toolActionConfig: {
+            toolType: "SLACK",
+            toolId: 1,
+            actionId: "slack-send-message",
+            parameters: {},
+          },
+        },
+        [],
+      );
+    serve(leftoverToolEvent([sandbox]));
+    const user = await open(page);
+
+    await chooseType(user, "Tool Action");
+    serve(leftoverToolEvent([{ ...sandbox, id: 7, name: "second" }]));
+    await refocus();
+
+    expect(await save(user)).toEqual(
+      expect.objectContaining({
+        type: EventType.TOOL_ACTION,
+        selectedServerIds: [],
+      }),
+    );
+  });
+
+  it("follows a type changed elsewhere, with that script rather than a template", async () => {
+    serve(scriptEvent);
+    await open(page);
+
+    serve(() =>
+      storedEvent({ type: EventType.PYTHON, content: "print('elsewhere')" }, [
+        { key: "FOO", value: "stored" },
+      ]),
+    );
+    await refocus();
+
+    expect(
+      screen.getByRole("combobox", { name: "Event Type" }),
+    ).toHaveTextContent("Python");
+    expect(screen.getByLabelText("Script")).toHaveValue("print('elsewhere')");
+  });
+});
+
+describe("an event with no script yet", () => {
+  const [, page] = SURFACES[0]!;
+  const noScript = (overrides: Partial<EventWithRelations> = {}) =>
+    storedEvent({ content: "", ...overrides }, [
+      { key: "FOO", value: "stored" },
+    ]);
+  const template = getDefaultScriptContent(EventType.BASH);
+
+  it("starts from the template, and keeps it when something else changes", async () => {
+    serve(noScript);
+    await open(page);
+    expect(screen.getByLabelText("Script")).toHaveValue(template);
+
+    serve(() => noScript({ name: "renamed elsewhere" }));
+    await refocus();
+
+    expect(screen.getByLabelText("Event Name")).toHaveValue(
+      "renamed elsewhere",
+    );
+    expect(screen.getByLabelText("Script")).toHaveValue(template);
+  });
+
+  // The template isn't an edit, so it shouldn't win over a real script.
+  it("takes a script written elsewhere over the template", async () => {
+    serve(noScript);
+    await open(page);
+
+    serve(() => noScript({ content: "echo elsewhere" }));
+    await refocus();
+
+    expect(screen.getByLabelText("Script")).toHaveValue("echo elsewhere");
+  });
+});
+
+describe("what edits a field from outside it", () => {
+  const [, page] = SURFACES[0]!;
+  const changedElsewhere = () =>
+    storedEvent({ content: "echo elsewhere" }, [
+      { key: "FOO", value: "stored" },
+    ]);
+
+  it("counts as an edit when it's the assistant's code", async () => {
+    serve(scriptEvent);
+    const user = await open(page);
+
+    await user.click(
+      screen.getByRole("button", { name: "Apply from assistant" }),
+    );
+    serve(changedElsewhere);
+    await refocus();
+
+    expect(screen.getByLabelText("Script")).toHaveValue("echo from assistant");
+  });
+
+  it("counts as an edit when it's the Clear button", async () => {
+    serve(scriptEvent);
+    const user = await open(page);
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    serve(changedElsewhere);
+    await refocus();
+
+    expect(screen.getByLabelText("Script")).toHaveValue("");
+  });
+});
+
+describe("a refetch that changes something while an error is on screen", () => {
+  const [, page] = SURFACES[0]!;
+
+  it("keeps the error, and clears it when the field is fixed", async () => {
+    serve(scriptEvent);
+    const user = await open(page);
+
+    changeValue("Event Name", "");
+    await user.click(screen.getByRole("button", { name: "Update Event" }));
+    await screen.findByText("Event name is required");
+
+    serve(() => storedEvent({ retries: 3 }, [{ key: "FOO", value: "stored" }]));
+    await refocus();
+
+    expect(screen.getByLabelText("Retries on Failure")).toHaveValue(3);
+    expect(screen.getByText("Event name is required")).toBeInTheDocument();
+
+    changeValue("Event Name", "fixed");
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Event name is required"),
+      ).not.toBeInTheDocument(),
+    );
+  });
+});
+
+describe("a value shown in the clear", () => {
+  const [, page] = SURFACES[0]!;
+  const twoVariables = (first: string, second: string) => () =>
+    storedEvent({}, [
+      { key: first, value: `${first}-secret` },
+      { key: second, value: `${second}-secret` },
+    ]);
+
+  it("doesn't reveal another variable when a refetch changes the rows", async () => {
+    serve(twoVariables("FOO", "BAR"));
+    const user = await open(page);
+
+    await user.click(screen.getAllByRole("button", { name: "Show value" })[0]!);
+    expect(screen.getByDisplayValue("FOO-secret")).toHaveProperty(
+      "tagName",
+      "TEXTAREA",
+    );
+
+    serve(twoVariables("BAR", "FOO"));
+    await refocus();
+
+    expect(document.getElementById("envKey-0")).toHaveValue("BAR");
+    expect(screen.getAllByRole("button", { name: "Show value" })).toHaveLength(
+      2,
+    );
+  });
+
+  it("stays shown when a refetch changes something else", async () => {
+    serve(twoVariables("FOO", "BAR"));
+    const user = await open(page);
+
+    await user.click(screen.getAllByRole("button", { name: "Show value" })[0]!);
+    serve(() => ({
+      ...twoVariables("FOO", "BAR")(),
+      name: "renamed elsewhere",
+    }));
+    await refocus();
+
+    expect(screen.getByLabelText("Event Name")).toHaveValue(
+      "renamed elsewhere",
+    );
+    expect(screen.getByDisplayValue("FOO-secret")).toHaveProperty(
+      "tagName",
+      "TEXTAREA",
     );
   });
 });

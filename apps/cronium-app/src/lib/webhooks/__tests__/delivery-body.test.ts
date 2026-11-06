@@ -4,8 +4,10 @@
 import {
   bodyTooLong,
   deliveryPayload,
+  eventBodyBytes,
   eventTooLong,
   MAX_WEBHOOK_REQUEST_BYTES,
+  serializePayload,
 } from "../delivery-body";
 
 describe("bodyTooLong", () => {
@@ -24,6 +26,64 @@ describe("bodyTooLong", () => {
 
     expect(twoBytesEach.length).toBeLessThan(MAX_WEBHOOK_REQUEST_BYTES);
     expect(bodyTooLong(twoBytesEach)).toContain("8,388,610 bytes");
+  });
+});
+
+describe("serializePayload", () => {
+  const payload = deliveryPayload(
+    { id: 42, event: "e", createdAt: new Date("2026-11-05T12:00:00.000Z") },
+    { text: "é😀\ud83d", n: 1 },
+    { source: "webhook" },
+  );
+
+  it("holds exactly what JSON.stringify makes of the payload, as UTF-8", () => {
+    expect(serializePayload(payload).body.toString()).toBe(
+      JSON.stringify(payload),
+    );
+  });
+
+  it("keeps what the headers repeat from the body", () => {
+    const { event, timestamp } = serializePayload(payload);
+
+    expect(event).toBe("e");
+    expect(timestamp).toEqual(new Date("2026-11-05T12:00:00.000Z"));
+  });
+
+  it("doesn't share memory with anything else, so a short one can't pin Node's pool", () => {
+    const { body } = serializePayload(payload);
+
+    expect(body.byteOffset).toBe(0);
+    expect(body.buffer.byteLength).toBe(body.length);
+  });
+
+  it("is told apart from the too long by its bytes", () => {
+    expect(
+      bodyTooLong(Buffer.alloc(MAX_WEBHOOK_REQUEST_BYTES)),
+    ).toBeUndefined();
+    expect(bodyTooLong(Buffer.alloc(MAX_WEBHOOK_REQUEST_BYTES + 1))).toContain(
+      "8,388,609 bytes",
+    );
+  });
+});
+
+describe("eventBodyBytes", () => {
+  it("can't be short of the real body, whatever id the event gets", () => {
+    const data = { note: "é😀" };
+    const metadata = { source: "webhook" };
+
+    for (const id of [1, 42, 2_147_483_647]) {
+      const { body } = serializePayload(
+        deliveryPayload(
+          { id, event: "e", createdAt: new Date() },
+          data,
+          metadata,
+        ),
+      );
+      const bytes = eventBodyBytes("e", data, metadata);
+
+      expect(bytes).toBeGreaterThanOrEqual(body.length);
+      expect(bytes).toBeLessThanOrEqual(body.length + 9);
+    }
   });
 });
 

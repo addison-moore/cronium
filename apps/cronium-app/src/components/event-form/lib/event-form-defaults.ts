@@ -11,6 +11,8 @@ import {
 } from "@/shared/schema";
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import { normalizeTimeUnit } from "@/lib/scheduling/schedule-math";
+import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
+import type { ToolActionConfig } from "../ToolActionSection";
 import type { EventFormData } from "./event-form-schema";
 
 /** A server as an event's relations carry it. */
@@ -50,9 +52,12 @@ export function toDatetimeLocal(startTime: Date | string): string {
 }
 
 /**
- * Resolve the form's default values from an (optional) existing event.
- * Pure: no React/tRPC imports.
+ * Resolve the form's values from an (optional) existing event.
+ * Pure: no React/tRPC imports. The form compares the result by value on every render
+ * and takes any difference as the stored event having changed, so the same event has
+ * to give the same values.
  *
+ * - `content` falls back to the event type's template when there's no script.
  * - `useCronScheduling` is derived from the presence of a custom cron
  *   expression (cron mode vs interval mode).
  * - `runOnLocal` is true unless the event is remote-only.
@@ -61,10 +66,18 @@ export function toDatetimeLocal(startTime: Date | string): string {
  * - `scheduleUnit`, `timeoutUnit` and `runLocation` are normalized, because
  *   rows from before the enum migration hold lowercase values. The form's
  *   schema refuses those with no message, so the save would silently do nothing.
+ * - `selectedServerIds` keeps an archived server selected until someone unticks it,
+ *   and a direct one a run goes to. Dropped here, a LOCAL_AND_REMOTE event with nothing
+ *   else selected would turn LOCAL on any save (deriveRunLocation), quietly moving the
+ *   script, and a REMOTE one would ask for a location it already has.
+ * - The HTTP fields are here for an event of any type that has them, because one that
+ *   used to be an HTTP request should offer them if it's switched back.
+ *   `buildEventPayload` only sends them for an HTTP request.
  */
 export function buildEventFormDefaults(
   initialData?: EventFormInitialData,
 ): EventFormData {
+  const type = initialData?.type ?? EventType.PYTHON;
   const runLocation =
     normalizeRunLocation(initialData?.runLocation) ?? RunLocation.LOCAL;
 
@@ -72,8 +85,8 @@ export function buildEventFormDefaults(
     name: initialData?.name ?? "",
     description: initialData?.description ?? "",
     shared: initialData?.shared ?? false,
-    type: initialData?.type ?? EventType.PYTHON,
-    content: initialData?.content ?? getDefaultScriptContent(EventType.PYTHON),
+    type,
+    content: (initialData?.content ?? "") || getDefaultScriptContent(type),
     status: initialData?.status ?? EventStatus.DRAFT,
     triggerType: initialData?.triggerType ?? EventTriggerType.MANUAL,
     scheduleNumber: initialData?.scheduleNumber ?? 5,
@@ -94,13 +107,30 @@ export function buildEventFormDefaults(
     runLocation,
     // Local unless the event is remote-only
     runOnLocal: runLocation !== RunLocation.REMOTE,
-    selectedServerIds: [],
+    selectedServerIds: Array.isArray(initialData?.servers)
+      ? extractServerIds(linkedServers(initialData))
+      : [],
     retries: initialData?.retries ?? 0,
     maxExecutions: initialData?.maxExecutions ?? 0,
     resetCounterOnActive: initialData?.resetCounterOnActive ?? false,
-    envVars: [],
-    tags: [],
-    toolActionConfig: null,
+    envVars:
+      parseInitialEnvVars(
+        initialData?.environmentVariables ?? initialData?.envVars,
+      ) ?? [],
+    tags: parseInitialTags(initialData?.tags) ?? [],
+    // The stored value may be an object (newer events) or a (double-)encoded JSON
+    // string (older events).
+    toolActionConfig: parseToolActionConfig(
+      initialData?.toolActionConfig,
+    ) as ToolActionConfig | null,
+    ...(initialData?.httpMethod
+      ? {
+          httpMethod: initialData.httpMethod,
+          httpUrl: initialData.httpUrl ?? "",
+          httpHeaders: parseInitialHttpHeaders(initialData.httpHeaders),
+          httpBody: initialData.httpBody ?? "",
+        }
+      : {}),
   };
 }
 

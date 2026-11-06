@@ -40,7 +40,6 @@ function EventNode({ data, selected }: NodeProps) {
     serverName,
     createdAt,
     updatedAt,
-    updateEvents,
   } = data as {
     label: string;
     type: EventType;
@@ -51,16 +50,6 @@ function EventNode({ data, selected }: NodeProps) {
     serverName?: string;
     createdAt?: string | Date;
     updatedAt?: string | Date;
-    updateEvents?: (eventId: number) => void;
-  };
-
-  const handleEventUpdated = () => {
-    console.log("Event updated, refreshing node for event ID:", eventId);
-    if (updateEvents) {
-      updateEvents(eventId);
-    } else {
-      console.warn("updateEvents function not provided to EventNode");
-    }
   };
 
   // Ensure type is a valid EventType
@@ -112,9 +101,6 @@ function EventNode({ data, selected }: NodeProps) {
               {...(serverName !== undefined && { eventServerName: serverName })}
               {...(createdAt !== undefined && { createdAt })}
               {...(updatedAt !== undefined && { updatedAt })}
-              {...(handleEventUpdated !== undefined && {
-                onEventUpdated: handleEventUpdated,
-              })}
             >
               <Button
                 variant="ghost"

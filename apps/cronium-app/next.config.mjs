@@ -141,10 +141,22 @@ const nextConfig = {
                 // Every page loads this chunk. Monaco's modules are shared
                 // between its main chunk and its language workers, which would
                 // otherwise pull them in here, but only editors should pay for
-                // them.
-                test(module) {
-                  return !/[\\/]node_modules[\\/]monaco-editor[\\/]/.test(
-                    module.identifier(),
+                // them. The tool-plugins chunk (see useToolPlugins) doesn't count
+                // as a chunk that shares a module either. It has what the Tools
+                // page imports statically, so counting it would put every plugin
+                // here, and leave nothing for its import to load.
+                test(module, { chunkGraph }) {
+                  if (
+                    /[\\/]node_modules[\\/]monaco-editor[\\/]/.test(
+                      module.identifier(),
+                    )
+                  ) {
+                    return false;
+                  }
+                  return (
+                    [...chunkGraph.getModuleChunksIterable(module)].filter(
+                      (chunk) => chunk.name !== "tool-plugins",
+                    ).length >= 2
                   );
                 },
                 minChunks: 2,

@@ -937,6 +937,24 @@ describe("testConnection", () => {
     expect(typeof result.duration).toBe("number");
   });
 
+  it("tests a tool on OAuth with its stored token, which isn't in its credentials", async () => {
+    dbState.toolRows = [toolRow()];
+    mockInjectOAuthToken.mockImplementation((credentials: object) =>
+      Promise.resolve({ ...credentials, oauthToken: "the-stored-token" }),
+    );
+
+    await userCaller().tools.testConnection({ id: 5 });
+
+    expect(mockInjectOAuthToken).toHaveBeenCalledWith(
+      { token: SECRET, email: "ops@example.com" },
+      { userId: "user-1", toolId: 5, toolType: "SLACK" },
+    );
+    expect(mockTestToolConnection).toHaveBeenCalledWith(
+      "SLACK",
+      expect.objectContaining({ oauthToken: "the-stored-token" }),
+    );
+  });
+
   it("returns an unsuccessful result when the provider rejects", async () => {
     dbState.toolRows = [toolRow()];
     mockTestToolConnection.mockResolvedValue({

@@ -22,9 +22,7 @@ jest.mock("@/server/db", () => ({
 }));
 
 jest.mock("../WebhookQueue", () => ({
-  WebhookQueue: jest
-    .fn()
-    .mockImplementation(() => ({ enqueue: jest.fn(async () => undefined) })),
+  WebhookQueue: jest.fn().mockImplementation(() => ({ reserve: jest.fn() })),
 }));
 jest.mock("../WebhookSecurity", () => ({
   WebhookSecurity: jest.fn().mockImplementation(() => ({})),
@@ -46,20 +44,23 @@ import { storage } from "@/server/storage";
 const mockGetActiveWebhooksForEvent =
   storage.getActiveWebhooksForEvent as jest.Mock;
 // The queue instance is created inside the manager's constructor; grab its
-// enqueue mock off the singleton.
-function enqueueMock(): jest.Mock {
+// reserve mock off the singleton.
+function reserveMock(): jest.Mock {
   return (
     WebhookManager.getInstance() as unknown as {
-      webhookQueue: { enqueue: jest.Mock };
+      webhookQueue: { reserve: jest.Mock };
     }
-  ).webhookQueue.enqueue;
+  ).webhookQueue.reserve;
 }
+const enqueue = jest.fn();
 
 const OWNER = "tenant-owner";
 
 beforeEach(() => {
   mockGetActiveWebhooksForEvent.mockReset();
-  enqueueMock().mockClear();
+  enqueue.mockClear();
+  reserveMock().mockReset();
+  reserveMock().mockReturnValue({ full: [], enqueue, cancel: jest.fn() });
 });
 
 describe("WebhookManager.triggerEvent tenant scoping", () => {
@@ -80,7 +81,15 @@ describe("WebhookManager.triggerEvent tenant scoping", () => {
       OWNER,
     );
     // Only the owner's subscription is enqueued.
-    expect(enqueueMock()).toHaveBeenCalledTimes(1);
+    expect(reserveMock()).toHaveBeenCalledTimes(1);
+    const [owner, , targets] = reserveMock().mock.calls[0] as [
+      string,
+      number,
+      Array<{ webhookId: number }>,
+    ];
+    expect(owner).toBe(OWNER);
+    expect(targets.map(({ webhookId }) => webhookId)).toEqual([1]);
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 
   it("does not fan out when the tenant has no subscriptions", async () => {
@@ -91,7 +100,8 @@ describe("WebhookManager.triggerEvent tenant scoping", () => {
       OWNER,
       { webhookId: 7 },
     );
-    expect(enqueueMock()).not.toHaveBeenCalled();
+    expect(reserveMock()).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
   });
 
   it("refuses to fan out without an owning tenant", async () => {

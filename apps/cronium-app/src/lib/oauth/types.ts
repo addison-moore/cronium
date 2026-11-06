@@ -42,9 +42,10 @@ export const oauthAuthRequestSchema = z.object({
 
 export type OAuthAuthRequest = z.infer<typeof oauthAuthRequestSchema>;
 
-// OAuth2 Callback Parameters
+// OAuth2 Callback Parameters. A provider's redirect brings the state and either a code
+// or an error (RFC 6749 4.1.2), so OAuthFlow.handleCallback is what requires one of them.
 export const oauthCallbackParamsSchema = z.object({
-  code: z.string(),
+  code: z.string().optional(),
   state: z.string(),
   error: z.string().optional(),
   errorDescription: z.string().optional(),

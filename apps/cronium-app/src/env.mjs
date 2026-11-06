@@ -1,5 +1,7 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+// A default import, because webpack only gives a .mjs file a CommonJS module's default.
+import retiredKeys from "../scripts/retired-keys.cjs";
 
 // A public-facing URL must not be plaintext http://ws:// over a non-loopback
 // host in production — that exposes sessions/traffic in the clear. Loopback
@@ -68,6 +70,18 @@ export const env = createEnv({
         /^[0-9a-fA-F]{64}$/,
         "ENCRYPTION_KEY must be exactly 64 hex characters (openssl rand -hex 32)",
       ),
+    ENCRYPTION_KEYS_RETIRED: z
+      .string()
+      .superRefine((value, ctx) => {
+        const { problem } = retiredKeys.parseRetiredKeys(value);
+        if (problem) {
+          ctx.addIssue({
+            code: "custom",
+            message: `ENCRYPTION_KEYS_RETIRED ${problem}`,
+          });
+        }
+      })
+      .optional(),
     ORCHESTRATOR_URL: z
       .string()
       .url()
@@ -122,6 +136,7 @@ export const env = createEnv({
     OAUTH_SLACK_CLIENT_SECRET: process.env.OAUTH_SLACK_CLIENT_SECRET,
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    ENCRYPTION_KEYS_RETIRED: process.env.ENCRYPTION_KEYS_RETIRED,
     ORCHESTRATOR_URL: process.env.ORCHESTRATOR_URL,
     VALKEY_URL: process.env.VALKEY_URL,
     REDIS_URL: process.env.REDIS_URL,
