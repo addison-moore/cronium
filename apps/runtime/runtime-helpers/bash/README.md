@@ -45,7 +45,7 @@ fi
 
 - `cronium_input` - Get execution input data
 - `cronium_output <data>` - Set execution output data
-- `cronium_get_variable <key>` - Print the variable's bare value
+- `cronium_get_variable <key>` - Print the variable's bare value. If it has no value, print nothing and return 0. If it can't be read, return 1
 - `cronium_set_variable <key> <value>` - Set a variable. Variables are stored as strings, so `42` and `{"a":1}` read back as that text
 - `cronium_set_condition <true|false>` - Set workflow condition
 - `cronium_event` - Get full event context as JSON
@@ -65,11 +65,15 @@ These wrappers exist in a container and on a remote server, but **they currently
 
 ### Utility Functions
 
-- `cronium_variable_exists <key>` - Check if variable exists
+- `cronium_variable_exists <key>` - Return 0 if the variable has a value, 1 if it doesn't, and 2 if it can't be read. An `if` treats 2 like 1, so check `$?` where the difference matters
 - `cronium_delete_variable <key>` - Not working yet: a variable cannot be deleted from a script, so this returns an error
-- `cronium_increment_variable <key> [increment]` - Increment numeric variable
-- `cronium_append_variable <key> <value> [separator]` - Append to string variable
+- `cronium_increment_variable <key> [increment]` - Add to a numeric variable and print the result. A variable with no value starts from 0
+- `cronium_append_variable <key> <value> [separator]` - Append to a string variable. A variable with no value starts empty
 - `cronium_info` - Display SDK information
+
+If `cronium_increment_variable` or `cronium_append_variable` can't read the variable, it writes nothing, so the stored value stays as it was. It prints why on stderr and returns 1. It also returns 1 if it can't store the result.
+
+The functions behave the same under `set -u` and `set -e`. Under `set -e`, one that fails ends the script, as any other command does.
 
 ## Examples
 

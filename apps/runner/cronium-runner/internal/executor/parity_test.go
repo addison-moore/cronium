@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -36,9 +37,24 @@ const (
 	parityContext = `{"executionId":"exec-parity","eventId":"7","eventName":"Demo \u003cevent\u003e","eventType":"BASH","userId":"u1","startTime":"0001-01-01T00:00:00Z","metadata":{"retry":0,"logId":12},"event":{"id":"7","name":"Demo \u003cevent\u003e","type":"BASH","runLocation":"REMOTE"}}`
 )
 
+// failingReads are variables whose reads go wrong in these ways. Their writes work, which
+// is what makes the failure dangerous: a helper that takes one for a variable with no
+// value goes on to replace it.
+var failingReads = map[string]struct {
+	status int
+	body   string
+}{
+	"BROKEN":      {http.StatusInternalServerError, `{"error":"Internal Server Error","message":"failed to get variable"}`},
+	"DENIED":      {http.StatusForbidden, `{"error":"Forbidden","message":"execution ID mismatch"}`},
+	"NOT_JSON":    {http.StatusOK, `<html>`},
+	"EMPTY_BODY":  {http.StatusOK, ``},
+	"SAYS_FAILED": {http.StatusOK, `{"success":false,"error":"it failed"}`},
+}
+
 // fakeRuntime answers as the runtime service does, and records each request it
 // accepted. A rejected request may never be sent by the side that can tell in
-// advance, so those are not part of the comparison.
+// advance, so those are not part of the comparison. A read that fails is recorded: it
+// has to have been sent, and both sides make the same number of tries.
 type fakeRuntime struct {
 	mu        sync.Mutex
 	variables map[string]string
@@ -86,6 +102,15 @@ func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.requests = append(f.requests, r.Method+" "+path+" "+canonical)
 	}
 
+	// A script sets BREAK_READS to the status it wants the input and context routes to
+	// answer, so that it can see what its helpers do when those fail.
+	if status, err := strconv.Atoi(f.variables["BREAK_READS"]); err == nil && r.Method == http.MethodGet &&
+		(path == root+"input" || path == root+"context") {
+		record()
+		f.reply(w, status, `{"error":"Failed","message":"broken"}`)
+		return
+	}
+
 	switch {
 	case r.Method == http.MethodGet && path == root+"input":
 		record()
@@ -119,6 +144,10 @@ func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				f.reply(w, http.StatusNotFound, `{"message":"Variable not found"}`)
 				return
 			}
+			if failure, failing := failingReads[key]; failing {
+				f.reply(w, failure.status, failure.body)
+				return
+			}
 			encoded := "null"
 			if found {
 				raw, _ := json.Marshal(value)
@@ -132,6 +161,11 @@ func (f *fakeRuntime) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.Unmarshal(body, &request); err != nil {
 			f.reply(w, http.StatusBadRequest, `{"error":"Bad Request","message":"invalid request body"}`)
+			return
+		}
+		if key == "READ_ONLY" {
+			record()
+			f.reply(w, http.StatusForbidden, `{"error":"Forbidden","message":"not yours"}`)
 			return
 		}
 		value, ok := variableText(request.Value)
@@ -399,9 +433,21 @@ bash -c 'echo "in a subshell: [$(cronium_get_variable NUM)]"'
 
 func TestParityBash(t *testing.T) {
 	requireTools(t, "bash", "curl", "jq")
-	result := compareRuns(t, types.ScriptTypeBash, parityBashScript)
+	pinParityBash(t, compareRuns(t, types.ScriptTypeBash, parityBashScript))
+}
 
-	// Pin the behavior itself, so the two cannot drift together unnoticed.
+// TestParityBashUnderSetU runs the same script under `set -u`, which applies inside the
+// helpers because they run in the script's own shell. In a container, every helper that
+// reads used to die on an unset "$3", and two of them then overwrote the stored value. The
+// runner's functions never had the problem, so this is where the two differed.
+func TestParityBashUnderSetU(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+	pinParityBash(t, compareRuns(t, types.ScriptTypeBash, "set -u\n"+parityBashScript))
+}
+
+// pinParityBash pins the behavior itself, so the two cannot drift together unnoticed.
+func pinParityBash(t *testing.T, result parityResult) {
+	t.Helper()
 	for _, want := range []string{
 		"string: [hello world]",
 		"number: [42]",
@@ -428,6 +474,146 @@ func TestParityBash(t *testing.T) {
 		if !strings.Contains(strings.Join(result.requests, "\n"), want) {
 			t.Errorf("requests are missing %q:\n%s", want, strings.Join(result.requests, "\n"))
 		}
+	}
+}
+
+// A failed read looked like a variable with no value on both sides, because both read
+// through `|| echo 0`: the stored value was replaced, and the helper reported success.
+const parityBashFailedReadsScript = `
+cronium_increment_variable BROKEN; echo "increment after a 500 rc=$?"
+cronium_increment_variable DENIED; echo "increment after a 403 rc=$?"
+cronium_append_variable DENIED more ","; echo "append after a 403 rc=$?"
+cronium_variable_exists DENIED; echo "exists after a 403 rc=$?"
+cronium_variable_exists NOPE; echo "exists with no value rc=$?"
+out=$(cronium_get_variable DENIED); echo "read after a 403 [$out] rc=$?"
+
+# Hiding stderr, because these don't word it the same. Neither may count as no value.
+for key in NOT_JSON EMPTY_BODY SAYS_FAILED; do
+  cronium_increment_variable "$key" 2>/dev/null; echo "increment $key rc=$?"
+  cronium_append_variable "$key" more 2>/dev/null; echo "append $key rc=$?"
+  cronium_variable_exists "$key" 2>/dev/null; echo "exists $key rc=$?"
+  out=$(cronium_get_variable "$key" 2>/dev/null); echo "read $key [$out] rc=$?"
+done
+
+# Only these may start from nothing.
+cronium_increment_variable NOPE; echo "increment with no value rc=$?"
+cronium_increment_variable GONE; echo "increment after a 404 rc=$?"
+cronium_append_variable NOPE2 more; echo "append with no value rc=$?"
+echo "stored: [$(cronium_get_variable NOPE)] [$(cronium_get_variable NOPE2)]"
+
+# A write that fails is a failure too, with no new value to go on with.
+cronium_increment_variable READ_ONLY; echo "increment refused rc=$?"
+cronium_append_variable READ_ONLY more; echo "append refused rc=$?"
+
+# 404 means no such variable, not that anything else is missing.
+cronium_set_variable BREAK_READS 404
+out=$(cronium_input); echo "input after a 404 [$out] rc=$?"
+out=$(cronium_event); echo "event after a 404 [$out] rc=$?"
+out=$(cronium_event_field eventName); echo "field after a 404 [$out] rc=$?"
+cronium_set_variable BREAK_READS 403
+out=$(cronium_event_field eventName); echo "field after a 403 [$out] rc=$?"
+`
+
+func TestParityBashFailedReads(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	for _, tc := range []struct{ name, script string }{
+		{"with no strict mode", parityBashFailedReadsScript},
+		{"under set -u", "set -u\n" + parityBashFailedReadsScript},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := compareRuns(t, types.ScriptTypeBash, tc.script)
+
+			for _, want := range []string{
+				"increment after a 500 rc=1",
+				"increment after a 403 rc=1",
+				"append after a 403 rc=1",
+				"exists after a 403 rc=2",
+				"exists with no value rc=1",
+				"read after a 403 [] rc=1",
+				"increment NOT_JSON rc=1",
+				"append EMPTY_BODY rc=1",
+				"exists SAYS_FAILED rc=2",
+				"read SAYS_FAILED [] rc=1",
+				"1\nincrement with no value rc=0",
+				"1\nincrement after a 404 rc=0",
+				"append with no value rc=0",
+				"stored: [1] [more]",
+				"increment refused rc=1",
+				"append refused rc=1",
+				"input after a 404 [] rc=1",
+				"event after a 404 [] rc=1",
+				"field after a 404 [] rc=1",
+				"field after a 403 [] rc=1",
+			} {
+				if !strings.Contains(result.stdout, want) {
+					t.Errorf("stdout is missing %q:\n%s", want, result.stdout)
+				}
+			}
+			for _, want := range []string{
+				"Error: API request failed - HTTP 500 - failed to get variable\nError: Could not read variable 'BROKEN', so it was not changed\n",
+				"Error: API request failed - HTTP 403 - execution ID mismatch\nError: Could not tell whether variable 'DENIED' exists\n",
+				"Error: API request failed - HTTP 403 - not yours\n",
+				"Error: API request failed - HTTP 404 - broken\n",
+			} {
+				if !strings.Contains(result.stderr, want) {
+					t.Errorf("stderr is missing %q:\n%s", want, result.stderr)
+				}
+			}
+
+			requests := strings.Join(result.requests, "\n")
+			for _, key := range []string{"BROKEN", "DENIED", "NOT_JSON", "EMPTY_BODY", "SAYS_FAILED"} {
+				if strings.Contains(requests, "PUT /executions/exec-parity/variables/"+key+" ") {
+					t.Errorf("wrote to %s after failing to read it:\n%s", key, requests)
+				}
+			}
+			if got := strings.Count(requests, "GET /executions/exec-parity/variables/BROKEN "); got != 3 {
+				t.Errorf("%d reads of BROKEN, want 3 tries:\n%s", got, requests)
+			}
+		})
+	}
+}
+
+// Under `set -e`, a helper that fails ends the script with status 1 on either side. In a
+// container one that writes used to end it at the first refused connection, with curl's
+// status and no retry, so a sidecar restarting was enough.
+func TestParityBashFailuresUnderSetE(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	for _, tc := range []struct {
+		name, script, stdout string
+	}{
+		{
+			name:   "a failed read",
+			script: "cronium_increment_variable NOPE\ncronium_increment_variable DENIED 2>/dev/null\necho not reached\n",
+			stdout: "1\n",
+		},
+		{
+			name:   "a refused connection",
+			script: "export CRONIUM_RUNTIME_API=http://127.0.0.1:1 CRONIUM_API_ENDPOINT=http://127.0.0.1:1\ncronium_output x 2>/dev/null\necho not reached\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := compareRuns(t, types.ScriptTypeBash, "set -euo pipefail\n"+tc.script)
+
+			if result.exitCode != 1 {
+				t.Errorf("exit code = %d, want 1", result.exitCode)
+			}
+			if result.stdout != tc.stdout {
+				t.Errorf("stdout = %q, want %q", result.stdout, tc.stdout)
+			}
+		})
+	}
+}
+
+// With no API token to show, as in bundled mode, this used to end a `set -u` script on the
+// runner. The container's cronium_info always guarded its token, so this one has no parity
+// to compare with: the two would print different tokens.
+func TestRunnerBashInfoWithoutATokenUnderSetU(t *testing.T) {
+	requireTools(t, "bash")
+	result := runOnRunner(t, types.ScriptTypeBash, "unset CRONIUM_API_TOKEN\nset -u\ncronium_info >/dev/null\necho \"rc=$?\"\n")
+	if result.stdout != "rc=0\n" || result.exitCode != 0 {
+		t.Errorf("stdout = %q, exit code = %d\nstderr: %s", result.stdout, result.exitCode, result.stderr)
 	}
 }
 
