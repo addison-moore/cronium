@@ -86,6 +86,15 @@ describe("webhook delivery behind the SSRF guard", () => {
         res.end();
         return;
       }
+      if (req.url === "/long") {
+        res.end("x".repeat(2 * 1024 * 1024));
+        return;
+      }
+      if (req.url === "/dropped") {
+        res.writeHead(200, { "Content-Length": 5000 });
+        res.write("start of the answer", () => res.destroy());
+        return;
+      }
       res.end("received");
     });
     server.on("connection", () => {
@@ -112,8 +121,45 @@ describe("webhook delivery behind the SSRF guard", () => {
 
     const result = await deliver(`http://public.test:${port}/hook`);
 
-    expect(result).toMatchObject({ success: true, statusCode: 200 });
+    expect(result).toMatchObject({
+      success: true,
+      statusCode: 200,
+      response: "received",
+    });
     expect(paths).toEqual(["/hook"]);
+  });
+
+  it("reads an answer past the cap through the guarded agent", async () => {
+    resolvesTo("127.0.0.1");
+    mockIsDisallowedIp.mockImplementation(
+      (ip) => ip !== "127.0.0.1" && realIsDisallowedIp(ip),
+    );
+
+    const result = await deliver(`http://public.test:${port}/long`);
+
+    expect(result).toMatchObject({
+      success: true,
+      statusCode: 200,
+      response: "x".repeat(1000),
+    });
+    expect(result.error).toBeUndefined();
+    expect(mockLookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads an answer that drops through the guarded agent", async () => {
+    resolvesTo("127.0.0.1");
+    mockIsDisallowedIp.mockImplementation(
+      (ip) => ip !== "127.0.0.1" && realIsDisallowedIp(ip),
+    );
+
+    const result = await deliver(`http://public.test:${port}/dropped`);
+
+    expect(result).toMatchObject({
+      success: true,
+      statusCode: 200,
+      response: "start of the answer",
+      error: "The response didn't finish (aborted)",
+    });
   });
 
   it.each(["http", "https"])(
