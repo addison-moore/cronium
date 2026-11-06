@@ -188,11 +188,15 @@ services:
     networks:
       - cronium
 
+  # This service and cronium-runtime list what they read rather than taking all of
+  # .env: any change to a service's environment recreates it on `docker compose up
+  # -d`, and neither needs AUTH_SECRET, SMTP settings, retention windows and so on.
   cronium-orchestrator:
     image: ghcr.io/addison-moore/cronium-orchestrator:${CRONIUM_IMAGE_TAG:-latest}
-    env_file:
-      - path: .env
-        required: false # missing values fail below with instructions
+    # It exits at once when only container jobs are running: they carry on, and the
+    # next orchestrator process picks them up. This is for what can't be left running
+    # (remote jobs, and jobs still starting), which get up to 30s, plus 5s to clean up.
+    stop_grace_period: 40s
     depends_on:
       cronium-app:
         condition: service_healthy
@@ -223,6 +227,31 @@ services:
       RUNTIME_HOST: cronium-runtime
       RUNTIME_PORT: 8081
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Optional tuning, set in .env. With no value here, Compose passes one along
+      # only if .env has it. To use another CRONIUM_* setting from
+      # docs/containerized-execution/orchestrator-environment-variables.md, add its
+      # name here the same way.
+      CRONIUM_JOBS_MAX_CONCURRENT:
+      CRONIUM_JOBS_POLL_INTERVAL:
+      CRONIUM_JOBS_POLL_BATCH_SIZE:
+      CRONIUM_JOBS_LEASE_RENEWAL:
+      CRONIUM_SETUP_TIMEOUT:
+      CRONIUM_CLEANUP_TIMEOUT:
+      CRONIUM_MAX_EXECUTION_TIMEOUT:
+      CRONIUM_CONTAINER_IMAGES:
+      CRONIUM_CONTAINER_RUNTIME_IMAGE:
+      CRONIUM_CONTAINER_RESOURCES_DEFAULTS_CPU:
+      CRONIUM_CONTAINER_RESOURCES_DEFAULTS_MEMORY:
+      CRONIUM_CONTAINER_RESOURCES_DEFAULTS_PIDS:
+      CRONIUM_CONTAINER_RESOURCES_LIMITS_CPU:
+      CRONIUM_CONTAINER_RESOURCES_LIMITS_MEMORY:
+      CRONIUM_CONTAINER_RESOURCES_LIMITS_PIDS:
+      CRONIUM_SSH_SECURITY_HOST_KEY_POLICY:
+      CRONIUM_SSH_SECURITY_KNOWN_HOSTS_FILE:
+      CRONIUM_SSH_SECURITY_STRICT_HOST_KEY_CHECKING:
+      CRONIUM_SSH_SECURITY_PAYLOAD_SIGNING_KEY_FILE:
+      CRONIUM_LOGGING_LEVEL:
+      CRONIUM_LOGGING_FORMAT:
     healthcheck:
       test: ["CMD", "/app/orchestrator", "healthcheck"]
       interval: 30s
@@ -240,9 +269,6 @@ services:
 
   cronium-runtime:
     image: ghcr.io/addison-moore/cronium-runtime:${CRONIUM_IMAGE_TAG:-latest}
-    env_file:
-      - path: .env
-        required: false # missing values fail below with instructions
     depends_on:
       cronium-app:
         condition: service_healthy
