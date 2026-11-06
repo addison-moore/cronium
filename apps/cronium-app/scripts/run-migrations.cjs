@@ -80,9 +80,11 @@ function runDrizzleKitPush() {
 
 async function transitionLegacyDatabase(pool) {
   // drizzle-kit push applies the declarative schema but cannot apply custom
-  // SQL such as triggers. Stamp schema migrations and execute explicitly
-  // marked custom migrations in journal order so legacy installations receive
-  // the same invariants as fresh databases.
+  // SQL such as triggers or data changes. Stamp schema migrations and execute
+  // explicitly marked custom migrations in journal order so legacy installations
+  // receive the same invariants as fresh databases. A migration without the
+  // marker never runs here, and migration-legacy-marker.test.ts fails on one
+  // that needs it.
   const journal = readJournal();
   const client = await pool.connect();
   try {
