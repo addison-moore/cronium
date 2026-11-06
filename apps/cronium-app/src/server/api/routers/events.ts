@@ -45,10 +45,11 @@ import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * A fork writes its own links to the source event's servers, and no write can
- * link an archived server. Refuse rather than leave the server out: a REMOTE
- * draft with no server still activates and then runs in a local container, with
- * only a warning in the server log, so the fork would quietly move the script.
- * The source itself can't run until its owner deals with these servers.
+ * link an archived server. Refuse rather than leave the server out: the fork
+ * would quietly lose a server it was meant to run on, and if that was its only
+ * one, it would be a REMOTE draft that can't be activated or run
+ * (shared/event-servers.ts). The source itself can't run until its owner deals
+ * with these servers.
  *
  * Only call this for the event's owner, because it names the servers.
  */

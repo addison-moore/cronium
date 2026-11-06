@@ -91,6 +91,28 @@ function isUniqueViolation(error: unknown): boolean {
   return pgErrorCode(error) === "23505";
 }
 
+/**
+ * Enforce maxExecutions before dispatch: at the limit, auto-pause the event
+ * (visible incident, not a silent stop) and skip. Manual runs are exempt —
+ * the cap governs the schedule, not the user's own button.
+ */
+async function checkMaxExecutions(
+  event: EventWithRelations,
+  triggeredBy: TriggerSource,
+): Promise<boolean> {
+  if (triggeredBy === "manual") return true;
+  if (!event.maxExecutions || event.maxExecutions <= 0) return true;
+  if ((event.executionCount ?? 0) < event.maxExecutions) return true;
+
+  console.log(
+    `[Dispatch] Event ${event.id} reached max executions (${event.maxExecutions}); auto-pausing`,
+  );
+  await autoPause(event, ScheduleIncidentKind.AUTO_PAUSED, {
+    maxExecutions: event.maxExecutions,
+  });
+  return false;
+}
+
 /** Pause an event dispatch won't run: a visible incident, not a silent stop. */
 async function autoPause(
   event: EventWithRelations,
@@ -116,28 +138,6 @@ async function autoPause(
       error instanceof Error ? error.message : String(error),
     );
   }
-}
-
-/**
- * Enforce maxExecutions before dispatch: at the limit, auto-pause the event
- * (visible incident, not a silent stop) and skip. Manual runs are exempt —
- * the cap governs the schedule, not the user's own button.
- */
-async function checkMaxExecutions(
-  event: EventWithRelations,
-  triggeredBy: TriggerSource,
-): Promise<boolean> {
-  if (triggeredBy === "manual") return true;
-  if (!event.maxExecutions || event.maxExecutions <= 0) return true;
-  if ((event.executionCount ?? 0) < event.maxExecutions) return true;
-
-  console.log(
-    `[Dispatch] Event ${event.id} reached max executions (${event.maxExecutions}); auto-pausing`,
-  );
-  await autoPause(event, ScheduleIncidentKind.AUTO_PAUSED, {
-    maxExecutions: event.maxExecutions,
-  });
-  return false;
 }
 
 /**

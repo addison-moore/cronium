@@ -74,6 +74,28 @@ describe("the Server column", () => {
     );
   });
 
+  it("says it from the session when getCurrentUser failed, which isn't retried", () => {
+    jest.mocked(useAuth).mockReturnValue({
+      user: null,
+      session: { user: { id: VIEWER } },
+    } as ReturnType<typeof useAuth>);
+
+    expect(locationOf(makeEvent({ runLocation: RunLocation.REMOTE }))).toBe(
+      "no servers",
+    );
+  });
+
+  it("doesn't say it until it knows who's looking", () => {
+    jest.mocked(useAuth).mockReturnValue({
+      user: null,
+      session: undefined,
+    } as unknown as ReturnType<typeof useAuth>);
+
+    expect(locationOf(makeEvent({ runLocation: RunLocation.REMOTE }))).not.toBe(
+      "no servers",
+    );
+  });
+
   it("doesn't say that of someone else's event, whose servers are left out", () => {
     expect(
       locationOf(makeEvent({ runLocation: RunLocation.REMOTE, userId: OTHER })),

@@ -175,7 +175,7 @@ export function EventsTable({
     // A script that runs only on servers isn't local just because it has none.
     // Only its owner can tell: someone else's servers are left out of the row.
     if (
-      event.userId === user?.id &&
+      ownerOf(event) === "viewer" &&
       !canRunWithoutServers({
         type: event.type,
         runLocation: event.runLocation?.toUpperCase() ?? null,

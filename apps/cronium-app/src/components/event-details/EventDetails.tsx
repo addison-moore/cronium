@@ -10,6 +10,7 @@ import { useHashTabNavigation } from "@/hooks/useHashTabNavigation";
 import { EventDetailsSkeleton } from "./EventDetailsSkeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import { LogStatus } from "@/shared/schema";
 import { useLogsSocket } from "@/hooks/use-logs-socket";
 
@@ -101,6 +102,14 @@ export function EventDetails({ eventId }: EventDetailsProps) {
     },
   );
 
+  const toastFailure = (fallback: string) => (error: unknown) => {
+    toast({
+      title: "Error",
+      description: trpcErrorMessage(error, fallback),
+      variant: "destructive",
+    });
+  };
+
   // tRPC mutations
   const deleteEventMutation = trpc.events.delete.useMutation({
     onSuccess: () => {
@@ -123,13 +132,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
       // Refresh logs to show new execution
       void refetchLogs();
     },
-    onError: (error) => {
-      toast({
-        title: "Event Not Run",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    onError: toastFailure("Failed to run event"),
   });
 
   const activateEventMutation = trpc.events.activate.useMutation({
@@ -141,13 +144,7 @@ export function EventDetails({ eventId }: EventDetailsProps) {
       });
       void refetchEvent();
     },
-    onError: (error) => {
-      toast({
-        title: "Event Not Activated",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    onError: toastFailure("Failed to activate event"),
   });
 
   const deactivateEventMutation = trpc.events.deactivate.useMutation({
