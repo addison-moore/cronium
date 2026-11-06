@@ -116,7 +116,11 @@ export async function assertServerCapabilities(
   serverIds: readonly number[],
   userId: string,
   capability: ResourceCapability,
-  options: { allowArchived?: boolean } = {},
+  options: {
+    allowArchived?: boolean;
+    /** Says why, in place of the generic refusal, when one is archived. */
+    archivedMessage?: (names: string[]) => string;
+  } = {},
 ): Promise<void> {
   const ids = [...new Set(serverIds)];
   if (ids.length === 0) return;
@@ -124,6 +128,7 @@ export async function assertServerCapabilities(
   const rows = await db
     .select({
       id: servers.id,
+      name: servers.name,
       userId: servers.userId,
       shared: servers.shared,
       isArchived: servers.isArchived,
@@ -131,12 +136,22 @@ export async function assertServerCapabilities(
     .from(servers)
     .where(inArray(servers.id, ids));
 
-  if (
-    (!options.allowArchived && rows.some((server) => server.isArchived)) ||
-    !allRequestedResourcesHaveCapability(ids, rows, userId, capability)
-  ) {
+  if (!allRequestedResourcesHaveCapability(ids, rows, userId, capability)) {
     deny("server relationship");
   }
+  if (options.allowArchived) return;
+
+  const archived = rows.filter((server) => server.isArchived);
+  if (archived.length === 0) return;
+  // Only past the check above, so this can't say anything about a server the
+  // caller has no access to, or that a server exists at all.
+  if (options.archivedMessage) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: options.archivedMessage(archived.map((server) => server.name)),
+    });
+  }
+  deny("server relationship");
 }
 
 export async function assertEventRelations(
@@ -265,7 +280,15 @@ export async function assertProposedEventServers(
   selectedServerIds: readonly number[] | undefined,
 ): Promise<void> {
   const ids = eventServerRelationshipIds(serverId, selectedServerIds);
-  await assertServerCapabilities(ids, userId, "use-secret");
+  await assertServerCapabilities(ids, userId, "use-secret", {
+    archivedMessage: (names) => {
+      const [what, it] =
+        names.length === 1
+          ? ["an archived server", "it"]
+          : ["archived servers", "them"];
+      return `This event can't be saved while it's linked to ${what}: ${names.join(", ")}. Restore ${it} or remove ${it} from the event, then try again.`;
+    },
+  });
 }
 
 export function eventServerRelationshipIds(

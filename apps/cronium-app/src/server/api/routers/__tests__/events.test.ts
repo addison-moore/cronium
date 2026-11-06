@@ -727,6 +727,110 @@ describe("update", () => {
     expect(storageMock.setEventServers).toHaveBeenCalledWith(1, [], OWNER);
   });
 
+  describe("with an archived server in the proposed list", () => {
+    function ownServer(id: number, name: string, isArchived: boolean) {
+      return { id, name, userId: OWNER, shared: false, isArchived };
+    }
+
+    it("says which one and what to do, and writes nothing", async () => {
+      dbState.servers = [
+        ownServer(6, "live-box", false),
+        ownServer(7, "retired-box", true),
+      ];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({
+          id: 1,
+          name: "Renamed",
+          selectedServerIds: [6, 7],
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message:
+          "This event can't be saved while it's linked to an archived server: retired-box. Restore it or remove it from the event, then try again.",
+      });
+      expect(storageMock.updateScript).not.toHaveBeenCalled();
+      expect(storageMock.setEventServers).not.toHaveBeenCalled();
+    });
+
+    it("names all of them when there are several", async () => {
+      dbState.servers = [
+        ownServer(7, "retired-one", true),
+        ownServer(8, "retired-two", true),
+      ];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, selectedServerIds: [7, 8] }),
+      ).rejects.toMatchObject({
+        message:
+          "This event can't be saved while it's linked to archived servers: retired-one, retired-two. Restore them or remove them from the event, then try again.",
+      });
+    });
+
+    it("explains a direct serverId the same way", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, serverId: 7 }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: expect.stringContaining("retired-box"),
+      });
+    });
+
+    it("never names a server that isn't the caller's", async () => {
+      dbState.servers = [
+        ownServer(7, "retired-box", true),
+        { ...ownServer(8, "their-box", true), userId: OTHER, shared: true },
+      ];
+      const caller = callerWith(sessionFor());
+
+      const error = await caller.events
+        .update({ id: 1, selectedServerIds: [7, 8] })
+        .catch((caught: unknown) => caught as Error);
+
+      expect(error).toMatchObject({
+        code: "FORBIDDEN",
+        message:
+          "You do not have the required capability for this server relationship",
+      });
+    });
+
+    it("says nothing about an archived server when another id doesn't exist", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, selectedServerIds: [7, 999] }),
+      ).rejects.toMatchObject({
+        message:
+          "You do not have the required capability for this server relationship",
+      });
+    });
+
+    it("refuses a create the same way", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.create({
+          name: "Remote Event",
+          type: EventType.BASH,
+          content: "echo hi",
+          runLocation: RunLocation.REMOTE,
+          selectedServerIds: [7],
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: expect.stringContaining("retired-box"),
+      });
+      expect(storageMock.createScript).not.toHaveBeenCalled();
+    });
+  });
+
   it("denies editing another user's event even when shared", async () => {
     dbState.events = [eventAccessRow({ userId: OTHER, shared: true })];
     const caller = callerWith(sessionFor());

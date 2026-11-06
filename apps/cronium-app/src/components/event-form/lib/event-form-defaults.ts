@@ -11,10 +11,19 @@ import {
 import { getDefaultScriptContent } from "@/lib/scriptTemplates";
 import type { EventFormData } from "./event-form-schema";
 
+/** A server as an event's relations carry it. */
+export interface EventFormServer {
+  id: number;
+  name: string;
+  address: string;
+  isArchived?: boolean;
+}
+
 // Extended Event type that includes relation properties
 export interface EventFormInitialData extends Partial<Event> {
   environmentVariables?: Array<{ key: string; value: string }>;
-  servers?: Array<{ id: number; name: string }>;
+  servers?: EventFormServer[];
+  server?: EventFormServer | null;
 }
 
 /**
@@ -113,6 +122,26 @@ export function extractServerIds(
   return servers
     .map((server) => server.id)
     .filter((id): id is number => typeof id === "number");
+}
+
+/**
+ * The servers the form must keep selected and on screen for an event: its links,
+ * and an archived direct server (the deprecated `serverId`), which stops the
+ * event just as an archived link does. A LOCAL event's direct server is left out:
+ * ticked, the event would start running on it once it was restored and saved.
+ * Left out, any save clears it.
+ */
+export function linkedServers(
+  initialData?: EventFormInitialData,
+): EventFormServer[] {
+  const links = initialData?.servers ?? [];
+  const direct = initialData?.server;
+  const runLocation = initialData?.runLocation ?? RunLocation.LOCAL;
+  return direct?.isArchived &&
+    runLocation !== RunLocation.LOCAL &&
+    !links.some((link) => link.id === direct.id)
+    ? [...links, direct]
+    : links;
 }
 
 /**
