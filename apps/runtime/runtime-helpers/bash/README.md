@@ -125,6 +125,6 @@ In a container, everything is in the image. The SDK there needs:
   - `CRONIUM_EXECUTION_ID` - Execution ID
   - `CRONIUM_RUNTIME_API` - API URL (optional, defaults to http://localhost:8081)
 
-A script still runs without these. Each function except `cronium_info` checks when it's called: if something is missing, it prints why on stderr, makes no request and returns 1.
+A script still runs if `curl`, `jq` or one of these variables is missing. Each function except `cronium_info` checks when it's called, and if something is missing it prints why on stderr, makes no request and returns 1.
 
 On a remote server, the functions need only `bash`, because they run on helper binaries that the runner brings with it. A script that calls `jq` itself, like the examples above, needs `jq` installed on that server.
