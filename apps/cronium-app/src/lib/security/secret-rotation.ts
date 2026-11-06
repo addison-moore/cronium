@@ -349,7 +349,7 @@ async function rotateUserVariables(dryRun: boolean): Promise<SurfaceResult> {
   for (const row of rows) {
     r.scanned++;
     if (isLegacyValue(row.value)) {
-      countLegacy(r, row.value);
+      r.legacy++; // Always plaintext, whatever it looks like.
       continue;
     }
     if (!vaultNeedsReencrypt(row.value)) {
@@ -472,9 +472,7 @@ async function rotateToolCredentials(dryRun: boolean): Promise<SurfaceResult> {
             keyDerivation: next.keyDerivation,
           },
         })
-        .where(
-          and(eq(toolCredentials.id, row.id), isRowVersion(row.version)),
-        ),
+        .where(and(eq(toolCredentials.id, row.id), isRowVersion(row.version))),
     );
   }
   return r;

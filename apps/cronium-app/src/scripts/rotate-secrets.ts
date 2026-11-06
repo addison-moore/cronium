@@ -6,8 +6,8 @@
  * <old> from ENCRYPTION_KEYS_RETIRED. See src/lib/security/secret-rotation.ts for
  * the safety model (idempotent, resumable, both keys in the ring throughout).
  *
- * With --encrypt-legacy it instead encrypts webhook secrets, webhook headers and
- * user variables saved before encryption at rest. See
+ * With --encrypt-legacy it instead encrypts what's still stored the way it was before
+ * the vault: plaintext, and older ciphertext a key change would orphan. See
  * src/lib/security/legacy-secrets.ts.
  *
  * From a source checkout (in apps/cronium-app), or in the published image, which
@@ -44,12 +44,12 @@ async function rotate(dryRun: boolean): Promise<number> {
   const boundToKey = report.totalLegacy - report.plaintextLegacy;
   if (boundToKey > 0) {
     console.warn(
-      `\nWARNING: ${boundToKey} legacy (pre-vault) secret value(s) are still bound to the current ENCRYPTION_KEY and CANNOT be rotated by this driver. Rotating the key would ORPHAN them. Migrate them to vault envelopes first (they re-encrypt automatically when the owning record is next saved).`,
+      `\nWARNING: ${boundToKey} legacy (pre-vault) secret value(s) are still bound to the ENCRYPTION_KEY they were saved under and CANNOT be rotated by this driver. Rotating the key without moving them first would ORPHAN them. To move them into the vault, run this again with --encrypt-legacy.`,
     );
   }
   if (report.plaintextLegacy > 0) {
     console.warn(
-      `\nWARNING: ${report.plaintextLegacy} webhook or user-variable value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
+      `\nWARNING: ${report.plaintextLegacy} value(s) are still plaintext from before encryption at rest. Rotating the key doesn't affect them. To encrypt them, run this again with --encrypt-legacy.`,
     );
   }
   const changed = report.totalChangedDuringRun;
@@ -68,7 +68,7 @@ async function rotate(dryRun: boolean): Promise<number> {
 
 async function encryptLegacy(dryRun: boolean): Promise<number> {
   console.log(
-    `Encrypting legacy plaintext values${dryRun ? " (dry run)" : ""}…`,
+    `Encrypting values from before the vault${dryRun ? " (dry run)" : ""}…`,
   );
 
   const report = await encryptLegacySecrets({ dryRun });
@@ -80,6 +80,11 @@ async function encryptLegacy(dryRun: boolean): Promise<number> {
   for (const f of report.failures) {
     console.error(
       `  FAILED, left unchanged: ${f.surface} id=${f.id} column=${f.column}: ${f.reason}`,
+    );
+  }
+  for (const v of report.readsAsCiphertext) {
+    console.warn(
+      `  NOTE: ${v.surface} id=${v.id} column=${v.column} reads as old ciphertext, not the value that was saved. This doesn't change that: set the value again to fix it, before the key it's under is gone.`,
     );
   }
   console.log(`Legacy rows remaining: ${report.remaining}`);

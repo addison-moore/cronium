@@ -525,10 +525,10 @@ describe("a value in a row that moved on", () => {
     await rotateAllSecrets();
 
     // Both columns are one write, so the headers wait with the secret.
-    const { rows } = await pool.query<{ key: string; headers: { __enc: string } }>(
-      `SELECT key, headers FROM webhooks WHERE id = $1`,
-      [second.id],
-    );
+    const { rows } = await pool.query<{
+      key: string;
+      headers: { __enc: string };
+    }>(`SELECT key, headers FROM webhooks WHERE id = $1`, [second.id]);
     expect(rows[0]!.headers.__enc.split(".")[2]).not.toBe(activeKeyId());
 
     await dropTriggers();

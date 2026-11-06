@@ -548,21 +548,46 @@ unset ENCRYPTION_KEYS_RETIRED   # and remove it from .env
 ```
 
 To **roll back** mid-rotation, run again with the keys swapped (old active, new
-retired). The driver **warns** about any `legacy` (pre-vault) values still bound
-to the current key on servers, env vars and MFA secrets: those cannot be rotated
-and must first be migrated to vault envelopes (they re-encrypt automatically the
-next time their record is saved) — rotating the key while legacy values remain
-would orphan them. It also counts plaintext webhook and user-variable values as
-`legacy`. A key change doesn't affect those, and the next section encrypts them.
+retired).
+
+The driver doesn't overwrite a value saved while it runs, such as a regenerated
+webhook secret or a refreshed OAuth token: each write applies only to the row version
+it read. A row that changed is left as it was saved, and its values count as
+`changed-during-run`, not as re-encrypted or as errors. The run then exits non-zero,
+because those values may still be under the old key. Run it again, and don't remove the
+old key until a run shows `re-encrypted=0` and `changed-during-run=0` on every line.
+
+The driver **warns** about `legacy` values: anything still stored the way it was
+before the vault, which it can't rotate. **Run `--encrypt-legacy`, described in the next
+section, before you change the key.** On servers, env vars and MFA secrets these can be
+ciphertext bound to the key they were saved under. Reads only try the active key, so
+changing the key without moving them first makes them fail, and removing the old key
+orphans them for good. If the key has already changed, `--encrypt-legacy` can still open
+them while the old key is in `ENCRYPTION_KEYS_RETIRED`. Plaintext isn't affected by a key
+change, but it's readable in every copy of the database, so the same run encrypts it.
 
 ## Encrypting values saved before encryption at rest
 
-Webhook secrets, webhook custom headers and user variables are encrypted at rest
-since July 2026. A row saved before that stays plaintext until that exact field is
-next written: an edit to a webhook's URL leaves its headers and secret as they are,
-and an edit to a variable's description leaves its value. Anyone with a copy of the
-database can read them. The app keeps working either way, so nothing fails to tell
-you. The worker logs a warning at boot while such rows exist.
+Values saved before encryption at rest, or before the record-bound vault, stay as they
+were until that exact field is next written: an edit to a webhook's URL leaves its
+headers and secret as they are, and an edit to a variable's description leaves its
+value.
+
+| Column                                                    | Can still hold              | Afterwards, encrypted with               |
+| --------------------------------------------------------- | --------------------------- | ---------------------------------------- |
+| `webhooks.secret`, `webhooks.headers`                     | plaintext                   | the vault, bound to the webhook          |
+| `user_variables.value`                                    | plaintext                   | the vault, bound to the owner and key    |
+| `servers.ssh_key`, `servers.password`                     | older ciphertext, plaintext | the vault, bound to the owner and column |
+| `env_vars.value`                                          | older ciphertext, plaintext | the vault, bound to the event and key    |
+| `users.mfa_secret`                                        | older ciphertext, plaintext | the vault, bound to the user             |
+| Sensitive `system_settings` values                        | older ciphertext, plaintext | the vault, bound to the setting          |
+| `tool_credentials.credentials`                            | plaintext                   | the format reads already use, unbound    |
+| `oauth_tokens.access_token`, `oauth_tokens.refresh_token` | plaintext                   | the format reads already use, unbound    |
+
+Anyone with a copy of the database can read plaintext. Older ciphertext isn't bound to
+its row, so anyone who can write to the database can move it to another row, and a key
+change orphans it. The app keeps working either way, so nothing fails to tell you. The
+worker logs a warning at boot while such rows exist.
 
 To encrypt them, take a database backup, then:
 
@@ -578,9 +603,12 @@ From a source checkout, the same flags go on
 `pnpm --filter @cronium/app rotate:secrets`, with the instance's `.env` loaded and
 its `DATABASE_URL` reachable from where you run it.
 
-Nothing changes for senders, subscribers or scripts: signatures still use the same
-secret, deliveries send the same headers, and `cronium.getVariable()` returns the
-same value.
+Nothing changes for what reads these values: signatures still use the same secret,
+deliveries send the same headers, `cronium.getVariable()` returns the same value, SSH
+logs in with the same key, scripts get the same env vars, authenticator apps keep
+working, and tools and OAuth connections use the same credentials. The one exception is
+older ciphertext under a key in `ENCRYPTION_KEYS_RETIRED`, which the app can't read at all
+until this moves it.
 
 The run is safe to repeat and to stop: each row is written once on its own, so a
 second run changes nothing and a run after an interruption does what's left. It
@@ -612,29 +640,58 @@ against.
 
 It ends with `Legacy rows remaining: N`, and exits non-zero if that isn't 0 or if a
 row failed. A failed row is named by id and column, and is left exactly as it was,
-including any value in it that could have been encrypted. A value reported as
-`looks encrypted, but this keyring can't decrypt it for this row` can't be read by
-the app either: the read path treats anything starting with `crn.` as encrypted, so
-this can also be a plaintext value that happens to start that way. Replace it
-(regenerate the webhook secret, save the headers, or set the variable again), then
-run this again.
+including any value in it that could have been encrypted. To fix one, replace the value
+in the app: regenerate the webhook secret, save its headers, set the variable or env var
+again, save the server's credentials or the tool's, enter the setting again in the admin
+settings, connect the OAuth account again, or have the user enrol in MFA again. Then run
+this again. The reasons it gives:
+
+- `looks encrypted, but this keyring can't decrypt it for this row`. The app can't read
+  this either: the read path treats anything starting with `crn.` as encrypted, so this
+  can also be a plaintext value that happens to start that way.
+- `has the shape of old ciphertext, but no key in this keyring opens it`. The app takes
+  50 or more base64 characters to be older ciphertext, and can't read this either. It's
+  ciphertext under a key you no longer have, or a long plaintext made only of those
+  characters, and nothing can tell which. If you have the old key, add it to
+  `ENCRYPTION_KEYS_RETIRED` and run this again.
+- `its encrypted form is too long for this column`. A version where `env_vars.value` is
+  still `varchar(255)` can't hold an encrypted value of more than 150 characters. A dry
+  run doesn't catch this one. Upgrade, which changes the column, and run this again.
+- `marked as encrypted, but isn't in the encrypted format`,
+  `marked as not encrypted, but holds encrypted data` and
+  `not a JSON object of credentials`. A tool credential the app can't use.
+- `did not read back unchanged after encrypting`. An OAuth token a read would change once
+  encrypted, such as one that's also a JSON number, or anything else that didn't come
+  back the same. Nothing was written.
+
+**Values that read as ciphertext.** A line starting `NOTE:` names a value whose reads get
+ciphertext instead of what someone saved, and did before this run. A value of 1 to 4 bytes
+saved before the vault does this, because its ciphertext is too short for the app to
+recognize, and so does a value encrypted twice, because an old edit form was handed
+ciphertext and saved it back. So a script expecting `1` has been getting a string of base64.
+The run doesn't change what reads return, so a script doesn't start behaving differently
+because of it. It encrypts such a value as it reads, and these lines aren't failures and
+don't count as remaining. To fix one, set the real value again. The run can't recover it
+for you, and nothing can once the key it's under is gone.
 
 **This doesn't erase the old values.** They were on disk for months and are still
 there:
 
 - **Table files.** Updated rows leave their old versions behind. A plain `VACUUM`
-  clears most but can leave bytes in a page. This rewrites both tables, and blocks
+  clears most but can leave bytes in a page. This rewrites these tables, and blocks
   them while it runs:
 
   ```bash
-  docker compose exec postgres psql -U cronium -d cronium -c "VACUUM FULL webhooks, user_variables;"
+  docker compose exec postgres psql -U cronium -d cronium -c "VACUUM FULL webhooks, user_variables, servers, env_vars, users, system_settings, tool_credentials, oauth_tokens;"
   ```
 
 - **WAL.** Recycled by later checkpoints, unless you archive it.
 - **Backups and dumps.** Every copy taken before this run still holds the plaintext.
   If any of those copies could have been read by someone who shouldn't have, rotate
   the credentials themselves: regenerate the webhook's secret, replace its custom
-  headers at the service that issued them, and replace any secret held in a variable.
+  headers at the service that issued them, replace any secret held in a variable or an
+  env var, replace the servers' SSH keys and passwords, and reissue tool credentials and
+  OAuth tokens. Have users enrol in MFA again if the secret was plaintext.
 
 Rolling back to an image from before July 2026 after this has run doesn't work,
 because those versions can't read encrypted values. Restore the backup instead.

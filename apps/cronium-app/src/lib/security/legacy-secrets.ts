@@ -1,14 +1,27 @@
 /**
- * Encrypts values saved before encryption at rest (HI-09, July 2026).
+ * Encrypts what's still stored the way it was before the vault.
  *
- * `webhooks.secret`, `webhooks.headers` and `user_variables.value` were plaintext
- * until then. Their read paths still pass such a value through, and nothing
- * rewrites it unless someone changes that exact field, so a row nobody edited
- * stays readable in every copy of the database. Fixing that needs the vault, so
- * it can't be a SQL migration. `rotate:secrets --encrypt-legacy` runs this pass.
+ *   - `webhooks.secret`, `webhooks.headers` and `user_variables.value` were plaintext
+ *     until encryption at rest (HI-09, July 2026).
+ *   - `servers.ssh_key`, `servers.password`, `env_vars.value`, `users.mfa_secret` and
+ *     sensitive `system_settings` values can hold static-AAD ciphertext from before the
+ *     vault, which isn't bound to its row and which a key change orphans, or plaintext.
+ *   - `tool_credentials.credentials` and `oauth_tokens` were plaintext until HI-08.
+ *     These stay in the format their read paths use, with no record binding.
  *
- *   - Readers don't change. An envelope decrypts to the string they used to read
- *     directly, so signatures, custom headers and variables behave as before.
+ * Their read paths still accept all of this, and nothing rewrites a value unless someone
+ * changes that exact field, so a row nobody edited stays as it is in every copy of the
+ * database. Fixing that needs the vault, so it can't be a SQL migration.
+ * `rotate:secrets --encrypt-legacy` runs this pass.
+ *
+ *   - Readers don't change. What's written decrypts to the string they read now, so
+ *     signatures, SSH logins and scripts behave as before. The exception is a value under
+ *     a retired key, which a read can't open at all and which starts working.
+ *   - It doesn't guess. `legacyDecrypt` goes by a value's shape, and here that's only a
+ *     first look: what looks like ciphertext has to pass its GCM tag. If nothing opens
+ *     it, it's reported, because it could be plaintext or ciphertext under a lost key,
+ *     and encrypting the second as if it were the first would turn a failed read into a
+ *     wrong value.
  *   - Safe to stop and repeat. Each row is one UPDATE, and a row with nothing left
  *     to encrypt isn't written, so a second run changes nothing and a run after an
  *     interruption only does the rest.
@@ -16,32 +29,54 @@
  *     would read it, the row is reported and left exactly as it was.
  *   - Never overwrites a newer value. The app keeps running during this, so each
  *     UPDATE only applies to the row version it read. A secret regenerated or a
- *     variable renamed in between is left alone. Comparing `xmin` rather than the
- *     old value also keeps the plaintext out of the statement, and so out of
- *     Postgres's logs and Drizzle's error messages.
+ *     variable renamed in between is left alone.
  *   - Reports never hold a value. A failure gives the row id, the column and one of
  *     a fixed set of reasons: vault errors can quote parts of what they were given,
  *     which here could be a plaintext secret.
  */
-import { asc, and, eq, sql } from "drizzle-orm";
+import { asc, and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { userVariables, webhooks } from "@/shared/schema";
+import {
+  envVars,
+  oauthTokens,
+  servers,
+  systemSettings,
+  toolCredentials,
+  users,
+  userVariables,
+  webhooks,
+} from "@/shared/schema";
 import { SENSITIVE_SYSTEM_SETTINGS } from "@/lib/encryption-service";
-import { driverError } from "@/lib/pg-errors";
+import {
+  decryptSecret as decryptOAuthToken,
+  encryptSecret as encryptOAuthToken,
+} from "@/lib/oauth/TokenManager";
 import {
   credentialEncryption,
   type EncryptedData,
   parseEncryptedData,
+  toolCredentialsHoldNothing,
 } from "@/lib/security/credential-encryption";
 import {
+  decryptEnvVarValue,
+  decryptMfaSecret,
+  decryptServerSecret,
+  decryptSystemSetting,
+  encryptEnvVarValue,
+  encryptMfaSecret,
+  encryptServerSecret,
+  encryptSystemSetting,
   isLegacyCiphertextUnderKey,
   looksLikeLegacyCiphertext,
+  readLegacyValue,
+  readsAsLegacyCiphertext,
 } from "@/lib/security/field-secret";
 import {
-  getSecretVault,
-  isSecretEnvelope,
-  SecretDecryptionError,
-} from "@/lib/security/secret-vault";
+  isRowVersion,
+  rowVersion,
+  secretRowFailureReason,
+} from "@/lib/security/secret-row";
+import { getSecretVault, isSecretEnvelope } from "@/lib/security/secret-vault";
 import {
   decryptVariableValue,
   encryptVariableValue,
@@ -55,7 +90,15 @@ import {
 } from "@/lib/webhooks/webhook-secret";
 
 export interface LegacySurfaceResult {
-  surface: "webhooks" | "user_variables";
+  surface:
+    | "webhooks"
+    | "user_variables"
+    | "servers"
+    | "env_vars"
+    | "users"
+    | "system_settings"
+    | "tool_credentials"
+    | "oauth_tokens";
   scanned: number;
   /** Rows written, or in a dry run, rows that would be. */
   encrypted: number;
@@ -69,18 +112,31 @@ export interface LegacySurfaceResult {
 
 export interface LegacyRowFailure {
   surface: LegacySurfaceResult["surface"];
-  id: number;
+  id: number | string;
   column: string;
   reason: string;
+}
+
+/** Where a value is. Never the value. */
+export interface LegacyValueLocation {
+  surface: LegacySurfaceResult["surface"];
+  id: number | string;
+  column: string;
 }
 
 export interface LegacySecretsReport {
   dryRun: boolean;
   surfaces: LegacySurfaceResult[];
   failures: LegacyRowFailure[];
+  /**
+   * Values whose reads get ciphertext rather than what someone saved, before this run
+   * and after it. See `readsAsLegacyCiphertext`. They don't count as remaining: a run
+   * encrypts them as they read, and only saving the value again fixes them.
+   */
+  readsAsCiphertext: LegacyValueLocation[];
   totalEncrypted: number;
   /**
-   * Rows that still hold a plaintext value or one the app can't read. After a real
+   * Rows that still hold a legacy value or one the app can't read. After a real
    * run this is counted again from the database rather than from this run's tallies,
    * so it also covers rows that changed while the run was going.
    */
@@ -95,23 +151,24 @@ export class LegacySecretsRefusedError extends Error {
   }
 }
 
-class NotAHeaderObjectError extends Error {}
+/** A failure whose message is one of a fixed set, and so safe to print. */
+class RowFailure extends Error {}
 
-class DoesNotReadBackError extends Error {}
+const NOT_A_HEADER_OBJECT = "not a JSON object of headers";
+const DOES_NOT_READ_BACK = "did not read back unchanged after encrypting";
+const CANT_TELL =
+  "has the shape of old ciphertext, but no key in this keyring opens it, so it can't be told from plaintext";
+const MARKED_ENCRYPTED_BUT_ISNT =
+  "marked as encrypted, but isn't in the encrypted format";
+const MARKED_PLAINTEXT_BUT_ISNT =
+  "marked as not encrypted, but holds encrypted data";
+const NOT_JSON_CREDENTIALS = "not a JSON object of credentials";
+const CANT_DECRYPT_CREDENTIAL = "encrypted, but this keyring can't decrypt it";
 
 function failureReason(error: unknown): string {
-  if (error instanceof SecretDecryptionError) {
-    return "looks encrypted, but this keyring can't decrypt it for this row";
-  }
-  if (error instanceof NotAHeaderObjectError) {
-    return "not a JSON object of headers";
-  }
-  if (error instanceof DoesNotReadBackError) {
-    return "did not read back unchanged after encrypting";
-  }
-  const { code } = driverError(error);
-  if (code) return `database error ${code}`;
-  return error instanceof Error ? error.name : "unknown error";
+  return error instanceof RowFailure
+    ? error.message
+    : secretRowFailureReason(error);
 }
 
 /** The new stored value for a text column, or undefined if it needs none. */
@@ -129,8 +186,94 @@ function encryptedText(
     return undefined;
   }
   const next = encrypt(stored);
-  if (decrypt(next) !== stored) throw new DoesNotReadBackError();
+  if (decrypt(next) !== stored) throw new RowFailure(DOES_NOT_READ_BACK);
   return next;
+}
+
+/**
+ * The new stored value for a column that can hold static-AAD ciphertext, or undefined
+ * if it needs none. `read` is what the app reads this column with.
+ */
+function encryptedField(
+  stored: string | null,
+  encrypt: (plaintext: string) => string,
+  read: (stored: string) => string,
+  noteReadsAsCiphertext: () => void,
+): string | undefined {
+  if (!stored) return undefined; // nothing to protect
+  if (isSecretEnvelope(stored)) {
+    // Throws if the app couldn't read it either, as `encryptedText` says.
+    if (readsAsLegacyCiphertext(read(stored))) noteReadsAsCiphertext();
+    return undefined;
+  }
+  const value = readLegacyValue(stored);
+  if (value === null) throw new RowFailure(CANT_TELL);
+  if (readsAsLegacyCiphertext(value)) noteReadsAsCiphertext();
+  const next = encrypt(value);
+  if (read(next) !== value) throw new RowFailure(DOES_NOT_READ_BACK);
+  return next;
+}
+
+/** The new stored value for `tool_credentials.credentials`, or undefined if it needs none. */
+function encryptedToolCredentials(
+  stored: string,
+  markedEncrypted: boolean,
+): string | undefined {
+  if (toolCredentialsHoldNothing(stored)) return undefined;
+  const encrypted = parseEncryptedData(stored);
+  if (markedEncrypted) {
+    // The app can't read either of these, and gets no credentials from them.
+    if (!encrypted) throw new RowFailure(MARKED_ENCRYPTED_BUT_ISNT);
+    assertCredentialDecrypts(encrypted);
+    return undefined;
+  }
+  // The app reads this as a plain object of the ciphertext's fields, so it's broken
+  // already, and it isn't plaintext to encrypt.
+  if (encrypted) throw new RowFailure(MARKED_PLAINTEXT_BUT_ISNT);
+
+  const credentials = parsedPlaintextCredentials(stored);
+  // No code path writes this and tools can't use it, but it could still hold a
+  // credential, so it isn't skipped as if it were empty.
+  if (credentials === null) throw new RowFailure(NOT_JSON_CREDENTIALS);
+
+  const next = credentialEncryption.encrypt(stored);
+  const readBack = credentialEncryption.decrypt(next);
+  if (JSON.stringify(readBack) !== JSON.stringify(credentials)) {
+    throw new RowFailure(DOES_NOT_READ_BACK);
+  }
+  return JSON.stringify(next);
+}
+
+/** The new stored value for an OAuth token column, or undefined if it needs none. */
+function encryptedToken(stored: string | null): string | undefined {
+  if (!stored) return undefined; // nothing to protect
+  const encrypted = parseEncryptedData(stored);
+  if (encrypted) {
+    assertCredentialDecrypts(encrypted);
+    return undefined;
+  }
+  const next = encryptOAuthToken(stored);
+  // A read parses what it decrypts as JSON, so a token like `1.0` wouldn't come back.
+  if (decryptOAuthToken(next) !== stored) {
+    throw new RowFailure(DOES_NOT_READ_BACK);
+  }
+  return next;
+}
+
+/** What the read paths get from a row marked as not encrypted, or null if nothing usable. */
+function parsedPlaintextCredentials(stored: string): object | null {
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    return typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function assertCredentialDecrypts(encrypted: EncryptedData): void {
+  if (!credentialDecrypts(encrypted)) {
+    throw new RowFailure(CANT_DECRYPT_CREDENTIAL);
+  }
 }
 
 /** The new stored value for `webhooks.headers`, or undefined if it needs none. */
@@ -144,7 +287,7 @@ function encryptedHeaders(
     const next = encryptWebhookHeaders(headers, webhookKey, userId);
     const readBack = decryptWebhookHeaders(next, webhookKey, userId);
     if (JSON.stringify(readBack) !== JSON.stringify(headers)) {
-      throw new DoesNotReadBackError();
+      throw new RowFailure(DOES_NOT_READ_BACK);
     }
     return next;
   }
@@ -155,21 +298,22 @@ function encryptedHeaders(
   ) {
     // No code path writes this and deliveries can't use it, but it could still hold
     // a credential, so it isn't skipped as if it were empty.
-    throw new NotAHeaderObjectError();
+    throw new RowFailure(NOT_A_HEADER_OBJECT);
   }
   decryptWebhookHeaders(stored, webhookKey, userId); // throws if unreadable
   return undefined;
 }
 
-/** Selected alongside a row so its UPDATE can require the same version. */
-const rowVersion = sql<string>`xmin::text`;
-const isRowVersion = (version: string) => sql`xmin::text = ${version}`;
+interface PassFindings {
+  failures: LegacyRowFailure[];
+  readsAsCiphertext: LegacyValueLocation[];
+}
 
 async function upgradeRow(
   result: LegacySurfaceResult,
   failures: LegacyRowFailure[],
   dryRun: boolean,
-  id: number,
+  id: number | string,
   columns: Record<string, () => unknown>,
   write: (set: Record<string, unknown>) => Promise<number>,
 ): Promise<void> {
@@ -313,6 +457,276 @@ async function upgradeUserVariables(
   return result;
 }
 
+async function upgradeServers(
+  dryRun: boolean,
+  { failures, readsAsCiphertext }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("servers");
+  const rows = await db
+    .select({
+      id: servers.id,
+      userId: servers.userId,
+      sshKey: servers.sshKey,
+      password: servers.password,
+      version: rowVersion,
+    })
+    .from(servers)
+    .orderBy(asc(servers.id));
+
+  for (const row of rows) {
+    const column = (name: "sshKey" | "password") => () =>
+      encryptedField(
+        row[name],
+        (value) => encryptServerSecret(value, name, row.userId),
+        (value) => decryptServerSecret(value, name, row.userId),
+        () =>
+          readsAsCiphertext.push({
+            surface: result.surface,
+            id: row.id,
+            column: name,
+          }),
+      );
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      { sshKey: column("sshKey"), password: column("password") },
+      async (set) => {
+        const written = await db
+          .update(servers)
+          .set(set)
+          .where(and(eq(servers.id, row.id), isRowVersion(row.version)));
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
+async function upgradeEnvVars(
+  dryRun: boolean,
+  { failures, readsAsCiphertext }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("env_vars");
+  const rows = await db
+    .select({
+      id: envVars.id,
+      eventId: envVars.eventId,
+      key: envVars.key,
+      value: envVars.value,
+      version: rowVersion,
+    })
+    .from(envVars)
+    .orderBy(asc(envVars.id));
+
+  for (const row of rows) {
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      {
+        value: () =>
+          encryptedField(
+            row.value,
+            (value) => encryptEnvVarValue(value, row.eventId, row.key),
+            (value) => decryptEnvVarValue(value, row.eventId, row.key),
+            () =>
+              readsAsCiphertext.push({
+                surface: result.surface,
+                id: row.id,
+                column: "value",
+              }),
+          ),
+      },
+      async (set) => {
+        const written = await db
+          .update(envVars)
+          .set(set)
+          .where(and(eq(envVars.id, row.id), isRowVersion(row.version)));
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
+async function upgradeMfaSecrets(
+  dryRun: boolean,
+  { failures, readsAsCiphertext }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("users");
+  const rows = await db
+    .select({ id: users.id, mfaSecret: users.mfaSecret, version: rowVersion })
+    .from(users)
+    .orderBy(asc(users.id));
+
+  for (const row of rows) {
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      {
+        mfaSecret: () =>
+          encryptedField(
+            row.mfaSecret,
+            (value) => encryptMfaSecret(value, row.id),
+            (value) => decryptMfaSecret(value, row.id),
+            () =>
+              readsAsCiphertext.push({
+                surface: result.surface,
+                id: row.id,
+                column: "mfaSecret",
+              }),
+          ),
+      },
+      async (set) => {
+        const written = await db
+          .update(users)
+          .set(set)
+          .where(and(eq(users.id, row.id), isRowVersion(row.version)));
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
+async function upgradeSystemSettings(
+  dryRun: boolean,
+  { failures, readsAsCiphertext }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("system_settings");
+  // The rest are plain by design, and the app reads them that way.
+  const rows = await db
+    .select({
+      id: systemSettings.id,
+      key: systemSettings.key,
+      value: systemSettings.value,
+      version: rowVersion,
+    })
+    .from(systemSettings)
+    .where(inArray(systemSettings.key, [...SENSITIVE_SYSTEM_SETTINGS]))
+    .orderBy(asc(systemSettings.id));
+
+  for (const row of rows) {
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      {
+        value: () =>
+          encryptedField(
+            row.value,
+            (value) => encryptSystemSetting(value, row.key),
+            (value) => decryptSystemSetting(value, row.key),
+            () =>
+              readsAsCiphertext.push({
+                surface: result.surface,
+                id: row.id,
+                column: "value",
+              }),
+          ),
+      },
+      async (set) => {
+        const written = await db
+          .update(systemSettings)
+          .set(set)
+          .where(and(eq(systemSettings.id, row.id), isRowVersion(row.version)));
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
+async function upgradeToolCredentials(
+  dryRun: boolean,
+  { failures }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("tool_credentials");
+  const rows = await db
+    .select({
+      id: toolCredentials.id,
+      credentials: toolCredentials.credentials,
+      encrypted: toolCredentials.encrypted,
+      version: rowVersion,
+    })
+    .from(toolCredentials)
+    .orderBy(asc(toolCredentials.id));
+
+  for (const row of rows) {
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      {
+        credentials: () =>
+          encryptedToolCredentials(row.credentials, row.encrypted),
+      },
+      async (set) => {
+        const { algorithm, keyDerivation } = parseEncryptedData(
+          set.credentials as string,
+        )!;
+        const written = await db
+          .update(toolCredentials)
+          .set({
+            ...set,
+            // The read paths go by this flag, so it has to change with the value.
+            encrypted: true,
+            encryptionMetadata: { algorithm, keyDerivation },
+          })
+          .where(
+            and(eq(toolCredentials.id, row.id), isRowVersion(row.version)),
+          );
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
+async function upgradeOauthTokens(
+  dryRun: boolean,
+  { failures }: PassFindings,
+): Promise<LegacySurfaceResult> {
+  const result = emptyResult("oauth_tokens");
+  const rows = await db
+    .select({
+      id: oauthTokens.id,
+      accessToken: oauthTokens.accessToken,
+      refreshToken: oauthTokens.refreshToken,
+      version: rowVersion,
+    })
+    .from(oauthTokens)
+    .orderBy(asc(oauthTokens.id));
+
+  for (const row of rows) {
+    await upgradeRow(
+      result,
+      failures,
+      dryRun,
+      row.id,
+      {
+        accessToken: () => encryptedToken(row.accessToken),
+        refreshToken: () => encryptedToken(row.refreshToken),
+      },
+      async (set) => {
+        const written = await db
+          .update(oauthTokens)
+          .set(set)
+          .where(and(eq(oauthTokens.id, row.id), isRowVersion(row.version)));
+        return written.rowCount ?? 0;
+      },
+    );
+  }
+  return result;
+}
+
 // A failed attempt costs an scrypt for each key in the ring, so these are capped per
 // column, newest first. Legacy ciphertext is cheap to try, and only capped to bound
 // what's loaded.
@@ -435,19 +849,29 @@ async function assertKeyringFitsDatabase(): Promise<void> {
 
 async function runPass(
   dryRun: boolean,
-  failures: LegacyRowFailure[],
+  findings: PassFindings,
 ): Promise<LegacySurfaceResult[]> {
   return [
-    await upgradeWebhooks(dryRun, failures),
-    await upgradeUserVariables(dryRun, failures),
+    await upgradeWebhooks(dryRun, findings.failures),
+    await upgradeUserVariables(dryRun, findings.failures),
+    await upgradeServers(dryRun, findings),
+    await upgradeEnvVars(dryRun, findings),
+    await upgradeMfaSecrets(dryRun, findings),
+    await upgradeSystemSettings(dryRun, findings),
+    await upgradeToolCredentials(dryRun, findings),
+    await upgradeOauthTokens(dryRun, findings),
   ];
 }
 
+const noFindings = (): PassFindings => ({
+  failures: [],
+  readsAsCiphertext: [],
+});
+
 /**
- * Encrypt every legacy plaintext webhook secret, webhook header set and user
- * variable under its record binding. See the file header for what makes this safe
- * to run on a live instance. Throws before reading a row if the vault has no usable
- * key or the keyring doesn't fit the database.
+ * Encrypt every legacy value under its record binding. See the file header for what
+ * makes this safe to run on a live instance. Throws before reading a row if the vault
+ * has no usable key or the keyring doesn't fit the database.
  */
 export async function encryptLegacySecrets(
   opts: { dryRun?: boolean } = {},
@@ -455,14 +879,14 @@ export async function encryptLegacySecrets(
   const dryRun = opts.dryRun ?? false;
   await assertKeyringFitsDatabase();
 
-  const failures: LegacyRowFailure[] = [];
-  const surfaces = await runPass(dryRun, failures);
-  const after = dryRun ? surfaces : await runPass(true, []);
+  const findings = noFindings();
+  const surfaces = await runPass(dryRun, findings);
+  const after = dryRun ? surfaces : await runPass(true, noFindings());
 
   return {
     dryRun,
     surfaces,
-    failures,
+    ...findings,
     totalEncrypted: surfaces.reduce((n, s) => n + s.encrypted, 0),
     remaining: after.reduce((n, s) => n + s.encrypted + s.failed, 0),
   };
@@ -470,15 +894,17 @@ export async function encryptLegacySecrets(
 
 /**
  * Rows holding a value `--encrypt-legacy` would encrypt, by the same rules as
- * `isSecretEnvelope` and `isLegacyWebhookHeaders`. It decrypts nothing, so it's cheap
- * enough for every boot and needs no key.
+ * `isSecretEnvelope`, `isLegacyWebhookHeaders` and `parseEncryptedData`. It decrypts
+ * nothing, so it's cheap enough for every boot and needs no key.
  *
- * A run's `remaining` also counts rows it can't read. Those aren't counted here,
- * because they need fixing rather than encrypting: a value starting with `crn.` that
- * doesn't decrypt, or headers that aren't an object. Plaintext next to one of those in
- * the same row is counted, and a run names that row instead of encrypting it.
+ * A run's `remaining` also counts rows it can't read. Those aren't counted here where
+ * telling needs no key, because they need fixing rather than encrypting: a value
+ * starting with `crn.` that doesn't decrypt, headers that aren't an object, or a tool
+ * credential whose flag doesn't match what it holds. Plaintext next to one of those in
+ * the same row is counted, and a run names that row instead of encrypting it. What
+ * looks like old ciphertext is counted whether or not a key opens it, which takes a key.
  */
-export async function countLegacyPlaintextRows(): Promise<number> {
+export async function countLegacyRows(): Promise<number> {
   const plaintextSecret = sql`(secret <> '' AND secret NOT LIKE 'crn.%')`;
   const { rows } = await db.execute<{ count: string }>(sql`
     SELECT (
@@ -492,34 +918,72 @@ export async function countLegacyPlaintextRows(): Promise<number> {
     ) + (
       SELECT count(*) FROM user_variables
       WHERE value <> '' AND value NOT LIKE 'crn.%'
+    ) + (
+      SELECT count(*) FROM servers
+      WHERE (ssh_key <> '' AND ssh_key NOT LIKE 'crn.%')
+        OR (password <> '' AND password NOT LIKE 'crn.%')
+    ) + (
+      SELECT count(*) FROM env_vars
+      WHERE value <> '' AND value NOT LIKE 'crn.%'
+    ) + (
+      SELECT count(*) FROM users
+      WHERE mfa_secret <> '' AND mfa_secret NOT LIKE 'crn.%'
+    ) + (
+      SELECT count(*) FROM system_settings
+      WHERE key IN ${[...SENSITIVE_SYSTEM_SETTINGS]}
+        AND value <> '' AND value NOT LIKE 'crn.%'
     ) AS count
   `);
 
   // Headers stored as a JSON string read as whatever that string parses to, and SQL
   // before Postgres 16 can't test that without an error on the ones that don't parse.
   // So the few rows like that are read the way a run reads them, and asked the same
-  // question.
+  // question. The same goes for telling a credential's plaintext from its encrypted
+  // format, and these tables are small.
   const stringHeaders = await db
     .select({ headers: webhooks.headers })
     .from(webhooks)
     .where(sql`jsonb_typeof(headers) = 'string' AND NOT ${plaintextSecret}`);
+  const plaintextCredentials = await db
+    .select({ credentials: toolCredentials.credentials })
+    .from(toolCredentials)
+    .where(eq(toolCredentials.encrypted, false));
+  const tokens = await db
+    .select({
+      accessToken: oauthTokens.accessToken,
+      refreshToken: oauthTokens.refreshToken,
+    })
+    .from(oauthTokens);
+
+  const isPlaintextToken = (stored: string | null) =>
+    !!stored && !parseEncryptedData(stored);
 
   return (
     Number(rows[0]?.count ?? 0) +
-    stringHeaders.filter((row) => isLegacyWebhookHeaders(row.headers)).length
+    stringHeaders.filter((row) => isLegacyWebhookHeaders(row.headers)).length +
+    plaintextCredentials.filter(
+      ({ credentials }) =>
+        !toolCredentialsHoldNothing(credentials) &&
+        !parseEncryptedData(credentials) &&
+        parsedPlaintextCredentials(credentials) !== null,
+    ).length +
+    tokens.filter(
+      (row) =>
+        isPlaintextToken(row.accessToken) || isPlaintextToken(row.refreshToken),
+    ).length
   );
 }
 
 /**
- * A line for the worker's boot log when rows hold plaintext, or null. The worker only
- * reports. Encrypting rewrites secrets with whatever key the process has, and a dev
- * worker points at a shared database, so an operator starts it.
+ * A line for the worker's boot log when rows hold legacy values, or null. The worker
+ * only reports. Encrypting rewrites secrets with whatever key the process has, and a
+ * dev worker points at a shared database, so an operator starts it.
  */
 export async function legacySecretsBootWarning(): Promise<string | null> {
-  const count = await countLegacyPlaintextRows();
+  const count = await countLegacyRows();
   if (count === 0) return null;
   return (
-    `${String(count)} webhook or user-variable row(s) still hold plaintext from before encryption at rest. ` +
+    `${String(count)} row(s) still hold secrets from before the vault, as plaintext or older ciphertext. ` +
     "Run node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy to encrypt them. It names any row it can't encrypt. See docs/ENVIRONMENT_VARIABLES.md."
   );
 }

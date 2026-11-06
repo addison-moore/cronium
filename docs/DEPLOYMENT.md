@@ -214,9 +214,11 @@ docker compose up -d
   those variables to `0` in `.env` first. Re-running `install.sh` keeps your existing
   `.env` and does not add them for you. The tool audit log is the exception: nothing
   is deleted from it until you set a window.
-- **Webhooks and variables saved before July 2026 stay plaintext until you encrypt
-  them.** Upgrading doesn't do it for you. The worker logs a warning at boot if any
-  remain, and
+- **Secrets saved before encryption at rest stay as they were until you encrypt them.**
+  Webhook values, variables, tool credentials and OAuth tokens can still be plaintext.
+  Server credentials, env vars, MFA secrets and sensitive settings can be plaintext or
+  older ciphertext, which changing `ENCRYPTION_KEY` orphans. Upgrading doesn't do it for
+  you. The worker logs a warning at boot if any remain, and
   [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
   has the command.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
