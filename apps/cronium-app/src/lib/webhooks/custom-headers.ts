@@ -115,7 +115,7 @@ function customHeaderRefusal(name: string, value: string): string | undefined {
   const reserved = reservedHeader(name, value);
   if (reserved) return reserved.refusal;
   if (!HEADER_VALUE.test(value.trim())) {
-    return `The value of custom header ${name.trim()} can't hold line breaks, control characters or anything above U+00FF: they'd be removed before sending, so the receiver would get a different value`;
+    return `The value of custom header ${name.trim()} can't hold line breaks, control characters other than tabs, or anything above U+00FF: they'd be removed before sending, so the receiver would get a different value`;
   }
   return undefined;
 }
