@@ -442,9 +442,13 @@ export const webhookSystemRouter = createTRPCRouter({
       );
     }),
 
-  // Test webhook
+  // Send a test event to this webhook and report what the receiver did
   test: protectedProcedure
     .use(withTiming)
+    // Each call makes an outbound request and waits for it, outside the queue's
+    // limit on how many run at once, and writes two rows. This stops a client in a
+    // loop. Calls made at the same moment can get past it, as on retryDelivery.
+    .use(withRateLimit(10, 60000))
     .input(
       z.object({
         webhookId: z.number(),
@@ -470,25 +474,33 @@ export const webhookSystemRouter = createTRPCRouter({
             throw notFoundError("Webhook");
           }
 
-          // Trigger test event within the caller's own tenant.
-          await webhookManager.triggerEvent(
-            "webhook.test",
-            {
-              test: true,
-              timestamp: new Date().toISOString(),
-              ...input.testData,
-            },
-            webhook.userId,
-            {
-              webhookId: input.webhookId,
-              triggeredBy: ctx.session.user.id,
-            },
+          const attempt = await withRefusalsMapped(() =>
+            webhookManager.sendTestEvent(
+              webhook,
+              {
+                test: true,
+                timestamp: new Date().toISOString(),
+                ...input.testData,
+              },
+              {
+                webhookId: input.webhookId,
+                triggeredBy: ctx.session.user.id,
+              },
+            ),
           );
 
-          return mutationResponse(
-            { webhookId: input.webhookId },
-            "Test webhook sent",
-          );
+          // Not mutationResponse, whose `success` is always true. A receiver
+          // refusing the test isn't an error in this request, but it isn't a
+          // success either, and the attempt's details are worth keeping.
+          return {
+            success: attempt.success,
+            data: attempt,
+            message: attempt.success
+              ? "Test webhook delivered"
+              : `Test webhook failed: ${
+                  attempt.error ?? `HTTP ${attempt.statusCode ?? "unknown"}`
+                }`,
+          };
         },
         {
           component: "webhookSystemRouter",
