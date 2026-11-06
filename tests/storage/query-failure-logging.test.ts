@@ -361,7 +361,7 @@ describe("PATCH /api/events/{id}", () => {
   });
 });
 
-describe("the routes that used to log an error as it is", () => {
+describe("the other routes", () => {
   const stackOf = (line: string | undefined) => line?.match(/\n\s+at /);
 
   it("DELETE /api/events/{id} keeps the stack and leaves out the query", async () => {
