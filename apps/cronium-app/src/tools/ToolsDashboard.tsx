@@ -90,7 +90,7 @@ function ActionBrowser() {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={!selectedCategory ? "default" : "outline"}
             size="sm"
@@ -112,7 +112,7 @@ function ActionBrowser() {
       </div>
 
       {/* Actions grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredActions.map(({ action, tool }) => {
           const Icon = tool.icon;
           return (
@@ -123,7 +123,7 @@ function ActionBrowser() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon className="text-primary h-5 w-5" />
+                    <Icon className="text-primary h-5 w-5 shrink-0" />
                     <div>
                       <CardTitle className="text-base">{action.name}</CardTitle>
                       <p className="text-muted-foreground text-xs">
@@ -135,7 +135,7 @@ function ActionBrowser() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground mb-3 text-sm">
+                <p className="text-muted-foreground mb-3 text-sm wrap-anywhere">
                   {action.description}
                 </p>
                 <div className="flex items-center justify-between">
@@ -194,10 +194,10 @@ function ExecutionHistory() {
       {logs.map((log) => (
         <Card key={log.id}>
           <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StatusIcon status={log.status} className="h-5 w-5" />
-                <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <StatusIcon status={log.status} className="h-5 w-5 shrink-0" />
+                <div className="min-w-0 wrap-anywhere">
                   <p className="font-medium">{log.actionId}</p>
                   <p className="text-muted-foreground text-sm">
                     {log.toolType} •{" "}
@@ -236,7 +236,7 @@ function HealthOverview() {
   return (
     <div className="space-y-6">
       {/* Stats cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Tools</CardTitle>
@@ -301,7 +301,7 @@ function HealthOverview() {
           <CardTitle>Tool Health Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {tools.map((tool) => {
               const plugin = ToolPluginRegistry.get(tool.type.toLowerCase());
               if (!plugin) return null;
@@ -310,11 +310,11 @@ function HealthOverview() {
               return (
                 <div
                   key={tool.id}
-                  className="border-border flex items-center justify-between rounded-lg border p-3"
+                  className="border-border flex items-center justify-between rounded-lg border p-3 max-sm:gap-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="text-primary h-5 w-5" />
-                    <div>
+                  <div className="flex items-center gap-2 max-sm:min-w-0">
+                    <Icon className="text-primary h-5 w-5 shrink-0" />
+                    <div className="max-sm:min-w-0 max-sm:wrap-anywhere">
                       <p className="font-medium">{tool.name}</p>
                       <p className="text-muted-foreground text-xs">
                         {plugin.name}
@@ -339,21 +339,21 @@ export default function ToolsDashboard() {
     <div className="space-y-6">
       {/* Main content tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="management">
-            <Settings className="mr-2 h-4 w-4" />
+        <TabsList className="grid w-full grid-cols-2 items-stretch lg:grid-cols-4 lg:items-center">
+          <TabsTrigger value="management" className="whitespace-normal">
+            <Settings className="mr-2 h-4 w-4 shrink-0" />
             Management
           </TabsTrigger>
-          <TabsTrigger value="browse">
-            <Zap className="mr-2 h-4 w-4" />
+          <TabsTrigger value="browse" className="whitespace-normal">
+            <Zap className="mr-2 h-4 w-4 shrink-0" />
             Browse Actions
           </TabsTrigger>
-          <TabsTrigger value="history">
-            <Clock className="mr-2 h-4 w-4" />
+          <TabsTrigger value="history" className="whitespace-normal">
+            <Clock className="mr-2 h-4 w-4 shrink-0" />
             Execution History
           </TabsTrigger>
-          <TabsTrigger value="health">
-            <BarChart3 className="mr-2 h-4 w-4" />
+          <TabsTrigger value="health" className="whitespace-normal">
+            <BarChart3 className="mr-2 h-4 w-4 shrink-0" />
             Health Overview
           </TabsTrigger>
         </TabsList>

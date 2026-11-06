@@ -25,11 +25,11 @@ import { trpc } from "@/lib/trpc";
 function getSeverityIcon(severity: "error" | "warning" | "info") {
   switch (severity) {
     case "error":
-      return <XCircle className="text-destructive h-5 w-5" />;
+      return <XCircle className="text-destructive h-5 w-5 shrink-0" />;
     case "warning":
-      return <AlertCircle className="text-warning h-5 w-5" />;
+      return <AlertCircle className="text-warning h-5 w-5 shrink-0" />;
     case "info":
-      return <CheckCircle className="text-info h-5 w-5" />;
+      return <CheckCircle className="text-info h-5 w-5 shrink-0" />;
   }
 }
 
@@ -214,10 +214,10 @@ function DiagnosticsContent({
             key={issue.id}
             className="border-border space-y-3 rounded-lg border p-4"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex min-w-0 items-start gap-3">
                 {getSeverityIcon(issue.severity)}
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1 wrap-anywhere">
                   <h4 className="font-medium">{issue.title}</h4>
                   <p className="text-muted-foreground text-sm">
                     {issue.description}
