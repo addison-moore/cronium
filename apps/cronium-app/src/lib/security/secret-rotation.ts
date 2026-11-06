@@ -21,6 +21,9 @@
  *   1. ENCRYPTION_KEY=<new>, ENCRYPTION_KEYS_RETIRED=["<old>"]
  *   2. run this driver until it reports 0 remaining
  *   3. remove <old> from ENCRYPTION_KEYS_RETIRED
+ *
+ * Plaintext from before encryption at rest is not this driver's job, though it
+ * counts it as `legacy`: `legacy-secrets.ts` encrypts it.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
@@ -54,10 +57,11 @@ import {
   decryptWebhookSecret,
   encryptWebhookHeaders,
   decryptWebhookHeaders,
+  isLegacyWebhookHeaders,
 } from "@/lib/webhooks/webhook-secret";
 import {
   credentialEncryption,
-  type EncryptedData,
+  parseEncryptedData,
 } from "@/lib/security/credential-encryption";
 
 export interface SurfaceResult {
@@ -66,11 +70,13 @@ export interface SurfaceResult {
   reencrypted: number;
   skipped: number;
   errors: number;
-  // Non-null values in an always-secret column that are NOT vault envelopes,
-  // i.e. legacy static-AAD ciphertext still bound to the CURRENT ENCRYPTION_KEY.
-  // The driver cannot rotate these (it would orphan them under the retired key);
-  // they must be migrated to vault envelopes first (lazy passthrough on write,
-  // or a dedicated legacy-migration pass) BEFORE the key is rotated.
+  // Non-null values in an always-secret column that are NOT vault envelopes. On
+  // servers, env vars and MFA secrets these are legacy static-AAD ciphertext still
+  // bound to the CURRENT ENCRYPTION_KEY: the driver cannot rotate them (it would
+  // orphan them under the retired key), so they must be migrated to vault envelopes
+  // first (lazy passthrough on write) BEFORE the key is rotated. On webhooks and
+  // user variables they are plaintext, which a key change can't orphan and which
+  // `legacy-secrets.ts` encrypts.
   legacy: number;
 }
 
@@ -80,14 +86,14 @@ export interface RotationReport {
   totalReencrypted: number;
   totalErrors: number;
   totalLegacy: number;
+  /** The part of totalLegacy that is plaintext `--encrypt-legacy` can encrypt. */
+  plaintextLegacy: number;
   remaining: number;
 }
 
 /**
- * A non-null, always-secret value that is NOT a vault envelope — i.e. legacy
- * static-AAD ciphertext bound to the current ENCRYPTION_KEY. Counting these lets
- * the driver warn that a key rotation would orphan them (they must be migrated
- * to vault envelopes first).
+ * A non-null, always-secret value that is NOT a vault envelope. Counting these lets
+ * the driver warn about them: see `SurfaceResult.legacy` for what they are.
  */
 function isLegacyValue(value: string | null | undefined): boolean {
   return !!value && !isSecretEnvelope(value);
@@ -102,21 +108,6 @@ function vaultNeedsReencrypt(
     isSecretEnvelope(value) &&
     getSecretVault().needsReencryption(value)
   );
-}
-
-function parseEncrypted(
-  stored: string | null | undefined,
-): EncryptedData | null {
-  if (!stored) return null;
-  try {
-    const o = JSON.parse(stored) as Partial<EncryptedData>;
-    if (o?.encrypted && o.iv && o.authTag && o.keyDerivation) {
-      return o as EncryptedData;
-    }
-  } catch {
-    // Not JSON → legacy plaintext, nothing to rotate.
-  }
-  return null;
 }
 
 async function rotateServers(dryRun: boolean): Promise<SurfaceResult> {
@@ -370,8 +361,11 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
       r.skipped++;
     }
     // headers ({ __enc: envelope } jsonb)
+    r.scanned++;
     const enc = (row.headers as { __enc?: unknown } | null)?.__enc;
-    if (typeof enc === "string" && vaultNeedsReencrypt(enc)) {
+    if (isLegacyWebhookHeaders(row.headers)) {
+      r.legacy++;
+    } else if (typeof enc === "string" && vaultNeedsReencrypt(enc)) {
       try {
         const decoded = decryptWebhookHeaders(row.headers, row.key, row.userId);
         headersNext = encryptWebhookHeaders(decoded, row.key, row.userId);
@@ -379,6 +373,8 @@ async function rotateWebhooks(dryRun: boolean): Promise<SurfaceResult> {
         r.errors++;
         logRowError(r.surface, String(row.id), "headers", e);
       }
+    } else {
+      r.skipped++;
     }
     if ((secretNext !== undefined || headersNext !== undefined) && !dryRun) {
       const set: Record<string, unknown> = {};
@@ -410,7 +406,7 @@ async function rotateToolCredentials(dryRun: boolean): Promise<SurfaceResult> {
     .from(toolCredentials);
   for (const row of rows) {
     r.scanned++;
-    const enc = row.encrypted ? parseEncrypted(row.credentials) : null;
+    const enc = row.encrypted ? parseEncryptedData(row.credentials) : null;
     if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
       r.skipped++;
       continue;
@@ -459,7 +455,7 @@ async function rotateOauthTokens(dryRun: boolean): Promise<SurfaceResult> {
     const set: Record<string, unknown> = {};
     for (const col of ["accessToken", "refreshToken"] as const) {
       const stored = row[col];
-      const enc = parseEncrypted(stored);
+      const enc = parseEncryptedData(stored);
       r.scanned++;
       if (!enc || credentialEncryption.isUnderActiveKey(enc)) {
         r.skipped++;
@@ -508,8 +504,10 @@ export async function rotateAllSecrets(
   surfaces.push(await rotateEnvVars(dryRun));
   surfaces.push(await rotateSystemSettings(dryRun));
   surfaces.push(await rotateMfaSecrets(dryRun));
-  surfaces.push(await rotateUserVariables(dryRun));
-  surfaces.push(await rotateWebhooks(dryRun));
+  const userVariableResult = await rotateUserVariables(dryRun);
+  surfaces.push(userVariableResult);
+  const webhookResult = await rotateWebhooks(dryRun);
+  surfaces.push(webhookResult);
   surfaces.push(await rotateToolCredentials(dryRun));
   surfaces.push(await rotateOauthTokens(dryRun));
 
@@ -524,6 +522,7 @@ export async function rotateAllSecrets(
     totalReencrypted,
     totalErrors,
     totalLegacy,
+    plaintextLegacy: userVariableResult.legacy + webhookResult.legacy,
     remaining,
   };
 }

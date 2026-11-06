@@ -44,6 +44,11 @@ const tableOfContents = [
   { title: "Backing Services", href: "#backing-services-env", level: 3 },
   { title: "Deployment Workflow", href: "#deployment-workflow", level: 2 },
   { title: "Data Retention", href: "#data-retention", level: 2 },
+  {
+    title: "Encrypting Older Values",
+    href: "#encrypting-older-values",
+    level: 2,
+  },
   { title: "Post-Deployment Checklist", href: "#post-deployment", level: 2 },
 ];
 
@@ -178,6 +183,14 @@ export default function SelfHostingPage() {
               touching your secrets, and <code>--uninstall</code> stops the
               stack while keeping your data. Prefer to see every step? The
               manual path below does exactly what the installer automates.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Upgrading doesn&apos;t encrypt webhooks and variables saved before
+              July 2026. That&apos;s a step you run yourself: see{" "}
+              <a href="#encrypting-older-values" className="underline">
+                Encrypting Older Values
+              </a>
+              .
             </p>
           </div>
         </section>
@@ -935,6 +948,87 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 until you set a window.
               </AlertDescription>
             </Alert>
+          </div>
+        </section>
+
+        <section id="encrypting-older-values" className="mb-12">
+          <h2 className="mb-6 text-2xl font-bold">Encrypting Older Values</h2>
+          <div className="space-y-6">
+            <p>
+              Webhook secrets, webhook custom headers and user variables are
+              encrypted at rest since July 2026. A row saved before that stays
+              plaintext until that exact field is next written, so anyone with a
+              copy of the database can read it. Upgrading doesn&apos;t change
+              this and the app keeps working either way, so the{" "}
+              <code>cronium-worker</code> service logs a warning at boot while
+              such rows exist.
+            </p>
+            <p>To encrypt them, take a database backup, then run:</p>
+            <SimpleCodeBlock language="bash">
+              {`# See what would change. Writes nothing.
+docker compose exec cronium-worker \\
+  node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy --dry-run
+
+# Encrypt. The app can stay up.
+docker compose exec cronium-worker \\
+  node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy`}
+            </SimpleCodeBlock>
+            <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+              <li>
+                Nothing changes for senders, subscribers or scripts: signatures
+                use the same secret, deliveries send the same headers, and
+                variables return the same value.
+              </li>
+              <li>
+                It&apos;s safe to repeat and to stop. A second run changes
+                nothing, a run after an interruption does what&apos;s left, and
+                a value changed while it runs isn&apos;t overwritten.
+              </li>
+              <li>
+                It checks the key first. If the database holds encrypted values
+                and <code>ENCRYPTION_KEY</code> can&apos;t read any of those it
+                checks, it stops without writing anything, which usually means a
+                restored database next to a newly generated <code>.env</code>.
+                If nothing in the database is encrypted there is nothing to
+                check against, so make sure the key is the one the app runs
+                with.
+              </li>
+              <li>
+                It ends with <code>Legacy rows remaining: N</code>, and exits
+                non-zero if that isn&apos;t 0 or a row failed. A failed row is
+                named by id and column and left exactly as it was. Replace the
+                value it names, then run it again.
+              </li>
+              <li>
+                Afterwards, rolling back to an image from before July 2026 needs
+                the backup, because those versions can&apos;t read encrypted
+                values.
+              </li>
+            </ul>
+            <Alert className="bg-card text-card-foreground">
+              <AlertTitle>This doesn&apos;t erase the old values</AlertTitle>
+              <AlertDescription>
+                Old versions of each row stay in the table files until you run{" "}
+                <code>VACUUM FULL webhooks, user_variables;</code>, which blocks
+                both tables while it runs. WAL and every backup taken before
+                this run still hold the plaintext. If any of those copies could
+                have been read by someone who shouldn&apos;t have, rotate the
+                credentials themselves: regenerate the webhook&apos;s secret,
+                replace its custom headers at the service that issued them, and
+                replace any secret held in a variable.
+              </AlertDescription>
+            </Alert>
+            <p className="text-muted-foreground text-sm">
+              The{" "}
+              <a
+                href="https://github.com/addison-moore/cronium/blob/main/docs/ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest"
+                className="underline"
+              >
+                full reference
+              </a>{" "}
+              has what the key check looks at, what to do if it refuses the
+              right key, and how to run this from a source checkout.
+            </p>
           </div>
         </section>
 
