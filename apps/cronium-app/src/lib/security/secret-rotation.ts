@@ -2,8 +2,8 @@
  * Secret key-rotation driver (security plan Phase 2.1: 559/565).
  *
  * Re-encrypts every at-rest secret from a retired key onto the active key, along
- * with the env var copies held by jobs that haven't finished. It is SAFE and
- * RESUMABLE by construction:
+ * with the env var copies held by jobs that haven't finished, and hashes API tokens
+ * from before tokens were hashed. It is SAFE and RESUMABLE by construction:
  *
  *   - Both keys stay in the ring during rotation (active = ENCRYPTION_KEY,
  *     retired = ENCRYPTION_KEYS_RETIRED), so every row decrypts throughout, for a
@@ -33,6 +33,7 @@
  * `legacy`: `legacy-secrets.ts` moves them into it.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { hashApiToken } from "@/lib/api-token-hash";
 import { isSystemSettingSensitive } from "@/lib/encryption-service";
 import { NON_TERMINAL_JOB_STATUSES } from "@/lib/scheduling/job-transition";
 import { db } from "@/server/db";
@@ -65,6 +66,7 @@ import {
   encryptMfaSecret,
   decryptMfaSecret,
   looksLikeLegacyCiphertext,
+  openLegacyCiphertextInRing,
 } from "@/lib/security/field-secret";
 import {
   encryptVariableValue,
@@ -87,6 +89,11 @@ export interface SurfaceResult {
   surface: string;
   scanned: number;
   reencrypted: number;
+  /**
+   * Only on API tokens, in place of `reencrypted`: values hashed, or in a dry run the
+   * values that would be. A hash needs no key, so nothing ever re-encrypts them.
+   */
+  hashed?: number;
   skipped: number;
   errors: number;
   /**
@@ -120,6 +127,7 @@ export interface RotationReport {
   dryRun: boolean;
   surfaces: SurfaceResult[];
   totalReencrypted: number;
+  totalHashed: number;
   totalErrors: number;
   totalLegacy: number;
   /** What a key change can't orphan, among values with no `legacyAdvice` of their own. */
@@ -373,7 +381,7 @@ async function rotateSystemSettings(dryRun: boolean): Promise<SurfaceResult> {
   const r: SurfaceResult = {
     ...emptyResult("system_settings.value"),
     legacyAdvice:
-      "sensitive setting(s) aren't in the vault. Older ciphertext can only be read while ENCRYPTION_KEY is the key it was saved under, and after that the app uses the ciphertext as the value. To move them into the vault, run this again with --encrypt-legacy before the key changes:",
+      "sensitive setting(s) aren't in the vault. Older ciphertext can only be read while ENCRYPTION_KEY is the key it was saved under. After that nothing can use it: email stops, and so does AI if it needs the key. To move them into the vault, run this again with --encrypt-legacy before the key changes:",
     legacyNames: legacySettings,
   };
   const rows = await db
@@ -646,17 +654,25 @@ const HASHED_API_TOKEN = /^[0-9a-f]{64}$/;
 /**
  * API tokens from before hashing are ciphertext, hashed the first time each is used.
  * That lookup decrypts with the active key alone, so one nobody has used by the time
- * the key changes gets a 401 from then on. Only reports them, so it writes nothing.
+ * the key changes would get a 401 for good. This hashes them while the old key is in
+ * the ring, so nobody has to use or replace one.
  *
- * Revoked and expired tokens get a 401 either way, so they aren't counted.
+ * The lookup can hash the same row at the same moment, so this applies only to the row
+ * version it read. A miss means the row was hashed, revoked or deleted, which leaves
+ * nothing under the old key, so it counts as skipped. `changedDuringRun` would make the
+ * run exit non-zero, to say a value may still need moving, and here none does.
+ *
+ * Revoked and expired tokens get a 401 either way, and nothing makes one usable again,
+ * so they stay as they are and aren't counted.
  */
-async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
-  const unhashed: string[] = [];
-  const r: SurfaceResult = {
+async function hashLegacyApiTokens(dryRun: boolean): Promise<SurfaceResult> {
+  const unopened: string[] = [];
+  const r: SurfaceResult & { hashed: number } = {
     ...emptyResult("api_tokens.token"),
+    hashed: 0,
     legacyAdvice:
-      "API token(s) haven't been used since tokens began to be stored hashed, and get a 401 once ENCRYPTION_KEY isn't the key they were saved under. Use each one once before the key changes, which hashes it, or issue a new one:",
-    legacyNames: unhashed,
+      "API token(s) from before tokens were hashed can't be hashed now, because no key in the ring opens them, and they get a 401. Add the key each was saved under to ENCRYPTION_KEYS_RETIRED and run this again, or issue a new one:",
+    legacyNames: unopened,
   };
   const rows = await db
     .select({
@@ -665,6 +681,7 @@ async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
       token: apiTokens.token,
       status: apiTokens.status,
       expiresAt: apiTokens.expiresAt,
+      version: rowVersion,
     })
     .from(apiTokens)
     .orderBy(asc(apiTokens.id));
@@ -674,12 +691,31 @@ async function reportUnhashedApiTokens(): Promise<SurfaceResult> {
     const usable =
       row.status === TokenStatus.ACTIVE &&
       !(row.expiresAt && row.expiresAt.getTime() < now);
-    if (usable && !HASHED_API_TOKEN.test(row.token)) {
+    if (!usable || HASHED_API_TOKEN.test(row.token)) {
+      r.skipped++;
+      continue;
+    }
+    const raw = openLegacyCiphertextInRing(row.token);
+    if (raw === null) {
       r.legacy++;
       // Stringified because a name can hold anything, and this goes to a terminal.
-      unhashed.push(`id=${row.id} ${JSON.stringify(row.name)}`);
-    } else {
-      r.skipped++;
+      unopened.push(`id=${row.id} ${JSON.stringify(row.name)}`);
+      continue;
+    }
+    if (dryRun) {
+      r.hashed++;
+      continue;
+    }
+    try {
+      const written = await db
+        .update(apiTokens)
+        .set({ token: hashApiToken(raw) })
+        .where(and(eq(apiTokens.id, row.id), isRowVersion(row.version)));
+      if ((written.rowCount ?? 0) > 0) r.hashed++;
+      else r.skipped++;
+    } catch (e) {
+      r.errors++;
+      logRowError(r.surface, String(row.id), "token", e);
     }
   }
   return r;
@@ -718,9 +754,10 @@ export async function rotateAllSecrets(
   surfaces.push(await rotateWebhooks(dryRun));
   surfaces.push(await rotateToolCredentials(dryRun));
   surfaces.push(await rotateOauthTokens(dryRun));
-  surfaces.push(await reportUnhashedApiTokens());
+  surfaces.push(await hashLegacyApiTokens(dryRun));
 
   const totalReencrypted = surfaces.reduce((n, s) => n + s.reencrypted, 0);
+  const totalHashed = surfaces.reduce((n, s) => n + (s.hashed ?? 0), 0);
   const totalErrors = surfaces.reduce((n, s) => n + s.errors, 0);
   const totalLegacy = surfaces.reduce((n, s) => n + s.legacy, 0);
   const totalChangedDuringRun = surfaces.reduce(
@@ -729,12 +766,13 @@ export async function rotateAllSecrets(
   );
   // In a dry run the "remaining" count is what still needs rotating.
   const remaining = dryRun
-    ? totalReencrypted
+    ? totalReencrypted + totalHashed
     : totalErrors + totalChangedDuringRun;
   return {
     dryRun,
     surfaces,
     totalReencrypted,
+    totalHashed,
     totalErrors,
     totalLegacy,
     plaintextLegacy: surfaces

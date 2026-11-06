@@ -411,6 +411,29 @@ describe("runDispatchTick — due events", () => {
     expect(result.dispatched).toBe(0);
   });
 
+  it("stops dispatching after a no_servers auto-pause", async () => {
+    enqueueSelect(events, []);
+    enqueueSelect(events, [dueEventRow()]);
+    mockPlanTicks.mockReturnValue(
+      singleTickPlan({
+        ticks: [
+          { at: DUE_AT, miss: false },
+          { at: NOW, miss: false },
+        ],
+      }),
+    );
+    mockDispatch.mockResolvedValue({
+      job: null,
+      logId: null,
+      skipped: "no_servers",
+    });
+
+    const result = await runDispatchTick(NOW);
+
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+    expect(result.dispatched).toBe(0);
+  });
+
   it("does not count overlap skips as dispatches but keeps going", async () => {
     enqueueSelect(events, []);
     enqueueSelect(events, [dueEventRow()]);

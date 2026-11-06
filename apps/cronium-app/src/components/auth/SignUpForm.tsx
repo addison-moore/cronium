@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { trpc } from "@/lib/trpc";
 import { UserStatus } from "@/shared/schema";
+import { useEarlyFormInput } from "@/hooks/useEarlyFormInput";
 import {
   Form,
   FormControl,
@@ -76,6 +77,8 @@ export default function SignUpForm() {
       confirmPassword: "",
     },
   });
+
+  const earlyInput = useEarlyFormInput(form);
 
   const {
     handleSubmit,
@@ -176,7 +179,11 @@ export default function SignUpForm() {
         )}
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          <form
+            {...earlyInput}
+            onSubmit={handleSubmit(onSubmit)}
+            className="mt-8 space-y-6"
+          >
             <div className="space-y-4 rounded-md shadow-sm">
               <FormField
                 control={form.control}

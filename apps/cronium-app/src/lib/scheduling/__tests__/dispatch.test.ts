@@ -513,6 +513,98 @@ describe("dispatchEventJob — max executions", () => {
   });
 });
 
+describe("dispatchEventJob — a REMOTE event with no servers", () => {
+  const stranded = () => makeEvent({ runLocation: "REMOTE", servers: [] });
+  const refused = { job: null, logId: null, skipped: "no_servers" };
+
+  beforeEach(() => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  describe("on a schedule", () => {
+    it("pauses the event with an incident, and creates no log or job", async () => {
+      const result = await dispatchEventJob(stranded(), {
+        triggeredBy: "schedule",
+      });
+
+      expect(result).toEqual(refused);
+      expect(mockUpdateScript).toHaveBeenCalledWith(7, {
+        status: EventStatus.PAUSED,
+        nextRunAt: null,
+      });
+      expect(incidentInserts().map((incident) => incident.values)).toEqual([
+        {
+          eventId: 7,
+          kind: ScheduleIncidentKind.NO_SERVERS,
+          details: {
+            reason:
+              "This event runs only on servers and has none, so it was paused. Choose a server or set it to run locally, then reactivate it.",
+          },
+        },
+      ]);
+      expect(mockDeleteScript).toHaveBeenCalledWith(7);
+      expect(mockCreateLog).not.toHaveBeenCalled();
+      expect(mockCreateJob).not.toHaveBeenCalled();
+    });
+
+    it("still creates no job if the pause can't be written", async () => {
+      mockUpdateScript.mockRejectedValue(new Error("db down"));
+
+      await expect(
+        dispatchEventJob(stranded(), { triggeredBy: "schedule" }),
+      ).rejects.toThrow("db down");
+
+      expect(mockCreateLog).not.toHaveBeenCalled();
+      expect(mockCreateJob).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each(["manual", "workflow", "webhook"] as const)(
+    "refuses a %s run without pausing the event or recording an incident",
+    async (triggeredBy) => {
+      const result = await dispatchEventJob(stranded(), { triggeredBy });
+
+      expect(result).toEqual(refused);
+      expect(mockUpdateScript).not.toHaveBeenCalled();
+      expect(incidentInserts()).toEqual([]);
+      expect(mockCreateLog).not.toHaveBeenCalled();
+      expect(mockCreateJob).not.toHaveBeenCalled();
+    },
+  );
+
+  it("checks who is asking first", async () => {
+    mockAssertRelations.mockRejectedValue(new Error("not yours"));
+
+    await expect(
+      dispatchEventJob(stranded(), { triggeredBy: "schedule" }),
+    ).rejects.toThrow("not yours");
+
+    expect(mockUpdateScript).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a direct server", { runLocation: "REMOTE", serverId: 5, servers: [] }],
+    ["a linked server", { runLocation: "REMOTE", servers: [{ id: 5 }] }],
+    ["a local half", { runLocation: "LOCAL_AND_REMOTE", servers: [] }],
+    [
+      "the worker to run it, as an HTTP request",
+      { type: "HTTP_REQUEST", runLocation: "REMOTE", servers: [] },
+    ],
+    [
+      "the worker to run it, as a tool action",
+      { type: "TOOL_ACTION", runLocation: "REMOTE", servers: [] },
+    ],
+  ])("runs an event with %s", async (_name, fields) => {
+    const result = await dispatchEventJob(makeEvent(fields), {
+      triggeredBy: "schedule",
+    });
+
+    expect(result.skipped).toBeUndefined();
+    expect(mockCreateJob).toHaveBeenCalledTimes(1);
+    expect(mockUpdateScript).not.toHaveBeenCalled();
+  });
+});
+
 describe("dispatchEventJob — authorization fails closed", () => {
   it("rejects before any write when the principal lookup fails", async () => {
     mockGetPrincipal.mockRejectedValue(new Error("User account is disabled"));

@@ -32,6 +32,8 @@ type DeletionImpact = {
   eventServerCount: number;
   executionCount: number;
   activeEvents: Array<{ id: number; name: string; status: string }>;
+  eventsToPause: number;
+  eventsToRunLocallyOnly: number;
 };
 
 export function ServerDeleteConfirmDialog({
@@ -259,11 +261,26 @@ export function ServerDeleteConfirmDialog({
                         <>
                           <li>Permanently delete the server configuration</li>
                           <li>Remove all SSH keys and credentials</li>
-                          {impact.eventCount > 0 && (
+                          {impact.eventsToPause > 0 && (
                             <li>
-                              Convert {impact.eventCount} event
-                              {impact.eventCount > 1 ? "s" : ""} to local
-                              execution
+                              Pause {impact.eventsToPause} active event
+                              {impact.eventsToPause > 1 ? "s" : ""} with no
+                              other server, until you choose a new one or set{" "}
+                              {impact.eventsToPause > 1 ? "them" : "it"} to run
+                              locally
+                            </li>
+                          )}
+                          {impact.eventsToRunLocallyOnly > 0 && (
+                            <li>
+                              Run {impact.eventsToRunLocallyOnly} event
+                              {impact.eventsToRunLocallyOnly > 1
+                                ? "s"
+                                : ""}{" "}
+                              locally only, because this is{" "}
+                              {impact.eventsToRunLocallyOnly > 1
+                                ? "their"
+                                : "its"}{" "}
+                              last server
                             </li>
                           )}
                           {impact.eventServerCount > 0 && (

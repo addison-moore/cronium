@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFirstAdmin } from "@/app/(auth)/auth/setup/actions";
+import { useEarlyFormInput } from "@/hooks/useEarlyFormInput";
 import {
   Form,
   FormControl,
@@ -74,6 +75,8 @@ export default function SetupForm({
       bootstrapToken: "",
     },
   });
+
+  const earlyInput = useEarlyFormInput(form);
 
   const {
     handleSubmit,
@@ -151,7 +154,11 @@ export default function SetupForm({
         )}
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          <form
+            {...earlyInput}
+            onSubmit={handleSubmit(onSubmit)}
+            className="mt-8 space-y-6"
+          >
             <div className="space-y-4 rounded-md shadow-sm">
               <FormField
                 control={form.control}

@@ -32,10 +32,10 @@ func TestScriptSource_PutsTheLoaderBeforeTheScript(t *testing.T) {
 		scriptType types.ScriptType
 		loader     string
 	}{
-		{"bash", types.ScriptTypeBash, "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"},
+		{"bash", types.ScriptTypeBash, "source /usr/local/bin/cronium.sh || true\n"},
 		{"python", types.ScriptTypePython, "import cronium\n"},
 		{"node", types.ScriptTypeNode, "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"},
-		{"unknown falls back to bash", "RUBY", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"},
+		{"unknown falls back to bash", "RUBY", "source /usr/local/bin/cronium.sh || true\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,14 +145,17 @@ var interpreters = []interpreter{
 
 // forEachInterpreter runs a test for each language this machine can run. PYTHONPATH and
 // NODE_PATH hold a stand-in SDK, because the loader imports one and the real one lives
-// in the images.
+// in the images. Bash's loader names a fixed path, so BASH_ENV replaces `source` instead.
 func forEachInterpreter(t *testing.T, test func(t *testing.T, in interpreter)) {
 	t.Helper()
 	sdk := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(sdk, "cronium.py"), nil, 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(sdk, "cronium.js"), nil, 0o600))
+	bashEnv := filepath.Join(sdk, "bash_env")
+	require.NoError(t, os.WriteFile(bashEnv, []byte("source() { :; }\n"), 0o600))
 	t.Setenv("PYTHONPATH", sdk)
 	t.Setenv("NODE_PATH", sdk)
+	t.Setenv("BASH_ENV", bashEnv)
 
 	for _, in := range interpreters {
 		t.Run(string(in.scriptType), func(t *testing.T) {

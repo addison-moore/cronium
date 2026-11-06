@@ -514,6 +514,20 @@ describe("POST /api/events/{id}/execute", () => {
     expect(res.status).toBe(409);
   });
 
+  it("answers 409 with the reason when the event has no servers", async () => {
+    mockDispatch.mockResolvedValue({
+      job: null,
+      logId: null,
+      skipped: "no_servers",
+    });
+    const res = await call(route);
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error:
+        "This event runs only on servers and has none. Choose a server, or set it to run locally.",
+    });
+  });
+
   it("answers 404 if the event vanished after the access check", async () => {
     s.getEventWithRelations!.mockResolvedValue(undefined);
     const res = await call(route);

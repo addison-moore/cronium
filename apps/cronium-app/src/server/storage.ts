@@ -58,12 +58,15 @@ import {
   type InsertUserVariable,
   type Event,
   type InsertEvent,
+  EventStatus,
   RunLocation,
+  ScheduleIncidentKind,
   UserStatus,
   TokenStatus,
   LogStatus,
   roles,
 } from "../shared/schema";
+import { canRunWithoutServers, runsInProcess } from "../shared/event-servers";
 import { db } from "./db";
 import {
   eq,
@@ -79,11 +82,16 @@ import {
   inArray,
   ilike,
   like,
+  exists,
+  isNull,
+  ne,
+  notExists,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
   encryptionService,
   isSystemSettingSensitive,
+  type SensitiveSystemSetting,
 } from "../lib/encryption-service";
 import {
   encryptServerSecret,
@@ -91,10 +99,10 @@ import {
   encryptEnvVarValue,
   isEnvVarCiphertext,
   encryptSystemSetting,
-  decryptSystemSetting,
   encryptMfaSecret,
   decryptMfaSecret,
 } from "@/lib/security/field-secret";
+import { readSensitiveSetting } from "@/lib/security/unreadable-setting";
 import { hashApiToken } from "../lib/api-token-hash";
 
 /**
@@ -296,6 +304,11 @@ async function writeEventServers(
 }
 
 // Type definitions for complex return types
+export type EventLosingLastServer = Pick<
+  Script,
+  "id" | "type" | "status" | "runLocation"
+>;
+
 export interface EventWithRelations extends Script {
   envVars: EnvVar[];
   server?: Server | null;
@@ -348,6 +361,15 @@ export interface WorkflowExecutionEventWithDetails extends WorkflowExecutionEven
 
 export interface ServerGroupWithServers extends ServerGroup {
   serverIds: number[];
+}
+
+/**
+ * Every setting that could be read, and the keys of the sensitive ones that couldn't.
+ * Those aren't in `settings`, because all their rows hold is ciphertext.
+ */
+export interface AllSettings {
+  settings: Setting[];
+  unreadable: SensitiveSystemSetting[];
 }
 
 export interface IStorage {
@@ -460,6 +482,7 @@ export interface IStorage {
   ): Promise<Server>;
   updateServerSshHostKey(id: number, sshHostKey: string): Promise<void>;
   deleteServer(id: number): Promise<void>;
+  getEventsLosingLastServer(serverId: number): Promise<EventLosingLastServer[]>;
   permanentlyDeleteServer(id: number): Promise<void>;
   getServersScheduledForDeletion(limit?: number): Promise<Server[]>;
   getServersApproachingDeletion(daysAhead: number): Promise<Server[]>;
@@ -477,8 +500,10 @@ export interface IStorage {
   getEventServers(eventId: number): Promise<EventServer[]>;
 
   // Settings methods
+  /** @throws UnreadableSettingError for a sensitive setting it can't decrypt. */
   getSetting(key: string): Promise<Setting | undefined>;
-  getAllSettings(): Promise<Setting[]>;
+  /** Never fails over a value it can't decrypt, so that value can be replaced. */
+  getAllSettings(): Promise<AllSettings>;
   upsertSetting(key: string, value: string): Promise<Setting>;
 
   // API Token methods
@@ -1847,20 +1872,107 @@ class DatabaseStorage implements IStorage {
     return server;
   }
 
+  /**
+   * The events that are set to run on servers and would have none left without
+   * this one, through either a direct server or event_servers.
+   */
+  async getEventsLosingLastServer(
+    serverId: number,
+    client: Pick<typeof db, "select"> = db,
+  ): Promise<EventLosingLastServer[]> {
+    const linkTo = (...conditions: SQL[]) =>
+      client
+        .select({ eventId: eventServers.eventId })
+        .from(eventServers)
+        .where(and(eq(eventServers.eventId, events.id), ...conditions));
+
+    return client
+      .select({
+        id: events.id,
+        type: events.type,
+        status: events.status,
+        runLocation: events.runLocation,
+      })
+      .from(events)
+      .where(
+        and(
+          ne(events.runLocation, RunLocation.LOCAL),
+          or(
+            eq(events.serverId, serverId),
+            exists(linkTo(eq(eventServers.serverId, serverId))),
+          ),
+          or(isNull(events.serverId), eq(events.serverId, serverId)),
+          notExists(linkTo(ne(eventServers.serverId, serverId))),
+        ),
+      );
+  }
+
+  /**
+   * An event that's left with no servers must not start running somewhere else
+   * without anyone choosing that (shared/event-servers.ts). A script that runs
+   * only on servers stays REMOTE and, if active, pauses. Anything else already
+   * has somewhere to run, so it becomes LOCAL, which is what it now does.
+   */
   async deleteServer(id: number): Promise<void> {
     await assertSocketSecurityStoreAvailable();
     const server = await this.getServer(id);
+    const serverName = server?.name ?? `#${id}`;
 
     await db.transaction(async (tx) => {
+      const losingLastServer = await this.getEventsLosingLastServer(id, tx);
+
       await tx.delete(eventServers).where(eq(eventServers.serverId, id));
       await tx
         .update(events)
-        .set({
-          runLocation: RunLocation.LOCAL,
-          serverId: null,
-          updatedAt: new Date(),
-        })
+        .set({ serverId: null, updatedAt: new Date() })
         .where(eq(events.serverId, id));
+
+      const toPause: number[] = [];
+      const toMakeLocal: number[] = [];
+      const incidents: Array<typeof scheduleIncidents.$inferInsert> = [];
+      for (const event of losingLastServer) {
+        let reason: string | undefined;
+        if (canRunWithoutServers(event)) {
+          toMakeLocal.push(event.id);
+          // HTTP requests and tool actions run in the worker, wherever they're
+          // set to run, so losing the server changes nothing about the run.
+          if (!runsInProcess(event.type)) {
+            reason = `Server "${serverName}" was deleted. It was this event's last server, so the event now runs locally only.`;
+          }
+        } else if (event.status === EventStatus.ACTIVE) {
+          toPause.push(event.id);
+          reason = `Server "${serverName}" was deleted and this event has no servers left, so it was paused. Choose a server or set it to run locally, then reactivate it.`;
+        } else {
+          reason = `Server "${serverName}" was deleted and this event has no servers left. Choose a server or set it to run locally before activating it.`;
+        }
+        if (reason) {
+          incidents.push({
+            eventId: event.id,
+            kind: ScheduleIncidentKind.NO_SERVERS,
+            details: { serverId: id, serverName, reason },
+          });
+        }
+      }
+      if (toPause.length > 0) {
+        await tx
+          .update(events)
+          .set({
+            status: EventStatus.PAUSED,
+            nextRunAt: null,
+            updatedAt: new Date(),
+          })
+          .where(inArray(events.id, toPause));
+      }
+      if (toMakeLocal.length > 0) {
+        await tx
+          .update(events)
+          .set({ runLocation: RunLocation.LOCAL, updatedAt: new Date() })
+          .where(inArray(events.id, toMakeLocal));
+      }
+      if (incidents.length > 0) {
+        await tx.insert(scheduleIncidents).values(incidents);
+      }
+
       await tx
         .update(executions)
         .set({ serverId: null })
@@ -2072,46 +2184,34 @@ class DatabaseStorage implements IStorage {
 
     // Decrypt sensitive settings
     if (setting && isSystemSettingSensitive(key)) {
-      try {
-        return {
-          ...setting,
-          value: decryptSystemSetting(setting.value, key),
-        };
-      } catch (error) {
-        console.error(
-          `Error decrypting system setting ${key}:`,
-          failureWithStack(error),
-        );
-        // Return setting without decryption rather than failing
-        return setting;
-      }
+      return { ...setting, value: readSensitiveSetting(setting.value, key) };
     }
 
     return setting;
   }
 
-  async getAllSettings(): Promise<Setting[]> {
-    const allSettings = await db.select().from(systemSettings);
+  async getAllSettings(): Promise<AllSettings> {
+    const rows = await db.select().from(systemSettings);
+    const settings: Setting[] = [];
+    const unreadable: SensitiveSystemSetting[] = [];
 
-    // Decrypt sensitive settings
-    return allSettings.map((setting) => {
-      if (isSystemSettingSensitive(setting.key)) {
-        try {
-          return {
-            ...setting,
-            value: decryptSystemSetting(setting.value, setting.key),
-          };
-        } catch (error) {
-          console.error(
-            `Error decrypting system setting ${setting.key}:`,
-            failureWithStack(error),
-          );
-          // Return setting without decryption rather than failing
-          return setting;
-        }
+    for (const row of rows) {
+      if (!isSystemSettingSensitive(row.key)) {
+        settings.push(row);
+        continue;
       }
-      return setting;
-    });
+      try {
+        settings.push({
+          ...row,
+          value: readSensitiveSetting(row.value, row.key),
+        });
+      } catch {
+        // Already logged. The row's value is ciphertext, so it stays out of settings.
+        unreadable.push(row.key);
+      }
+    }
+
+    return { settings, unreadable };
   }
 
   async upsertSetting(key: string, value: string): Promise<Setting> {

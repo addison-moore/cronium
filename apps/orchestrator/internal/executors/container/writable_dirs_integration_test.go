@@ -127,7 +127,7 @@ func runScriptInSandbox(t *testing.T, ctx context.Context, e *Executor, scriptTy
 			Environment: env,
 		},
 	}
-	// The bash SDK exits at once without these, as it should in a real job.
+	// A real job has these, and the Python and Node SDKs stop at import without them.
 	e.sidecar.storeExecutionToken(job.ID, "test-token")
 	e.mu.Lock()
 	e.executionIDs[job.ID] = "exec-" + job.ID

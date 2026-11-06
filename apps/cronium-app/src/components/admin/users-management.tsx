@@ -205,12 +205,9 @@ export function UsersManagement({
 
   const handleResendInvitation = async (userId: string) => {
     try {
+      // The page reports how it went, once the server has answered. This returns
+      // before that, so a success toast here shows even when nothing was sent.
       await onResendInvitation(userId);
-      toast({
-        title: "Success",
-        description: "Invitation email sent successfully",
-        variant: "success",
-      });
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to resend invitation";

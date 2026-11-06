@@ -18,6 +18,7 @@ import {
   listAvailableModels,
 } from "@/lib/ai";
 import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 
 // Schemas
 const generateScriptSchema = z.object({
@@ -54,7 +55,16 @@ export const aiRouter = createTRPCRouter({
           }
 
           // Check if the configured AI provider has credentials
-          if (!(await isAiConfigured())) {
+          const configured = await isAiConfigured().catch((error: unknown) => {
+            if (error instanceof UnreadableSettingError) {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: error.message,
+              });
+            }
+            throw error;
+          });
+          if (!configured) {
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
               message: "AI provider API key not configured",
