@@ -9,6 +9,7 @@ import {
   guardAdminMutation,
   auditAdminAction,
 } from "@/lib/security/admin-mutation";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Read-only integrity check. GET must never mutate — the reconcile/fix/cleanup
 // actions that used to be reachable here via ?action= moved to POST (below) so
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     const report = await integrityService.checkIntegrity();
     return NextResponse.json(report);
   } catch (error) {
-    console.error("Error in integrity check:", error);
+    console.error("Error in integrity check:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    console.error("Error in integrity maintenance:", error);
+    console.error("Error in integrity maintenance:", failureWithStack(error));
     if (auth?.ok)
       auditAdminAction(auth.userId, "integrity.maintenance", "error");
     return NextResponse.json(

@@ -34,6 +34,7 @@ function redactTool<T extends { credentials: Record<string, unknown> }>(
 }
 import { testToolConnection } from "@/lib/tools/tool-registry";
 import { slackRouter } from "./tools/slack-routes";
+import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -131,7 +132,7 @@ async function getUserTools(
                 } catch (parseError) {
                   console.error(
                     `Failed to parse decrypted credentials for tool ${tool.id}:`,
-                    parseError,
+                    failureWithStack(parseError),
                   );
                   credentials = {};
                 }
@@ -139,7 +140,7 @@ async function getUserTools(
             } catch (error) {
               console.error(
                 `Failed to decrypt credentials for tool ${tool.id}:`,
-                error,
+                failureWithStack(error),
               );
               credentials = {};
             }
@@ -184,7 +185,7 @@ async function getUserTools(
                 } catch (decryptError) {
                   console.error(
                     `Failed to decrypt unmarked encrypted credentials for tool ${tool.id}:`,
-                    decryptError,
+                    failureWithStack(decryptError),
                   );
                   credentials = {};
                 }
@@ -204,7 +205,7 @@ async function getUserTools(
           } catch (error) {
             console.error(
               `Failed to parse tool credentials as JSON for tool ${tool.id}:`,
-              error,
+              failureWithStack(error),
             );
             credentials = {};
           }
@@ -246,7 +247,10 @@ async function getUserTools(
             } as unknown as typeof parsedEncryptionMetadata;
           }
         } catch (error) {
-          console.error("Failed to parse keyDerivation as JSON:", error);
+          console.error(
+            "Failed to parse keyDerivation as JSON:",
+            failureWithStack(error),
+          );
           // Keep as string if not valid JSON
         }
       }
@@ -263,7 +267,7 @@ async function getUserTools(
       return result;
     });
   } catch (error) {
-    console.error("Error fetching user tools:", error);
+    console.error("Error fetching user tools:", failureWithStack(error));
     return [];
   }
 }
@@ -281,7 +285,7 @@ async function validateCredentialsForType(
     // Validate using the server-side registry
     return validateToolCredentials(type, credentials);
   } catch (error) {
-    console.error("Error validating credentials:", error);
+    console.error("Error validating credentials:", failureWithStack(error));
     return {
       valid: false,
       errors: [
@@ -321,7 +325,7 @@ async function logManualToolAction(entry: {
     });
   } catch (logError) {
     console.warn(
-      `Failed to log manual tool action execution: ${logError instanceof Error ? logError.message : "Unknown error"}`,
+      `Failed to log manual tool action execution: ${describeFailure(logError)}`,
     );
   }
 }
@@ -374,7 +378,7 @@ async function checkToolActionUsage(toolId: number): Promise<{
       recentExecutions,
     };
   } catch (error) {
-    console.error("Error checking tool action usage:", error);
+    console.error("Error checking tool action usage:", failureWithStack(error));
     return {
       eventCount: 0,
       workflowCount: 0,
@@ -1038,7 +1042,10 @@ export const toolsRouter = createTRPCRouter({
           successCount = todayStats?.successCount ?? 0;
           totalExecutionTime = todayStats?.avgTime ?? 0;
         } catch (error) {
-          console.log("Could not fetch execution stats:", error);
+          console.log(
+            "Could not fetch execution stats:",
+            failureWithStack(error),
+          );
         }
 
         const stats = {
@@ -1142,7 +1149,10 @@ export const toolsRouter = createTRPCRouter({
           };
         }
       } catch (error) {
-        console.error("Error getting tool action health:", error);
+        console.error(
+          "Error getting tool action health:",
+          failureWithStack(error),
+        );
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get tool action health",
@@ -1309,7 +1319,7 @@ export const toolsRouter = createTRPCRouter({
           isTest: input.isTest,
         };
       } catch (error) {
-        console.error("Error executing tool action:", error);
+        console.error("Error executing tool action:", failureWithStack(error));
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
@@ -1399,7 +1409,7 @@ export const toolsRouter = createTRPCRouter({
           providerId: input.providerId,
         };
       } catch (error) {
-        console.error("Error checking OAuth status:", error);
+        console.error("Error checking OAuth status:", failureWithStack(error));
         return {
           configured: false,
           hasTokens: false,
@@ -1480,7 +1490,7 @@ export const toolsRouter = createTRPCRouter({
 
         return { success: true };
       } catch (error) {
-        console.error("Error revoking OAuth tokens:", error);
+        console.error("Error revoking OAuth tokens:", failureWithStack(error));
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",

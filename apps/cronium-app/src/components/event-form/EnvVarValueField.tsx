@@ -123,7 +123,13 @@ export default function EnvVarValueField({
             type="password"
             value={value}
             readOnly={lineBreaks > 0}
-            onChange={(event) => onChange(event.target.value)}
+            // Its own value is a flattened copy of one with line breaks, and a browser
+            // still fires `change` when the field loses focus after an earlier edit.
+            onChange={
+              lineBreaks > 0
+                ? undefined
+                : (event) => onChange(event.target.value)
+            }
             onPaste={
               lineBreaks > 0
                 ? undefined

@@ -98,7 +98,10 @@ routes are intended only for Cronium services and require
 A reverse proxy in front of the app also carries saves, so let it pass request
 bodies of at least 10 MB, the most one save can carry. nginx's
 `client_max_body_size` defaults to 1 MB, and past that it refuses a script before
-Cronium sees it.
+Cronium sees it, so set `client_max_body_size 10m;`. Until a proxy allows a save,
+the event form and the JSON import dialog say that a reverse proxy refused it, and
+callers of the REST API and `/api/mcp` get the proxy's own 413, which may not be
+JSON.
 
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
