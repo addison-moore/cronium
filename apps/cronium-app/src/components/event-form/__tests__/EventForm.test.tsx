@@ -218,6 +218,181 @@ describe("EventForm", () => {
     });
   });
 
+  describe("environment variables", () => {
+    async function addVariable(key: string, value: string) {
+      const user = userEvent.setup();
+      render(<EventForm initialData={scheduledBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "With variables");
+      await user.click(screen.getByRole("button", { name: "Add Variable" }));
+      fireEvent.change(screen.getByLabelText("Key"), {
+        target: { value: key },
+      });
+      // Pasted, in effect: typing this many characters would take minutes.
+      fireEvent.change(screen.getByLabelText("Value"), {
+        target: { value },
+      });
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+      return user;
+    }
+
+    const tooLongMessage = /environment variable value can be at most 128 KB/;
+
+    it("submits a value too long for the old column", async () => {
+      const value = "x".repeat(4_096);
+      await addVariable("TOKEN", value);
+
+      await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+      expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ envVars: [{ key: "TOKEN", value }] }),
+      );
+    });
+
+    it("says beside the row that a value is too long, and saves nothing", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+
+      expect(await screen.findByText(tooLongMessage)).toBeInTheDocument();
+      expect(screen.getByLabelText("Value")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("clears the message once the value fits", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+      await screen.findByText(tooLongMessage);
+
+      fireEvent.change(screen.getByLabelText("Value"), {
+        target: { value: "x".repeat(128_000) },
+      });
+
+      await waitFor(() =>
+        expect(screen.queryByText(tooLongMessage)).not.toBeInTheDocument(),
+      );
+    });
+
+    it("asks for a missing key beside the row", async () => {
+      await addVariable("", "some value");
+
+      expect(
+        await screen.findByText("Environment variable key is required"),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Key")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    describe("line breaks the field can't hold", () => {
+      const note = /this value lost its line breaks/;
+
+      async function pasteIntoValue(text: string) {
+        const user = userEvent.setup();
+        render(<EventForm initialData={scheduledBashEvent} />);
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.paste(screen.getByLabelText("Value"), {
+          clipboardData: { getData: () => text },
+        });
+        // jsdom doesn't do the insert, so this is the input event that follows.
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: text.trimEnd().replace(/\r?\n/g, " ") },
+        });
+        return user;
+      }
+
+      it("says so when a paste loses them", async () => {
+        await pasteIntoValue("-----BEGIN KEY-----\nabc\n-----END KEY-----\n");
+        expect(await screen.findByText(note)).toBeInTheDocument();
+      });
+
+      it("says nothing about a paste of one line, trailing line break or not", async () => {
+        await pasteIntoValue("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      it("takes the note away with the value, and with the row", async () => {
+        const user = await pasteIntoValue("line one\nline two");
+        await screen.findByText(note);
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "" },
+        });
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "again" },
+        });
+        await screen.findByText(note);
+        await user.click(screen.getByRole("button", { name: "×" }));
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
+      const savedElsewhere = {
+        ...scheduledBashEvent,
+        name: "Set over the API",
+        environmentVariables: [{ key: "PEM", value: multiLine }],
+      };
+
+      it("keeps them in a saved value nobody edited", async () => {
+        const user = userEvent.setup();
+        render(<EventForm initialData={savedElsewhere} />);
+
+        await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+        expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+          expect.objectContaining({
+            envVars: [{ key: "PEM", value: multiLine }],
+          }),
+        );
+        expect(screen.queryByText(note)).not.toBeInTheDocument();
+      });
+
+      it("says so when editing a saved value loses them", async () => {
+        render(<EventForm initialData={savedElsewhere} />);
+
+        fireEvent.change(screen.getByLabelText("Value"), {
+          target: { value: "-----BEGIN KEY-----abc-----END KEY-----!" },
+        });
+
+        expect(await screen.findByText(note)).toBeInTheDocument();
+      });
+    });
+
+    it("says when the variables are too much together", async () => {
+      const user = userEvent.setup();
+      render(<EventForm initialData={scheduledBashEvent} />);
+      await user.type(screen.getByLabelText("Event Name"), "With variables");
+      for (let row = 0; row < 8; row += 1) {
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.change(screen.getAllByLabelText("Key")[row]!, {
+          target: { value: `K${row}` },
+        });
+        fireEvent.change(screen.getAllByLabelText("Value")[row]!, {
+          target: { value: "x".repeat(128_000) },
+        });
+      }
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+
+      expect(
+        await screen.findByText(/can be at most 1 MB in total/),
+      ).toBeInTheDocument();
+      expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    // The submit button is a screen or more below this card, so a message nobody
+    // scrolled to would read as a button that does nothing.
+    it("moves the focus to the list when a save fails on it", async () => {
+      await addVariable("TOKEN", "x".repeat(128_001));
+      await screen.findByText(tooLongMessage);
+
+      const list = screen.getByLabelText("Value").closest("[tabindex]");
+      await waitFor(() => expect(list).toHaveFocus());
+    });
+  });
+
   describe("payload assembly", () => {
     async function submitForm(user: ReturnType<typeof userEvent.setup>) {
       await user.click(screen.getByRole("button", { name: "Create Event" }));

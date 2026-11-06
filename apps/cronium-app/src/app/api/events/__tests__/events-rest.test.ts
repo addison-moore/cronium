@@ -12,9 +12,6 @@ jest.mock("@/server/storage", () => ({
   storage: {
     createScript: jest.fn(),
     updateScript: jest.fn(),
-    createEnvVar: jest.fn(),
-    deleteEnvVarsByEventId: jest.fn(),
-    setEventServers: jest.fn(),
     getEvent: jest.fn(),
     getEventWithRelations: jest.fn(),
     getAllEvents: jest.fn(),
@@ -191,15 +188,11 @@ describe("POST /api/events", () => {
       expect(created().triggerType).toBe("MANUAL");
     });
 
-    it("materializes the schedule only after env vars and servers exist", async () => {
+    it("materializes the schedule only after the event, its env vars and servers exist", async () => {
       const order: string[] = [];
-      s.createEnvVar!.mockImplementation(() => {
-        order.push("env");
-        return Promise.resolve({});
-      });
-      s.setEventServers!.mockImplementation(() => {
-        order.push("servers");
-        return Promise.resolve();
+      s.createScript!.mockImplementation(() => {
+        order.push("event");
+        return Promise.resolve({ id: 1 });
       });
       (scheduler.updateScript as jest.Mock).mockImplementation(() => {
         order.push("schedule");
@@ -213,7 +206,29 @@ describe("POST /api/events", () => {
         selectedServerIds: [3],
       });
 
-      expect(order).toEqual(["env", "servers", "schedule"]);
+      expect(order).toEqual(["event", "schedule"]);
+      // In the same call, so a failure can't leave an event without them.
+      expect(s.createScript!.mock.calls[0]![1]).toEqual({
+        envVars: [{ key: "A", value: "1" }],
+        serverIds: [3],
+      });
+    });
+
+    it("answers 500 and schedules nothing when the event can't be created", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.createScript!.mockRejectedValueOnce(new Error("insert failed"));
+
+      const res = await post({
+        ...baseEvent,
+        scheduleNumber: 5,
+        envVars: [{ key: "A", value: "1" }],
+      });
+
+      expect(res.status).toBe(500);
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
     });
 
     it.each([
@@ -258,6 +273,130 @@ describe("PATCH /api/events/[id]", () => {
   it("does not re-anchor the schedule for an unrelated edit", async () => {
     await patch({ name: "renamed" });
     expect(scheduler.updateScript).not.toHaveBeenCalled();
+  });
+
+  describe("saving the fields, env vars and servers", () => {
+    const envVars = [{ key: "B", value: "2" }];
+
+    it("does it in one call", async () => {
+      const res = await patch({
+        name: "renamed",
+        envVars,
+        selectedServerIds: [3],
+      });
+
+      expect(res.status).toBe(200);
+      expect(s.updateScript).toHaveBeenCalledTimes(1);
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { envVars, serverIds: [3], userId: USER },
+      );
+    });
+
+    it("clears the env vars when given an empty list", async () => {
+      await patch({ envVars: [] });
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        {},
+        { envVars: [], userId: USER },
+      );
+    });
+
+    it("leaves the env vars and servers alone when the body has neither", async () => {
+      await patch({ name: "renamed" });
+      expect(s.updateScript).toHaveBeenCalledWith(
+        1,
+        { name: "renamed" },
+        { userId: USER },
+      );
+    });
+
+    it("answers 500 and leaves the schedule alone when the save fails", async () => {
+      const error = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      s.updateScript!.mockRejectedValueOnce(new Error("save failed"));
+
+      const res = await patch({
+        status: "PAUSED",
+        envVars,
+        selectedServerIds: [3],
+      });
+
+      expect(res.status).toBe(500);
+      expect(scheduler.updateScript).not.toHaveBeenCalled();
+      error.mockRestore();
+    });
+  });
+});
+
+describe("env vars too long to deliver", () => {
+  const tooLong = {
+    envVars: [{ key: "TOKEN", value: "x".repeat(128_001) }],
+  };
+
+  it("POST answers 400 with the reason, and creates nothing", async () => {
+    const res = await post({ ...baseEvent, ...tooLong });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
+    expect(s.createScript).not.toHaveBeenCalled();
+  });
+
+  it("PATCH answers 400 with the reason, and leaves the variables alone", async () => {
+    const res = await patch(tooLong);
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("at most 128 KB");
+    expect(s.updateScript).not.toHaveBeenCalled();
+  });
+
+  // What a body over the proxy's 10 MB cap looks like by the time it arrives.
+  const cutOff = '{"name":"e","envVars":[{"key":"K","value":"xxxxxxx';
+
+  it.each([
+    [
+      "POST",
+      () =>
+        POST(
+          new NextRequest("http://localhost:5001/api/events", {
+            method: "POST",
+            body: cutOff,
+          }),
+        ),
+    ],
+    [
+      "PATCH",
+      () =>
+        PATCH(
+          new NextRequest("http://localhost:5001/api/events/1", {
+            method: "PATCH",
+            body: cutOff,
+          }),
+          { params: Promise.resolve({ id: "1" }) },
+        ),
+    ],
+  ])(
+    "%s answers 400, not 500, to a body cut off at the cap",
+    async (_method, send) => {
+      const res = await send();
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: "Request body must be a JSON object under 10 MB",
+      });
+      expect(s.updateScript).not.toHaveBeenCalled();
+    },
+  );
+
+  it("both accept a value too long for the old column", async () => {
+    const long = { envVars: [{ key: "TOKEN", value: "x".repeat(4_096) }] };
+
+    expect((await post({ ...baseEvent, ...long })).status).toBe(201);
+    expect((await patch(long)).status).toBe(200);
+    expect(s.createScript!.mock.calls[0]![1]).toMatchObject(long);
+    expect(s.updateScript!.mock.calls[0]![2]).toMatchObject(long);
   });
 });
 

@@ -24,6 +24,7 @@ are aimed at people **running** or **developing** Cronium.
 | [WORKFLOWS.md](./WORKFLOWS.md)           | Chaining events into DAG pipelines             |
 | [Execution_Flow.md](./Execution_Flow.md) | How a job travels from trigger to result       |
 | [Integrations.md](./Integrations.md)     | Tools vs. integrations vs. plugins             |
+| [WEBHOOKS.md](./WEBHOOKS.md)             | What a delivery contains and how to verify it  |
 | [AUTH.md](./AUTH.md)                     | Authentication, sessions, and roles            |
 | [MCP.md](./MCP.md)                       | Create events & workflows from an AI app (MCP) |
 | [TIMEOUTS.md](./TIMEOUTS.md)             | Timeout behavior across the stack              |
