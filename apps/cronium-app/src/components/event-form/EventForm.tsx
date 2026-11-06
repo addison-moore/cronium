@@ -30,6 +30,7 @@ import EditorSettingsModal, {
 import { Trash2, Settings, Lock } from "lucide-react";
 import { isToolActionsUIEnabled } from "@/lib/featureFlags";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   EventType,
   EventStatus,
@@ -47,9 +48,11 @@ import {
   buildEventFormDefaults,
   buildTimezoneOptions,
   extractServerIds,
+  linkedServers,
   parseInitialEnvVars,
   parseInitialTags,
   type EventFormInitialData,
+  type EventFormServer,
 } from "./lib/event-form-defaults";
 import {
   buildEventPayload,
@@ -88,6 +91,9 @@ const eventsCopy = {
       Help: "Select where this event runs — locally, on remote servers, or both.",
       Groups: "Groups",
       AtLeastOne: "Select at least one execution location",
+      Archived: "Archived",
+      ArchivedNotice:
+        "This event can't be saved or run while an archived server is ticked. Untick it, or restore it on the Servers page first.",
     },
     Servers: "Servers",
     NoServersAvailable: "No servers available",
@@ -203,6 +209,7 @@ export default function EventForm({
   const useCronScheduling = watch("useCronScheduling");
   const watchedCron = watch("customSchedule");
   const watchedTimezone = watch("timezone");
+  const selectedServerIds = watch("selectedServerIds");
 
   // Live cron validation + next-fire preview (debounced by react-query keying)
   const cronPreview = trpc.events.validateCron.useQuery(
@@ -225,6 +232,18 @@ export default function EventForm({
     QUERY_OPTIONS.dynamic,
   );
   const servers = (serversData?.servers ?? []) as ServerData[];
+  // A linked server the list leaves out, as it does every archived one, still
+  // needs a row. Without one it stays selected, goes out with every save, and
+  // can't be unticked. These come first so a long list can't hide them.
+  const serverRows: EventFormServer[] = [
+    ...linkedServers(initialData).filter(
+      (linked) => !servers.some((server) => server.id === linked.id),
+    ),
+    ...servers,
+  ];
+  const archivedServerTicked = serverRows.some(
+    (server) => server.isArchived && selectedServerIds.includes(server.id),
+  );
 
   // Fetch server groups (quick-select in the execution location picker)
   const { data: serverGroupsData } = trpc.servers.getGroups.useQuery(
@@ -278,7 +297,11 @@ export default function EventForm({
     return () => document.removeEventListener("keydown", handleKeyPress);
   }, [form]);
 
-  // Initialize form data from initialData
+  // Initialize form data from initialData, once per event. The object itself can't
+  // be the dependency: EventEditTab builds a new one on every render, and every
+  // toast re-renders it, so each run put the saved tags, env vars and servers back
+  // over what had been edited. A refused save lost a new env var, and a toast
+  // closing re-ticked an archived server that had just been unticked.
   useEffect(() => {
     if (initialData) {
       // Parse and set tool action config. Stored value may be an object (newer
@@ -321,12 +344,17 @@ export default function EventForm({
         setValue("httpBody", initialData.httpBody ?? "");
       }
 
-      // Set server IDs
+      // Set server IDs. An archived server stays selected until someone unticks
+      // it: dropping it here would turn a REMOTE event with nothing else selected
+      // into a LOCAL one on any save (deriveRunLocation), quietly moving the script.
       if (initialData.servers && Array.isArray(initialData.servers)) {
-        setValue("selectedServerIds", extractServerIds(initialData.servers));
+        setValue(
+          "selectedServerIds",
+          extractServerIds(linkedServers(initialData)),
+        );
       }
     }
-  }, [initialData, setValue, isHttpRequest]);
+  }, [initialData?.id, setValue, isHttpRequest]);
 
   // Update content when type changes
   useEffect(() => {
@@ -335,7 +363,9 @@ export default function EventForm({
         setValue("content", getDefaultScriptContent(type));
       }
     }
-  }, [type, initialData, isScriptType, setValue]);
+    // Not the whole object, for the same reason as the effect above: a script
+    // written after changing the event's type would go back to the template.
+  }, [type, initialData?.content, initialData?.type, isScriptType, setValue]);
 
   // Force local execution for Tool Actions
   useEffect(() => {
@@ -1360,14 +1390,14 @@ export default function EventForm({
                         )}
 
                         {/* Servers */}
-                        {servers.length === 0 ? (
+                        {serverRows.length === 0 ? (
                           <p className="border-border border-t pt-2 text-sm text-gray-500">
                             {eventsCopy.Fields.NoServersAvailable ||
                               "No servers available. Please add a server first."}
                           </p>
                         ) : (
                           <div className="border-border space-y-2 border-t pt-2">
-                            {servers.map((server) => (
+                            {serverRows.map((server) => (
                               <div
                                 key={server.id}
                                 className="flex items-center space-x-2"
@@ -1392,6 +1422,16 @@ export default function EventForm({
                                   className="cursor-pointer text-sm font-normal"
                                 >
                                   {server.name} ({server.address})
+                                  {server.isArchived && (
+                                    <StatusBadge
+                                      status="archived"
+                                      label={
+                                        eventsCopy.Fields.RunLocations.Archived
+                                      }
+                                      size="sm"
+                                      className="ml-2"
+                                    />
+                                  )}
                                 </Label>
                               </div>
                             ))}
@@ -1401,6 +1441,11 @@ export default function EventForm({
                     );
                   }}
                 />
+                {archivedServerTicked && (
+                  <p className="text-warning-text text-sm">
+                    {eventsCopy.Fields.RunLocations.ArchivedNotice}
+                  </p>
+                )}
                 {errors.selectedServerIds && (
                   <p className="text-destructive text-sm">
                     {errors.selectedServerIds.message}

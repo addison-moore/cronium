@@ -2,6 +2,7 @@ import {
   buildEventFormDefaults,
   buildTimezoneOptions,
   extractServerIds,
+  linkedServers,
   parseInitialEnvVars,
   parseInitialTags,
 } from "../event-form-defaults";
@@ -212,6 +213,70 @@ describe("extractServerIds", () => {
       { id: "7", name: "b" },
     ] as unknown as Array<{ id: number; name: string }>;
     expect(extractServerIds(servers)).toEqual([6]);
+  });
+});
+
+describe("linkedServers", () => {
+  const live = { id: 6, name: "live-box", address: "192.0.2.10" };
+  const retired = {
+    id: 7,
+    name: "retired-box",
+    address: "192.0.2.20",
+    isArchived: true,
+  };
+
+  it("is empty for a new event", () => {
+    expect(linkedServers(undefined)).toEqual([]);
+    expect(linkedServers({})).toEqual([]);
+  });
+
+  it("returns an event's links, archived or not", () => {
+    expect(linkedServers({ servers: [live, retired] })).toEqual([
+      live,
+      retired,
+    ]);
+  });
+
+  it("adds an archived direct server, once", () => {
+    const remote = { runLocation: RunLocation.REMOTE, server: retired };
+    expect(linkedServers({ ...remote, servers: [live] })).toEqual([
+      live,
+      retired,
+    ]);
+    expect(linkedServers({ ...remote, servers: [retired] })).toEqual([retired]);
+  });
+
+  it("adds an archived direct server on a LOCAL_AND_REMOTE event too", () => {
+    expect(
+      linkedServers({
+        runLocation: RunLocation.LOCAL_AND_REMOTE,
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([retired]);
+  });
+
+  it("leaves out a direct server that is active, or on a LOCAL event", () => {
+    expect(
+      linkedServers({
+        runLocation: RunLocation.REMOTE,
+        server: live,
+        servers: [],
+      }),
+    ).toEqual([]);
+    expect(
+      linkedServers({
+        runLocation: RunLocation.LOCAL,
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([]);
+    expect(
+      linkedServers({
+        server: retired,
+        servers: [],
+      }),
+    ).toEqual([]);
   });
 });
 
