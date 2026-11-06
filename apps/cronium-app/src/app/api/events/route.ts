@@ -7,6 +7,7 @@ import {
   EventTriggerType,
   RunLocation,
   TimeUnit,
+  type InsertEvent,
 } from "@/shared/schema";
 import { scheduler } from "@/lib/scheduler";
 import {
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
     );
 
     const isHttpRequest = data.type === EventType.HTTP_REQUEST;
-    const script = await storage.createScript({
+    const eventData: InsertEvent = {
       userId: auth.userId,
       name: data.name,
       ...(data.description !== undefined && { description: data.description }),
@@ -249,27 +250,13 @@ export async function POST(request: NextRequest) {
             httpBody: null,
             httpHeaders: null,
           }),
+    };
+    const script = await storage.createScript(eventData, {
+      envVars: data.envVars,
+      serverIds: data.selectedServerIds,
     });
 
-    // Add environment variables if provided
-    for (const envVar of data.envVars ?? []) {
-      await storage.createEnvVar({
-        eventId: script.id,
-        key: envVar.key,
-        value: envVar.value,
-      });
-    }
-
-    // Handle multiple server selection for remote events
-    if (data.selectedServerIds && data.selectedServerIds.length > 0) {
-      await storage.setEventServers(
-        script.id,
-        data.selectedServerIds,
-        auth.userId,
-      );
-    }
-
-    // Last, so the dispatcher cannot pick the event up half-configured.
+    // Materialize the schedule, so a new ACTIVE + SCHEDULE event starts firing.
     await scheduler.updateScript(script.id);
 
     // Get the full script with all relations

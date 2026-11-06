@@ -84,7 +84,7 @@ Execute pre-built integrations with third-party services:
 
 #### 🔄 Runtime Features
 
-- **Environment Variables**: Pass configuration securely to scripts. A value can be up to 128 KB and an event's variables up to 1 MB in total, because Linux won't start a process with more, and an event can have up to 1,000 of them. The form's value field holds one line, so set a value with line breaks, like a PEM key, through the REST API
+- **Environment Variables**: Pass configuration securely to scripts. A value can be up to 128 KB and an event's variables up to 1 MB in total, because Linux won't start a process with more, and an event can have up to 1,000 of them
 - **Timeout Controls**: Prevent runaway executions
 - **Retry Logic**: Automatic retries on failure (0-10 attempts)
 - **Execution Logs**: Complete stdout/stderr capture with timestamps
