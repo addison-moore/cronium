@@ -80,6 +80,9 @@ describe("withBodyLimit", () => {
 
     const request = limited(postOf(stream, { "content-length": "101" }), 100);
 
+    // A pipe would hold a reader here. Only Node 24's pipe pulls, so CI on Node 22 needs
+    // this line to notice one.
+    expect(stream.locked).toBe(false);
     await expect(request.text()).rejects.toBe(tooLong);
     expect(seen.pulls).toBe(0);
     expect(seen.cancelled).toBe(true);
