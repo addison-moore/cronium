@@ -1103,6 +1103,7 @@ describe("download", () => {
     const result = await caller.events.download({ eventIds: [1, 999] });
     // Only the accessible event is exported (single-event path).
     expect(result.filename).toBe("Test Event.json");
+    expect(result.eventCount).toBe(1);
     expect(storageMock.getEventWithRelations).toHaveBeenCalledTimes(1);
     expect(storageMock.getEventWithRelations).toHaveBeenCalledWith(1);
   });
@@ -1118,6 +1119,17 @@ describe("download", () => {
     const parsed = JSON.parse(result.data) as Row[];
     expect(parsed).toHaveLength(2);
     expect(parsed.map((e) => e.id)).toEqual([1, 2]);
+    expect(result.eventCount).toBe(2);
+  });
+
+  it("doesn't count an event that's gone by the time it's read", async () => {
+    storageMock.getAllEvents.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    storageMock.getEventWithRelations.mockImplementation((id: number) =>
+      Promise.resolve(id === 1 ? eventWithRelations({ id }) : null),
+    );
+    const caller = callerWith(sessionFor());
+    const result = await caller.events.download({ eventIds: [1, 2] });
+    expect(result.eventCount).toBe(1);
   });
 
   it("returns FORBIDDEN when no requested event is accessible", async () => {
