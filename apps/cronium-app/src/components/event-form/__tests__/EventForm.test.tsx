@@ -13,6 +13,7 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { TRPCClientError } from "@trpc/client";
 
 const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
@@ -937,6 +938,66 @@ describe("EventForm", () => {
           }),
         ),
       );
+    });
+  });
+
+  describe("when the server refuses a save", () => {
+    const refusal = (message: string, zodError: unknown = null) =>
+      TRPCClientError.from({
+        error: {
+          message,
+          code: -32600,
+          data: { code: "BAD_REQUEST", httpStatus: 400, zodError },
+        },
+      });
+
+    async function saveRefused(error: unknown) {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      mockCreateMutateAsync.mockRejectedValue(error);
+      const user = userEvent.setup();
+      render(
+        <EventForm initialData={{ ...scheduledBashEvent, name: "Refused" }} />,
+      );
+      await user.click(screen.getByRole("button", { name: "Create Event" }));
+      await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    }
+
+    it("gives a validation failure's sentences, not its JSON", async () => {
+      await saveRefused(
+        refusal('[{"code":"too_big","path":["description"]}]', {
+          formErrors: [],
+          fieldErrors: {
+            description: ["Description must be less than 500 characters"],
+          },
+        }),
+      );
+
+      expect(mockToast).toHaveBeenCalledTimes(1);
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Description must be less than 500 characters",
+        variant: "destructive",
+      });
+    });
+
+    it("gives any other refusal as it stands", async () => {
+      await saveRefused(refusal("Event not found"));
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Event not found",
+        variant: "destructive",
+      });
+    });
+
+    it("still says something when the error has no message", async () => {
+      await saveRefused(refusal(""));
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Error",
+        description: "Failed to create event. Please try again.",
+        variant: "destructive",
+      });
     });
   });
 
