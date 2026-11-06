@@ -17,6 +17,11 @@ import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
 import { describeFailure } from "@/lib/pg-errors";
 import { pgStorableText } from "@/lib/pg-text";
 import { webhookRetryConfigSchema } from "./retry-config-schema";
+import {
+  headerKey,
+  splitCustomHeaders,
+  webhookCustomHeadersSchema,
+} from "./custom-headers";
 import { WebhookPreconditionError } from "./webhook-errors";
 
 // Cap the response body we buffer from a webhook target.
@@ -29,7 +34,7 @@ export const WebhookConfigSchema = z.object({
   url: z.string().url(),
   events: z.array(z.string()),
   secret: z.string().optional(),
-  headers: z.record(z.string(), z.string()).optional(),
+  headers: webhookCustomHeadersSchema.optional(),
   active: z.boolean().default(true),
   retryConfig: webhookRetryConfigSchema.optional(),
 });
@@ -471,12 +476,18 @@ export class WebhookManager {
         "X-Webhook-Timestamp": payload.timestamp.toISOString(),
         "X-Delivery-Id": deliveryId,
       };
+      const { sendable: customHeaders, ignored } = splitCustomHeaders(headers);
+      if (ignored.length > 0) {
+        console.warn(
+          `Webhook ${webhookId}: left out custom headers that receivers need Cronium's own values for (${ignored.join(", ")}). Update the webhook's headers to remove them.`,
+        );
+      }
       const requestHeaders = {
         ...systemHeaders,
         "X-Delivery-Timestamp": attemptTimestamp,
         "X-Webhook-Signature": signature,
         "X-Webhook-Signature-V2": signatureV2,
-        ...headers,
+        ...customHeaders,
       };
       // What the delivery record keeps. `headers` was decrypted just to make this
       // request (HI-09), and they are usually credentials, so only their names
@@ -484,10 +495,16 @@ export class WebhookManager {
       // history API. The signatures and the attempt's time stay out too. That time
       // is close to `attempted_at` less `duration`: the column is set when the attempt
       // ends, up to 30 seconds after it starts.
+      // A system header a custom one replaced wasn't sent, in any letter case.
+      const customKeys = new Set(Object.keys(customHeaders).map(headerKey));
       const recordedHeaders = {
-        ...systemHeaders,
         ...Object.fromEntries(
-          Object.keys(headers).map((name) => [name, "[redacted]"]),
+          Object.entries(systemHeaders).filter(
+            ([name]) => !customKeys.has(headerKey(name)),
+          ),
+        ),
+        ...Object.fromEntries(
+          Object.keys(customHeaders).map((name) => [name, "[redacted]"]),
         ),
       };
 
