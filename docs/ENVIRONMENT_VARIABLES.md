@@ -743,9 +743,9 @@ docker compose up -d
 
 This costs more downtime and some running work:
 
-- **The app answers nothing from step 3 until step 5 finishes.** That's about 12 ms a row
-  on top of the restart: 20,000 variables took 4 minutes in a test, and an install with a
-  few hundred secrets takes seconds.
+- **The app answers nothing from step 3 until step 5 finishes.** That's roughly 15 ms a
+  row on top of the restart: 20,000 variables took 4 to 6 minutes in tests, and an install
+  with a few hundred secrets takes seconds.
 - **A script running at step 3 loses its result,** the same way as one running at step 6
   of the usual steps.
 - **A job still queued at step 3 can fail,** as in [What stops working](#what-stops-working).
