@@ -13,6 +13,7 @@ import {
   assertJobScope,
   assertUserScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * POST /api/internal/tools/execute — run a tool action on behalf of a running
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
       error: result.stderr || "Tool action failed",
     });
   } catch (error) {
-    console.error("[tools/execute] Unexpected error:", error);
+    console.error("[tools/execute] Unexpected error:", failureWithStack(error));
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

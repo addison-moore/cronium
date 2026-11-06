@@ -6,6 +6,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Mark job as failed
 export async function POST(
@@ -78,7 +79,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, job: updatedJob });
   } catch (error) {
-    console.error("Error failing job:", error);
+    console.error("Error failing job:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

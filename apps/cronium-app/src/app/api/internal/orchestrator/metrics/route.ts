@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { storage } from "@/server/storage";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Report orchestrator metrics
 export async function POST(request: NextRequest) {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error processing metrics:", error);
+    console.error("Error processing metrics:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

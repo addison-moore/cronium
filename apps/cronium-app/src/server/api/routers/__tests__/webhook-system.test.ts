@@ -83,11 +83,14 @@ jest.mock("@/lib/rate-limit-service", () => ({
 // field-for-field copy of the schema in WebhookManager.ts.
 jest.mock("@/lib/webhooks", () => {
   const { z } = jest.requireActual<typeof import("zod")>("zod");
+  const { webhookCustomHeadersSchema } = jest.requireActual<
+    typeof import("@/lib/webhooks/custom-headers")
+  >("@/lib/webhooks/custom-headers");
   const WebhookConfigSchema = z.object({
     url: z.string().url(),
     events: z.array(z.string()),
     secret: z.string().optional(),
-    headers: z.record(z.string(), z.string()).optional(),
+    headers: webhookCustomHeadersSchema.optional(),
     active: z.boolean().default(true),
     retryConfig: z
       .object({
@@ -338,6 +341,19 @@ describe("webhookSystem.create", () => {
     expect(managerMock.registerWebhook).not.toHaveBeenCalled();
   });
 
+  it("refuses a custom header a signature depends on, in any letter case", async () => {
+    await expect(
+      userCaller().webhookSystem.create({
+        ...VALID_CREATE_INPUT,
+        headers: { "x-webhook-signature": "the-value" },
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("X-Webhook-Signature"),
+    });
+    expect(managerMock.registerWebhook).not.toHaveBeenCalled();
+  });
+
   it("maps unexpected manager failures through withErrorHandling", async () => {
     managerMock.registerWebhook.mockRejectedValue(new Error("boom"));
     await expect(
@@ -474,6 +490,19 @@ describe("webhookSystem.update", () => {
       headers: { "X-Custom": "value" },
       retryConfig: { maxRetries: 5, retryDelay: 500, backoffMultiplier: 2 },
     });
+  });
+
+  it("refuses a custom header a signature depends on, and forwards nothing", async () => {
+    await expect(
+      userCaller().webhookSystem.update({
+        id: 42,
+        updates: {
+          active: false,
+          headers: { "X-Delivery-Timestamp": "the-value" },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(managerMock.updateWebhook).not.toHaveBeenCalled();
   });
 
   it("does not inject active:true into an unrelated partial update (zod v4 .partial() default regression)", async () => {
@@ -671,6 +700,51 @@ describe("webhookSystem.retryDelivery", () => {
     });
   });
 
+  it("says so when a successful retry's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await retryOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message:
+        "Webhook delivery retry succeeded. The response didn't finish (aborted)",
+    });
+  });
+
+  it("puts the status first when a refused retry's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: false,
+      statusCode: 503,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await retryOwned(unfinished)).toEqual({
+      success: false,
+      data: unfinished,
+      message:
+        "Webhook delivery retry failed: HTTP 503. The response didn't finish (aborted)",
+    });
+  });
+
+  it("says so when a retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry succeeded. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
   it("reports why when the attempt got no answer at all", async () => {
     const unreachable = attempt({
       success: false,
@@ -855,6 +929,65 @@ describe("webhookSystem.test", () => {
       data: unrecorded,
       message:
         "Test webhook failed: HTTP 503. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a delivered test's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message: "Test webhook delivered. The response didn't finish (aborted)",
+    });
+  });
+
+  it("puts the status first when a refused test's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: false,
+      statusCode: 503,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: false,
+      data: unfinished,
+      message:
+        "Test webhook failed: HTTP 503. The response didn't finish (aborted)",
+    });
+  });
+
+  it("says all of it when a delivered test neither finished nor was recorded", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+      recorded: false,
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message:
+        "Test webhook delivered. The response didn't finish (aborted). It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("gives the guard's reason when it stopped the attempt", async () => {
+    const blocked = attempt({
+      success: false,
+      statusCode: 0,
+      error: "Host is a disallowed (internal) address",
+    });
+
+    expect(await testOwned(blocked)).toEqual({
+      success: false,
+      data: blocked,
+      message: "Test webhook failed: Host is a disallowed (internal) address",
     });
   });
 

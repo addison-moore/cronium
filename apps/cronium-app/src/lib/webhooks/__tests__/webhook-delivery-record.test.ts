@@ -35,6 +35,7 @@ jest.mock("@/lib/tools/safe-fetch", () => ({
 jest.mock("axios", () => ({ request: jest.fn() }));
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-1" }));
 
+import { Readable } from "stream";
 import axios from "axios";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import { WebhookManager } from "../WebhookManager";
@@ -46,13 +47,13 @@ const CUSTOM_HEADERS = {
   "X-Api-Key": "ALSO-SECRET-SENTINEL",
 };
 
-const deliver = () =>
+const deliver = (headers: Record<string, string> = CUSTOM_HEADERS) =>
   WebhookManager.getInstance().processDelivery(
     1,
     2,
     "https://hooks.example/in",
     "hmac-secret",
-    CUSTOM_HEADERS,
+    headers,
     {
       id: "2",
       event: "user.created",
@@ -65,7 +66,31 @@ beforeEach(() => {
   inserted.length = 0;
   insertFailure = undefined;
   axiosRequest.mockReset();
-  axiosRequest.mockResolvedValue({ status: 200, data: "ok" });
+  axiosRequest.mockImplementation(async () => ({
+    status: 200,
+    data: Readable.from([Buffer.from("ok")]),
+  }));
+});
+
+describe("webhook delivery request", () => {
+  it("asks for the status before the body, with the guards still on", async () => {
+    await deliver();
+
+    expect(axiosRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      url: "https://hooks.example/in",
+      responseType: "stream",
+      timeout: 30_000,
+      httpAgent: {},
+      httpsAgent: {},
+      proxy: false,
+      maxRedirects: 0,
+    });
+    // axios enforces this one by failing the stream, which isn't a failed delivery.
+    expect(axiosRequest.mock.calls[0]![0]).not.toHaveProperty(
+      "maxContentLength",
+    );
+  });
 });
 
 describe("webhook delivery record", () => {
@@ -91,10 +116,65 @@ describe("webhook delivery record", () => {
     expect(recorded).not.toHaveProperty("X-Delivery-Timestamp");
   });
 
+  it("leaves out a custom header a signature depends on, and records what was sent", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation();
+
+    await deliver({
+      "x-delivery-id": "SENTINEL",
+      "X-Webhook-Signature": "SENTINEL",
+      Authorization: "Bearer token",
+    });
+
+    const sent = (
+      axiosRequest.mock.calls[0]![0] as { headers: Record<string, string> }
+    ).headers;
+    expect(JSON.stringify(sent)).not.toContain("SENTINEL");
+    expect(sent["X-Delivery-Id"]).toBe("delivery-1");
+    expect(sent["X-Webhook-Signature"]).toMatch(/^sha256=/);
+    expect(sent.Authorization).toBe("Bearer token");
+
+    const recorded = inserted[0]!.headers as Record<string, string>;
+    expect(recorded["X-Delivery-Id"]).toBe("delivery-1");
+    expect(recorded).not.toHaveProperty("x-delivery-id");
+    expect(recorded).not.toHaveProperty("X-Webhook-Signature");
+    expect(recorded.Authorization).toBe("[redacted]");
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]![0])).toContain(
+      "(X-Delivery-Id, X-Webhook-Signature)",
+    );
+    warn.mockRestore();
+  });
+
+  it("records a replaced system header under the owner's spelling alone", async () => {
+    await deliver({ "content-type": "text/plain" });
+
+    const sent = (
+      axiosRequest.mock.calls[0]![0] as { headers: Record<string, string> }
+    ).headers;
+    expect(sent["content-type"]).toBe("text/plain");
+
+    const recorded = inserted[0]!.headers as Record<string, string>;
+    expect(recorded["content-type"]).toBe("[redacted]");
+    expect(recorded).not.toHaveProperty("Content-Type");
+  });
+
   it("records nothing sensitive when the delivery fails", async () => {
     axiosRequest.mockRejectedValue(new Error("connect ECONNREFUSED"));
     await deliver();
     expect(JSON.stringify(inserted[0])).not.toContain("SENTINEL");
+  });
+
+  it("reports no more of a long response than it records", async () => {
+    axiosRequest.mockResolvedValue({
+      status: 200,
+      data: Readable.from([Buffer.from("x".repeat(5000))]),
+    });
+
+    const result = await deliver();
+
+    expect(inserted[0]!.response).toBe("x".repeat(1000));
+    expect(result.response).toBe("x".repeat(1000));
   });
 
   it("keeps what the receiver did when the row won't go in, and logs no values", async () => {
@@ -122,14 +202,5 @@ describe("webhook delivery record", () => {
     expect(logged).toContain("Delivery delivery-1 ");
     expect(logged).toContain("ECONNREFUSED: connection refused");
     expect(logged).not.toContain("SENTINEL");
-  });
-
-  it("reports no more of a long response than it records", async () => {
-    axiosRequest.mockResolvedValue({ status: 200, data: "x".repeat(5000) });
-
-    const result = await deliver();
-
-    expect(inserted[0]!.response).toBe("x".repeat(1000));
-    expect(result.response).toBe("x".repeat(1000));
   });
 });

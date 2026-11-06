@@ -39,7 +39,13 @@ Both signatures cover the body. The request also has these headers:
 | `X-Webhook-Signature-V2` | The signature to check. See [Verifying a delivery](#verifying-a-delivery). |                             |
 | `X-Webhook-Signature`    | An older signature over the body alone. See [below](#x-webhook-signature). |                             |
 
-Any custom headers configured on the webhook are added last, and one with the same name as a header above replaces it. Giving a custom header the name of a signature or anything a signature covers means the signature won't verify. Other headers, such as `User-Agent`, come from the HTTP client and aren't something to rely on.
+Any custom headers configured on the webhook are added to these, but none can replace a signature or anything a signature covers, because that would stop you verifying the delivery. `webhookSystem.create` and `webhookSystem.update` refuse the names `X-Webhook-Signature`, `X-Webhook-Signature-V2`, `X-Delivery-Id` and `X-Delivery-Timestamp`, in any letter case. A webhook set up before that rule can still have one stored. It isn't sent, and setting the webhook's headers again without it removes it.
+
+They also refuse `Content-Length`, `Transfer-Encoding` and `Trailer`, because the HTTP client works out how to send each body, and a wrong value can truncate it, hang the delivery or stop it being sent at all. They refuse `Content-Encoding` too, unless its value is `identity`, because the body is never compressed. A webhook set up before these rules can have one of these stored as well, and it's treated the same way: it isn't sent, and the delivery goes out with the HTTP client's own framing.
+
+A custom header also has to be something HTTP can carry. A name can only use letters, digits and ``!#$%&'*+-.^_`|~``, and a value can't hold line breaks, control characters other than tabs, or anything above U+00FF. Whitespace and line breaks around a name or a value are removed, so a value pasted with its line ending arrives without one. A webhook that already has a name HTTP can't carry sends nothing: each attempt is recorded as failed, with an error giving the start of the name, until its headers are set again. One that already has such a value sends it with those characters removed, which may be what its receiver accepts.
+
+A custom header with the name of any other header above replaces it, so a webhook's owner can change what those say. No signature covers them, so the delivery still verifies. If it matters, read `event` and `timestamp` from the body, which custom headers can't change. `Content-Type` can be whatever the receiver asks for, and the body is the same JSON regardless, so if your code matches on it, as `express.raw` does, match what the webhook sends. Other headers, such as `User-Agent`, come from the HTTP client and aren't something to rely on.
 
 ### Which events are sent
 
@@ -172,8 +178,10 @@ An event can reach you more than once, so handle deliveries with the steps above
 
 ## Answering a delivery
 
-- **A 2xx means delivered.** Anything else is recorded as a failed attempt and retried if retries remain. That includes a 3xx, because redirects aren't followed.
-- **You have 30 seconds.** After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **A 2xx means delivered, as soon as the status arrives.** Anything else is recorded as a failed attempt and retried if retries remain. That includes a 3xx, because redirects aren't followed.
+- **Send a 2xx only once you've taken the event.** Cronium keeps your answer's body for the record and nothing else, so what happens to the body can't change the status. A 2xx isn't sent again if its connection then drops, or its body runs long or can't be decompressed. When a body doesn't finish, the delivery's `error` says so, and a manual retry can send the event again.
+- **You have 30 seconds to send the status.** After that the attempt counts as failed. If your work can take longer, answer first and do it afterwards.
+- **The body gets another 30 seconds and 1 MB, after decompression.** Cronium stops reading at either limit and closes the connection.
 - **The first 1,000 characters of your answer are stored** in the delivery history, so don't put anything sensitive in them.
 
 Cronium won't deliver to internal addresses (loopback, private ranges and cloud metadata endpoints). The attempt is recorded as failed without a request being made.

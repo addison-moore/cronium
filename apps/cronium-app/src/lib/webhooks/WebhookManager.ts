@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { Readable } from "stream";
 import { z } from "zod";
 import axios from "axios";
 import { db } from "@/server/db";
@@ -7,6 +8,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue } from "./WebhookQueue";
+import { readResponseBody, WEBHOOK_TIMEOUT_MS } from "./response-body";
 import { nanoid } from "nanoid";
 import {
   assertRequestUrlIsPublic,
@@ -17,6 +19,11 @@ import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
 import { describeFailure } from "@/lib/pg-errors";
 import { pgStorableText } from "@/lib/pg-text";
 import { webhookRetryConfigSchema } from "./retry-config-schema";
+import {
+  headerKey,
+  splitCustomHeaders,
+  webhookCustomHeadersSchema,
+} from "./custom-headers";
 import { WebhookPreconditionError } from "./webhook-errors";
 
 // Cap the response body we buffer from a webhook target.
@@ -29,7 +36,7 @@ export const WebhookConfigSchema = z.object({
   url: z.string().url(),
   events: z.array(z.string()),
   secret: z.string().optional(),
-  headers: z.record(z.string(), z.string()).optional(),
+  headers: webhookCustomHeadersSchema.optional(),
   active: z.boolean().default(true),
   retryConfig: webhookRetryConfigSchema.optional(),
 });
@@ -53,6 +60,10 @@ export interface WebhookDeliveryResult {
   recorded?: false;
   statusCode?: number;
   response?: string;
+  /**
+   * Why there's no status. Alongside a status, why `response` is only part of the
+   * answer, which doesn't change what the status means.
+   */
   error?: string;
   duration: number;
 }
@@ -471,12 +482,30 @@ export class WebhookManager {
         "X-Webhook-Timestamp": payload.timestamp.toISOString(),
         "X-Delivery-Id": deliveryId,
       };
+      const {
+        sendable: customHeaders,
+        ignored,
+        invalidNames,
+      } = splitCustomHeaders(headers);
+      if (ignored.length > 0) {
+        console.warn(
+          `Webhook ${webhookId}: left out custom headers that only Cronium can set (${ignored.join(", ")}). Update the webhook's headers to remove them.`,
+        );
+      }
+      // Recorded below like any failed attempt. Node would refuse these anyway, but
+      // its message repeats the whole name, which can hold a credential pasted in by
+      // mistake, and webhook_deliveries isn't encrypted.
+      if (invalidNames.length > 0) {
+        throw new Error(
+          `Nothing was sent, because these custom header names aren't valid in HTTP: ${invalidNames.map((start) => `"${start}…"`).join(", ")}. Set the webhook's headers again without them.`,
+        );
+      }
       const requestHeaders = {
         ...systemHeaders,
         "X-Delivery-Timestamp": attemptTimestamp,
         "X-Webhook-Signature": signature,
         "X-Webhook-Signature-V2": signatureV2,
-        ...headers,
+        ...customHeaders,
       };
       // What the delivery record keeps. `headers` was decrypted just to make this
       // request (HI-09), and they are usually credentials, so only their names
@@ -484,10 +513,16 @@ export class WebhookManager {
       // history API. The signatures and the attempt's time stay out too. That time
       // is close to `attempted_at` less `duration`: the column is set when the attempt
       // ends, up to 30 seconds after it starts.
+      // A system header a custom one replaced wasn't sent, in any letter case.
+      const customKeys = new Set(Object.keys(customHeaders).map(headerKey));
       const recordedHeaders = {
-        ...systemHeaders,
         ...Object.fromEntries(
-          Object.keys(headers).map((name) => [name, "[redacted]"]),
+          Object.entries(systemHeaders).filter(
+            ([name]) => !customKeys.has(headerKey(name)),
+          ),
+        ),
+        ...Object.fromEntries(
+          Object.keys(customHeaders).map((name) => [name, "[redacted]"]),
         ),
       };
 
@@ -496,32 +531,43 @@ export class WebhookManager {
       // proxy from the environment is ignored because it would resolve the host
       // itself, out of the guard's sight, and redirects are not followed so a
       // 3xx cannot bounce past the guard.
-      const response = await axios.request({
+      const response = await axios.request<Readable>({
         method: "POST",
         url,
         headers: requestHeaders,
         data: rawBody,
-        timeout: 30000,
+        timeout: WEBHOOK_TIMEOUT_MS,
         httpAgent: ssrfHttpAgent,
         httpsAgent: ssrfHttpsAgent,
         proxy: false,
         maxRedirects: 0,
-        maxContentLength: MAX_WEBHOOK_RESPONSE_BYTES,
         maxBodyLength: MAX_WEBHOOK_RESPONSE_BYTES,
         // Treat any status as a resolved response; we record the code.
         validateStatus: () => true,
-        responseType: "text",
+        // A stream hands over the status before the body. With a buffered response,
+        // a body past the cap or cut off rejects this call, and the status is lost.
+        responseType: "stream",
         transitional: { clarifyTimeoutError: true },
       });
 
-      const duration = Date.now() - startTime;
-      const responseText =
-        typeof response.data === "string"
-          ? response.data
-          : JSON.stringify(response.data);
-      const recordedResponse = pgStorableText(
-        responseText.substring(0, MAX_RECORDED_RESPONSE_CHARS),
+      // The status is the receiver's answer, and the body is kept only for the record,
+      // so a body that doesn't finish changes what's recorded and nothing else. A 2xx
+      // is a success however its body ends, and the queue doesn't send it again. The
+      // cost falls on a receiver that sends its 2xx before doing the work and then
+      // dies, which would lose the event just the same if its body had finished.
+      // `error` shows these attempts in the history, and a person can retry one.
+      const { text, unfinished } = await readResponseBody(
+        response.data,
+        MAX_WEBHOOK_RESPONSE_BYTES,
+        WEBHOOK_TIMEOUT_MS,
       );
+
+      const duration = Date.now() - startTime;
+      const recordedResponse = pgStorableText(
+        text.substring(0, MAX_RECORDED_RESPONSE_CHARS),
+      );
+      const bodyError =
+        unfinished === undefined ? undefined : pgStorableText(unfinished);
       const ok = response.status >= 200 && response.status < 300;
 
       row = {
@@ -531,6 +577,7 @@ export class WebhookManager {
         status: ok ? "success" : "failed",
         statusCode: response.status,
         response: recordedResponse,
+        error: bodyError,
         headers: recordedHeaders,
         duration,
         attemptedAt: new Date(),
@@ -542,11 +589,12 @@ export class WebhookManager {
         success: ok,
         statusCode: response.status,
         response: recordedResponse,
+        ...(bodyError !== undefined && { error: bodyError }),
         duration,
       };
     } catch (error) {
-      // The request couldn't be made or got no answer. Node quotes a header name
-      // it refuses, so this can hold anything the name does.
+      // The request couldn't be made or got no answer. An error can quote what it was
+      // given, as Node does with a header name, so its message may not be storable.
       const duration = Date.now() - startTime;
       const errorMessage = pgStorableText(
         error instanceof Error ? error.message : "Unknown error",

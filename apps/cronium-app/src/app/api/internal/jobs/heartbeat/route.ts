@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jobService } from "@/lib/services/job-service";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * Owner heartbeat (PLAN.md §4.2): renews leases for the orchestrator's
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error processing job heartbeat:", error);
+    console.error("Error processing job heartbeat:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

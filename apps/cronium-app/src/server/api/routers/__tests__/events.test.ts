@@ -792,6 +792,110 @@ describe("update", () => {
     );
   });
 
+  describe("with an archived server in the proposed list", () => {
+    function ownServer(id: number, name: string, isArchived: boolean) {
+      return { id, name, userId: OWNER, shared: false, isArchived };
+    }
+
+    it("says which one and what to do, and writes nothing", async () => {
+      dbState.servers = [
+        ownServer(6, "live-box", false),
+        ownServer(7, "retired-box", true),
+      ];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({
+          id: 1,
+          name: "Renamed",
+          selectedServerIds: [6, 7],
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message:
+          "An archived server can't be used: retired-box. Restore it or choose another server, then try again.",
+      });
+      // Since PR 29 this one call writes the fields, variables and servers.
+      expect(storageMock.updateScript).not.toHaveBeenCalled();
+    });
+
+    it("names all of them when there are several", async () => {
+      dbState.servers = [
+        ownServer(7, "retired-one", true),
+        ownServer(8, "retired-two", true),
+      ];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, selectedServerIds: [7, 8] }),
+      ).rejects.toMatchObject({
+        message:
+          "Archived servers can't be used: retired-one, retired-two. Restore them or choose other servers, then try again.",
+      });
+    });
+
+    it("explains a direct serverId the same way", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, serverId: 7 }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: expect.stringContaining("retired-box"),
+      });
+    });
+
+    it("never names a server that isn't the caller's", async () => {
+      dbState.servers = [
+        ownServer(7, "retired-box", true),
+        { ...ownServer(8, "their-box", true), userId: OTHER, shared: true },
+      ];
+      const caller = callerWith(sessionFor());
+
+      const error = await caller.events
+        .update({ id: 1, selectedServerIds: [7, 8] })
+        .catch((caught: unknown) => caught as Error);
+
+      expect(error).toMatchObject({
+        code: "FORBIDDEN",
+        message:
+          "You do not have the required capability for this server relationship",
+      });
+    });
+
+    it("says nothing about an archived server when another id doesn't exist", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.update({ id: 1, selectedServerIds: [7, 999] }),
+      ).rejects.toMatchObject({
+        message:
+          "You do not have the required capability for this server relationship",
+      });
+    });
+
+    it("refuses a create the same way", async () => {
+      dbState.servers = [ownServer(7, "retired-box", true)];
+      const caller = callerWith(sessionFor());
+
+      await expect(
+        caller.events.create({
+          name: "Remote Event",
+          type: EventType.BASH,
+          content: "echo hi",
+          runLocation: RunLocation.REMOTE,
+          selectedServerIds: [7],
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: expect.stringContaining("retired-box"),
+      });
+      expect(storageMock.createScript).not.toHaveBeenCalled();
+    });
+  });
+
   it("denies editing another user's event even when shared", async () => {
     dbState.events = [eventAccessRow({ userId: OTHER, shared: true })];
     const caller = callerWith(sessionFor());
@@ -1168,6 +1272,7 @@ describe("download", () => {
     const result = await caller.events.download({ eventIds: [1, 999] });
     // Only the accessible event is exported (single-event path).
     expect(result.filename).toBe("Test Event.json");
+    expect(result.eventCount).toBe(1);
     expect(storageMock.getEventWithRelations).toHaveBeenCalledTimes(1);
     expect(storageMock.getEventWithRelations).toHaveBeenCalledWith(1);
   });
@@ -1183,6 +1288,17 @@ describe("download", () => {
     const parsed = JSON.parse(result.data) as Row[];
     expect(parsed).toHaveLength(2);
     expect(parsed.map((e) => e.id)).toEqual([1, 2]);
+    expect(result.eventCount).toBe(2);
+  });
+
+  it("doesn't count an event that's gone by the time it's read", async () => {
+    storageMock.getAllEvents.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    storageMock.getEventWithRelations.mockImplementation((id: number) =>
+      Promise.resolve(id === 1 ? eventWithRelations({ id }) : null),
+    );
+    const caller = callerWith(sessionFor());
+    const result = await caller.events.download({ eventIds: [1, 2] });
+    expect(result.eventCount).toBe(1);
   });
 
   it("returns FORBIDDEN when no requested event is accessible", async () => {

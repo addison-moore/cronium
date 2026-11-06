@@ -18,6 +18,15 @@ const mockCreateMutateAsync = jest.fn();
 const mockUpdateMutateAsync = jest.fn();
 const mockToast = jest.fn();
 
+const sandbox = { id: 6, name: "sandbox", address: "192.0.2.10" };
+// What servers.getAll answers: never an archived server (see queryServers).
+let mockActiveServers: Array<typeof sandbox> = [sandbox];
+let mockServerGroups: Array<{
+  id: number;
+  name: string;
+  serverIds: number[];
+}> = [];
+
 jest.mock("@/lib/trpc", () => ({
   trpc: {
     events: {
@@ -33,14 +42,10 @@ jest.mock("@/lib/trpc", () => ({
     },
     servers: {
       getAll: {
-        useQuery: () => ({
-          data: {
-            servers: [{ id: 6, name: "sandbox", address: "192.0.2.10" }],
-          },
-        }),
+        useQuery: () => ({ data: { servers: mockActiveServers } }),
       },
       getGroups: {
-        useQuery: () => ({ data: { groups: [] } }),
+        useQuery: () => ({ data: { groups: mockServerGroups } }),
       },
     },
     tools: {
@@ -92,7 +97,12 @@ jest.mock("@/components/dashboard/AIScriptAssistant-lazy", () => ({
 }));
 
 import EventForm from "../EventForm";
-import { EventType, EventTriggerType, TimeUnit } from "@/shared/schema";
+import {
+  EventType,
+  EventTriggerType,
+  RunLocation,
+  TimeUnit,
+} from "@/shared/schema";
 import { MAX_REQUEST_BODY_BYTES } from "@/shared/request-limits";
 import { saveRequestBytes } from "../lib/event-payload";
 
@@ -107,6 +117,8 @@ describe("EventForm", () => {
     mockCreateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockUpdateMutateAsync.mockReset().mockResolvedValue({ id: 123 });
     mockToast.mockReset();
+    mockActiveServers = [sandbox];
+    mockServerGroups = [];
   });
 
   describe("cron/interval mode switching", () => {
@@ -284,80 +296,322 @@ describe("EventForm", () => {
       expect(mockCreateMutateAsync).not.toHaveBeenCalled();
     });
 
-    describe("line breaks the field can't hold", () => {
-      const note = /this value lost its line breaks/;
+    describe("a value with line breaks", () => {
+      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
+      const noteFor = (count: number) =>
+        `This value has ${count} line ${count === 1 ? "break" : "breaks"}. Show it to edit.`;
 
-      async function pasteIntoValue(text: string) {
+      const valueField = () => screen.getByLabelText("Value");
+      const showValue = () =>
+        screen.getByRole("button", { name: "Show value" });
+      const hideValue = () =>
+        screen.getByRole("button", { name: "Hide value" });
+
+      async function renderWithEmptyRow() {
         const user = userEvent.setup();
         render(<EventForm initialData={scheduledBashEvent} />);
+        await user.type(screen.getByLabelText("Event Name"), "With a key");
         await user.click(screen.getByRole("button", { name: "Add Variable" }));
-        fireEvent.paste(screen.getByLabelText("Value"), {
-          clipboardData: { getData: () => text },
-        });
-        // jsdom doesn't do the insert, so this is the input event that follows.
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: text.trimEnd().replace(/\r?\n/g, " ") },
-        });
+        await user.type(screen.getByLabelText("Key"), "PEM");
         return user;
       }
 
-      it("says so when a paste loses them", async () => {
-        await pasteIntoValue("-----BEGIN KEY-----\nabc\n-----END KEY-----\n");
-        expect(await screen.findByText(note)).toBeInTheDocument();
-      });
-
-      it("says nothing about a paste of one line, trailing line break or not", async () => {
-        await pasteIntoValue("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
-
-      it("takes the note away with the value, and with the row", async () => {
-        const user = await pasteIntoValue("line one\nline two");
-        await screen.findByText(note);
-
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "" },
-        });
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "again" },
-        });
-        await screen.findByText(note);
-        await user.click(screen.getByRole("button", { name: "×" }));
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
-
-      const multiLine = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";
-      const savedElsewhere = {
-        ...scheduledBashEvent,
-        name: "Set over the API",
-        environmentVariables: [{ key: "PEM", value: multiLine }],
-      };
-
-      it("keeps them in a saved value nobody edited", async () => {
+      function renderSaved(value: string) {
         const user = userEvent.setup();
-        render(<EventForm initialData={savedElsewhere} />);
-
-        await user.click(screen.getByRole("button", { name: "Create Event" }));
-
-        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
-        expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
-          expect.objectContaining({
-            envVars: [{ key: "PEM", value: multiLine }],
-          }),
+        render(
+          <EventForm
+            initialData={{
+              ...scheduledBashEvent,
+              name: "Set over the API",
+              environmentVariables: [{ key: "PEM", value }],
+            }}
+          />,
         );
-        expect(screen.queryByText(note)).not.toBeInTheDocument();
-      });
+        return user;
+      }
 
-      it("says so when editing a saved value loses them", async () => {
-        render(<EventForm initialData={savedElsewhere} />);
+      async function save(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole("button", { name: "Create Event" }));
+        await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+        return (
+          mockCreateMutateAsync.mock.calls[0]?.[0] as { envVars: unknown }
+        ).envVars;
+      }
 
-        fireEvent.change(screen.getByLabelText("Value"), {
-          target: { value: "-----BEGIN KEY-----abc-----END KEY-----!" },
+      describe("while it's hidden", () => {
+        it("is only ever in a password input", async () => {
+          const user = renderSaved(multiLine);
+          expect(valueField()).toHaveAttribute("type", "password");
+
+          await user.click(showValue());
+          expect(valueField().tagName).toBe("TEXTAREA");
+          expect(valueField()).toHaveValue(multiLine);
+
+          await user.click(hideValue());
+          expect(valueField()).toHaveAttribute("type", "password");
         });
 
-        expect(await screen.findByText(note)).toBeInTheDocument();
+        it("saves a paste with all its line breaks, and says it has them", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste(multiLine);
+
+          expect(valueField()).toHaveAttribute("type", "password");
+          expect(valueField()).toHaveAccessibleDescription(noteFor(3));
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("gives a paste's Windows line endings as a textarea would", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("one\r\ntwo\r\n");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "one\ntwo\n" },
+          ]);
+        });
+
+        it("drops the line break at the end of one pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("eyJhbGciOiJSUzI1NiJ9.abc.def\n");
+
+          expect(screen.queryByText(/line break/)).not.toBeInTheDocument();
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "eyJhbGciOiJSUzI1NiJ9.abc.def" },
+          ]);
+        });
+
+        it("puts a paste where the selection is", async () => {
+          const user = renderSaved("start-end");
+          const field = valueField() as HTMLInputElement;
+          await user.click(field);
+          field.setSelectionRange(5, 6);
+          await user.paste("one\ntwo");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone\ntwoend" },
+          ]);
+        });
+
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          const field = valueField() as HTMLInputElement;
+          await user.click(field);
+          field.setSelectionRange(5, 6);
+          await user.paste("one\n");
+
+          expect(field).toHaveValue("startoneend");
+          expect(field).not.toHaveAttribute("readonly");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
+        // Once someone has edited a field, a browser fires `change` when it loses
+        // focus. The input only holds a flattened copy of this value by then.
+        it("keeps a paste's line breaks when the field loses focus after an edit", async () => {
+          const user = await renderWithEmptyRow();
+          await user.type(valueField(), "typed-");
+          await user.paste("one\ntwo");
+          fireEvent.change(valueField());
+
+          expect(screen.getByText(noteFor(1))).toBeInTheDocument();
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "typed-one\ntwo" },
+          ]);
+        });
+
+        it("takes a drop the way it takes a paste", async () => {
+          const user = await renderWithEmptyRow();
+          fireEvent.drop(valueField(), {
+            dataTransfer: { getData: () => multiLine },
+          });
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("leaves one pasted line with none to the input", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(valueField());
+          await user.paste("plain");
+          await user.keyboard("-typed");
+
+          expect(valueField()).not.toHaveAttribute("readonly");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "plain-typed" },
+          ]);
+        });
+
+        it("can't be edited, so an edit can't lose them", async () => {
+          const user = renderSaved(multiLine);
+          expect(valueField()).toHaveAttribute("readonly");
+          expect(screen.getByText(noteFor(3))).toBeInTheDocument();
+
+          await user.type(valueField(), "typed");
+          await user.click(valueField());
+          await user.paste("pasted\nover");
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it.each([
+          ["line feeds", multiLine],
+          ["Windows line endings", "one\r\ntwo\r\n"],
+          ["one at the end", "token\n"],
+        ])("keeps %s nobody edited", async (_name, value) => {
+          const user = renderSaved(value);
+
+          expect(await save(user)).toEqual([{ key: "PEM", value }]);
+        });
+
+        it("still saves the form on Enter, as a one-line value did", async () => {
+          const user = await renderWithEmptyRow();
+          await user.type(valueField(), "typed{Enter}");
+
+          await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalled());
+          expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toEqual(
+            expect.objectContaining({
+              envVars: [{ key: "PEM", value: "typed" }],
+            }),
+          );
+        });
+      });
+
+      describe("once it's shown", () => {
+        it("takes a paste with all its line breaks", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste(multiLine);
+
+          expect(valueField()).toHaveValue(multiLine);
+          expect(await save(user)).toEqual([{ key: "PEM", value: multiLine }]);
+        });
+
+        it("drops the line break at the end of one pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste("token\n");
+
+          expect(valueField()).toHaveValue("token");
+        });
+
+        it("leaves a typed line break alone when one line is pasted elsewhere", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.type(valueField(), "abc{Enter}");
+          (valueField() as HTMLTextAreaElement).setSelectionRange(0, 0);
+          await user.paste("x");
+
+          expect(valueField()).toHaveValue("xabc\n");
+          expect(await save(user)).toEqual([{ key: "PEM", value: "xabc\n" }]);
+        });
+
+        it("drops only a pasted line's own line break, with the caret after it", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\n");
+          expect(valueField()).toHaveValue("startoneend");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone!end" },
+          ]);
+        });
+
+        it("leaves the caret after a multi-line paste", async () => {
+          const user = renderSaved("start-end");
+          await user.click(showValue());
+          await user.click(valueField());
+          (valueField() as HTMLTextAreaElement).setSelectionRange(5, 6);
+          await user.paste("one\ntwo\n");
+
+          await user.keyboard("!");
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: "startone\ntwo\n!end" },
+          ]);
+        });
+
+        it("still sees an edit that undoes a pasted line", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.click(valueField());
+          await user.paste("x\n");
+          await user.keyboard("{Backspace}");
+
+          expect(await save(user)).toEqual([{ key: "PEM", value: "" }]);
+        });
+
+        it("adds a line break on Enter instead of saving", async () => {
+          const user = await renderWithEmptyRow();
+          await user.click(showValue());
+          await user.type(valueField(), "one{Enter}two{Enter}");
+
+          expect(valueField()).toHaveValue("one\ntwo\n");
+          expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+        });
+
+        it("keeps them through an edit", async () => {
+          const user = renderSaved(multiLine);
+          await user.click(showValue());
+          await user.type(valueField(), "more");
+
+          expect(await save(user)).toEqual([
+            { key: "PEM", value: `${multiLine}more` },
+          ]);
+        });
+
+        it("keeps the browser and writing extensions out", async () => {
+          const user = renderSaved(multiLine);
+          await user.click(showValue());
+
+          expect(valueField()).toHaveAttribute("spellcheck", "false");
+          expect(valueField()).toHaveAttribute("autocomplete", "off");
+          expect(valueField()).toHaveAttribute("data-gramm", "false");
+        });
+
+        it.each([
+          ["one line", "one", 1],
+          ["three lines", "one\ntwo\nthree", 3],
+          ["a last line break", "one\ntwo\n", 3],
+          ["more lines than fit", "line\n".repeat(1_000), 8],
+        ])("sizes the field to %s", async (_name, value, rows) => {
+          const user = renderSaved(value);
+          await user.click(showValue());
+
+          expect(valueField()).toHaveAttribute("rows", String(rows));
+        });
+      });
+
+      it("doesn't show the next row when a shown one is deleted", async () => {
+        const user = userEvent.setup();
+        render(
+          <EventForm
+            initialData={{
+              ...scheduledBashEvent,
+              environmentVariables: [
+                { key: "FIRST", value: "first secret" },
+                { key: "SECOND", value: "second secret" },
+                { key: "THIRD", value: "third secret" },
+              ],
+            }}
+          />,
+        );
+        // Show the second row, then delete the first: the third is now second.
+        await user.click(
+          screen.getAllByRole("button", { name: "Show value" })[1]!,
+        );
+        await user.click(screen.getAllByRole("button", { name: "×" })[0]!);
+
+        for (const field of screen.getAllByLabelText("Value")) {
+          expect(field).toHaveAttribute("type", "password");
+        }
       });
     });
 
@@ -683,6 +937,426 @@ describe("EventForm", () => {
           }),
         ),
       );
+    });
+  });
+
+  describe("a server the event is linked to that the list leaves out", () => {
+    const retiredBox = {
+      id: 9,
+      name: "retired-box",
+      address: "192.0.2.20",
+      isArchived: true,
+    };
+    const ARCHIVED_ROW = "retired-box (192.0.2.20) Archived";
+    const SANDBOX_ROW = "sandbox (192.0.2.10)";
+    const NOTICE = /can't be saved or run while an archived server is ticked/;
+
+    function eventOn(
+      servers: Array<{
+        id: number;
+        name: string;
+        address: string;
+        isArchived?: boolean;
+      }>,
+      overrides: Record<string, unknown> = {},
+    ) {
+      return {
+        name: "Nightly job",
+        type: EventType.BASH,
+        content: "echo hello",
+        runLocation: RunLocation.REMOTE,
+        servers,
+        ...overrides,
+      };
+    }
+
+    function renderEditing(initialData: ReturnType<typeof eventOn>) {
+      render(<EventForm initialData={initialData} isEditing eventId={5} />);
+      return userEvent.setup();
+    }
+
+    function rowNames() {
+      return screen
+        .getAllByRole("checkbox")
+        .map((box) => box.getAttribute("id"));
+    }
+
+    async function save(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole("button", { name: "Update Event" }));
+    }
+
+    function lastUpdate() {
+      return mockUpdateMutateAsync.mock.calls.at(-1)?.[0] as Record<
+        string,
+        unknown
+      >;
+    }
+
+    it("lists an archived server ticked and labelled, ahead of the others", async () => {
+      renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: SANDBOX_ROW, checked: false }),
+      ).toBeInTheDocument();
+      // First, so a long server list can't scroll it out of view.
+      expect(rowNames()).toEqual(["location-local", "server-9", "server-6"]);
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+    });
+
+    it("repoints the event: untick the archived server, tick another, save", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("checkbox", { name: SANDBOX_ROW }));
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          id: 5,
+          runLocation: "REMOTE",
+          selectedServerIds: [6],
+          serverId: null,
+        }),
+      );
+    });
+
+    it("keeps the row after unticking, so a slip can be undone", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+      const row = await screen.findByRole("checkbox", { name: ARCHIVED_ROW });
+
+      await user.click(row);
+      expect(row).not.toBeChecked();
+      await user.click(row);
+
+      expect(row).toBeChecked();
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+    });
+
+    it("won't quietly move a REMOTE event to LOCAL when its only server is unticked", async () => {
+      const user = renderEditing(eventOn([retiredBox]));
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      await save(user);
+
+      expect(
+        await screen.findByText("Select at least one execution location"),
+      ).toBeInTheDocument();
+      expect(mockUpdateMutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("sends an untouched archived server as it stands and shows the server's refusal", async () => {
+      jest.spyOn(console, "error").mockImplementation(() => undefined);
+      const reason =
+        "An archived server can't be used: retired-box. Restore it or choose another server, then try again.";
+      mockUpdateMutateAsync.mockRejectedValueOnce(new Error(reason));
+      const user = renderEditing(eventOn([retiredBox]));
+      await screen.findByRole("checkbox", {
+        name: ARCHIVED_ROW,
+        checked: true,
+      });
+
+      await save(user);
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Error",
+          description: reason,
+          variant: "destructive",
+        }),
+      );
+      // Not dropped on the way: with nothing selected this would be a LOCAL event.
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          runLocation: "REMOTE",
+          selectedServerIds: [9],
+        }),
+      );
+    });
+
+    it("leaves a LOCAL_AND_REMOTE event local once its archived server is unticked", async () => {
+      const user = renderEditing(
+        eventOn([retiredBox], { runLocation: RunLocation.LOCAL_AND_REMOTE }),
+      );
+
+      await user.click(
+        await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+      );
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate()).toEqual(
+        expect.objectContaining({
+          runLocation: "LOCAL",
+          selectedServerIds: [],
+        }),
+      );
+    });
+
+    it("treats a server restored since the event loaded as an ordinary one", async () => {
+      mockActiveServers = [
+        sandbox,
+        { id: 9, name: "retired-box", address: "192.0.2.20" },
+      ];
+      const user = renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: "retired-box (192.0.2.20)",
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(rowNames()).toEqual(["location-local", "server-6", "server-9"]);
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+      await save(user);
+
+      await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+      expect(lastUpdate().selectedServerIds).toEqual([9]);
+    });
+
+    it("keeps a row for a linked server the list didn't return, without calling it archived", async () => {
+      // One past the list's limit of 100, or archived since the event loaded.
+      const unlisted = { id: 150, name: "far-box", address: "192.0.2.30" };
+      const user = renderEditing(eventOn([unlisted]));
+
+      const row = await screen.findByRole("checkbox", {
+        name: "far-box (192.0.2.30)",
+        checked: true,
+      });
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+      await user.click(row);
+      expect(row).not.toBeChecked();
+    });
+
+    it("shows the archived row instead of saying there are no servers", async () => {
+      mockActiveServers = [];
+      renderEditing(eventOn([retiredBox]));
+
+      expect(
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("No servers available"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("still says there are no servers when there are none at all", () => {
+      mockActiveServers = [];
+      renderEditing(eventOn([]));
+
+      expect(screen.getByText("No servers available")).toBeInTheDocument();
+    });
+
+    describe("in a server group", () => {
+      beforeEach(() => {
+        mockServerGroups = [{ id: 1, name: "fleet", serverIds: [6, 9] }];
+      });
+
+      it("doesn't count the archived member or tick it back", async () => {
+        const user = renderEditing(eventOn([retiredBox]));
+        const row = await screen.findByRole("checkbox", { name: ARCHIVED_ROW });
+        await user.click(row);
+
+        await user.click(screen.getByRole("button", { name: "fleet (1)" }));
+
+        expect(
+          screen.getByRole("checkbox", { name: SANDBOX_ROW }),
+        ).toBeChecked();
+        expect(row).not.toBeChecked();
+      });
+
+      it("doesn't untick the archived member either", async () => {
+        const user = renderEditing(eventOn([retiredBox]));
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        const group = screen.getByRole("button", { name: "fleet (1)" });
+
+        await user.click(group);
+        await user.click(group);
+
+        expect(
+          screen.getByRole("checkbox", { name: SANDBOX_ROW }),
+        ).not.toBeChecked();
+        expect(row).toBeChecked();
+      });
+    });
+
+    describe("through the deprecated direct server", () => {
+      function directEvent(overrides: Record<string, unknown> = {}) {
+        return eventOn([], {
+          serverId: retiredBox.id,
+          server: retiredBox,
+          ...overrides,
+        });
+      }
+
+      it("lists an archived one the same way, and unticking it unlinks it", async () => {
+        const user = renderEditing(directEvent());
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+
+        await user.click(row);
+        await user.click(screen.getByRole("checkbox", { name: SANDBOX_ROW }));
+        await save(user);
+
+        await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+        expect(lastUpdate()).toEqual(
+          expect.objectContaining({
+            runLocation: "REMOTE",
+            selectedServerIds: [6],
+            serverId: null,
+          }),
+        );
+      });
+
+      it("lists a server once when it's both the direct one and a link", async () => {
+        renderEditing(directEvent({ servers: [retiredBox] }));
+
+        await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        expect(rowNames()).toEqual(["location-local", "server-9", "server-6"]);
+      });
+
+      it("leaves one on a LOCAL event alone, because ticking it would add a server", () => {
+        renderEditing(directEvent({ runLocation: RunLocation.LOCAL }));
+
+        expect(rowNames()).toEqual(["location-local", "server-6"]);
+        expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+      });
+    });
+
+    describe("when the same event comes back as a new object", () => {
+      // EventEditTab hands over a new object on every render, and every toast
+      // re-renders it. See __tests__/EventEditTab.test.tsx for that wiring.
+      const event = eventOn([retiredBox], { id: 5 });
+
+      function renderWithRerender() {
+        const view = render(
+          <EventForm initialData={event} isEditing eventId={5} />,
+        );
+        return {
+          user: userEvent.setup(),
+          again: (data: Record<string, unknown>) =>
+            view.rerender(
+              <EventForm initialData={data} isEditing eventId={5} />,
+            ),
+        };
+      }
+
+      it("leaves an unticked server unticked", async () => {
+        const { user, again } = renderWithRerender();
+        const row = await screen.findByRole("checkbox", {
+          name: ARCHIVED_ROW,
+          checked: true,
+        });
+        await user.click(row);
+
+        again({ ...event });
+
+        expect(row).not.toBeChecked();
+      });
+
+      it("leaves an edited env var in place", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(screen.getByRole("button", { name: "Add Variable" }));
+        fireEvent.change(screen.getByLabelText("Key"), {
+          target: { value: "MY_VAR" },
+        });
+
+        again({ ...event, environmentVariables: [] });
+
+        expect(screen.getByLabelText("Key")).toHaveValue("MY_VAR");
+      });
+
+      it("leaves a script written over the template in place", () => {
+        const empty = { ...event, content: "" };
+        const view = render(
+          <EventForm initialData={empty} isEditing eventId={5} />,
+        );
+        fireEvent.change(screen.getByTestId("monaco-stub"), {
+          target: { value: "echo mine" },
+        });
+
+        view.rerender(
+          <EventForm initialData={{ ...empty }} isEditing eventId={5} />,
+        );
+
+        expect(screen.getByTestId("monaco-stub")).toHaveValue("echo mine");
+      });
+
+      it("still labels a server archived since the form loaded", async () => {
+        const live = { id: 11, name: "gone-box", address: "192.0.2.40" };
+        const withLive = eventOn([live], { id: 5 });
+        const view = render(
+          <EventForm initialData={withLive} isEditing eventId={5} />,
+        );
+        await screen.findByRole("checkbox", {
+          name: "gone-box (192.0.2.40)",
+          checked: true,
+        });
+        expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+
+        view.rerender(
+          <EventForm
+            initialData={eventOn([{ ...live, isArchived: true }], { id: 5 })}
+            isEditing
+            eventId={5}
+          />,
+        );
+
+        expect(
+          screen.getByRole("checkbox", {
+            name: "gone-box (192.0.2.40) Archived",
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(screen.getByText(NOTICE)).toBeInTheDocument();
+      });
+
+      it("takes up a different event's servers", async () => {
+        const { user, again } = renderWithRerender();
+        await user.click(
+          await screen.findByRole("checkbox", { name: ARCHIVED_ROW }),
+        );
+
+        again(eventOn([sandbox], { id: 6 }));
+
+        expect(
+          await screen.findByRole("checkbox", {
+            name: SANDBOX_ROW,
+            checked: true,
+          }),
+        ).toBeInTheDocument();
+        expect(rowNames()).toEqual(["location-local", "server-6"]);
+      });
+    });
+
+    it("shows no extra rows when creating an event", () => {
+      render(<EventForm initialData={scheduledBashEvent} />);
+
+      expect(rowNames()).toEqual(["location-local", "server-6"]);
     });
   });
 });
