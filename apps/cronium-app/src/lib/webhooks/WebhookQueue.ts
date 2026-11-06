@@ -96,7 +96,10 @@ export class WebhookQueue {
       item.payload,
     );
 
-    if (!result.success) {
+    // `retryable: false` is for what Cronium itself knows can't change. Every other
+    // failure gets its retries, because only the receiver or the network knows whether
+    // it will last.
+    if (!result.success && result.retryable !== false) {
       throw new Error(result.error ?? `HTTP ${result.statusCode ?? "unknown"}`);
     }
   }
