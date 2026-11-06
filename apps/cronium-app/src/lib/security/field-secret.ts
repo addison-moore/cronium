@@ -41,24 +41,18 @@ const LEGACY_AAD = Buffer.from("cronium-server-encryption");
 const IV_LEN = 16;
 const TAG_LEN = 16;
 
-function legacyDecrypt(stored: string): string {
-  if (!stored) return stored;
-  if (stored.length < 50 || !/^[A-Za-z0-9+/=]+$/.test(stored)) return stored;
+/**
+ * Whether a read would try to decrypt this as legacy ciphertext rather than pass it
+ * through. This is only a guess from its shape: a long plaintext made of base64
+ * characters looks the same, and a read of one fails.
+ */
+export function looksLikeLegacyCiphertext(stored: string): boolean {
+  if (stored.length < 50 || !/^[A-Za-z0-9+/=]+$/.test(stored)) return false;
+  return Buffer.from(stored, "base64").length >= IV_LEN + TAG_LEN + 1;
+}
 
-  const masterKeyHex = process.env.ENCRYPTION_KEY;
-  if (!masterKeyHex) {
-    throw new Error("ENCRYPTION_KEY is required to decrypt legacy ciphertext");
-  }
-  const masterKey = Buffer.from(masterKeyHex, "hex");
-
-  let combined: Buffer;
-  try {
-    combined = Buffer.from(stored, "base64");
-  } catch {
-    return stored;
-  }
-  if (combined.length < IV_LEN + TAG_LEN + 1) return stored;
-
+function openLegacyCiphertext(stored: string, masterKey: Buffer): string {
+  const combined = Buffer.from(stored, "base64");
   const iv = combined.subarray(0, IV_LEN);
   const tag = combined.subarray(-TAG_LEN);
   const ciphertext = combined.subarray(IV_LEN, -TAG_LEN);
@@ -70,6 +64,34 @@ function legacyDecrypt(stored: string): string {
     decipher.update(ciphertext),
     decipher.final(),
   ]).toString("utf8");
+}
+
+function legacyDecrypt(stored: string): string {
+  if (!stored) return stored;
+  if (!looksLikeLegacyCiphertext(stored)) return stored;
+
+  const masterKeyHex = process.env.ENCRYPTION_KEY;
+  if (!masterKeyHex) {
+    throw new Error("ENCRYPTION_KEY is required to decrypt legacy ciphertext");
+  }
+  return openLegacyCiphertext(stored, Buffer.from(masterKeyHex, "hex"));
+}
+
+/**
+ * Whether this is legacy ciphertext that authenticates under `masterKey`. A read
+ * can't answer that: getting a value back from it may only mean it was passed through.
+ */
+export function isLegacyCiphertextUnderKey(
+  stored: string,
+  masterKey: Buffer,
+): boolean {
+  if (!looksLikeLegacyCiphertext(stored)) return false;
+  try {
+    openLegacyCiphertext(stored, masterKey);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* ---- servers.sshKey / servers.password (bound to userId + column) ----
