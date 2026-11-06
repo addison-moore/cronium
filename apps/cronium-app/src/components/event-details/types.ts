@@ -56,7 +56,14 @@ export interface Event {
     name: string;
     address: string;
     port: number;
+    isArchived?: boolean;
   }[];
+  server?: {
+    id: number;
+    name: string;
+    address: string;
+    isArchived?: boolean;
+  } | null;
   description?: string | null;
   active?: boolean;
   schedule?: string;

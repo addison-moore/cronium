@@ -6,6 +6,7 @@ import {
   authorizeCapability,
   assertJobScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Create a new execution
 export async function POST(
@@ -55,12 +56,15 @@ export async function POST(
         startedAt: execution.createdAt,
       });
     } catch (error) {
-      console.error("[Execution API] Error broadcasting creation:", error);
+      console.error(
+        "[Execution API] Error broadcasting creation:",
+        failureWithStack(error),
+      );
     }
 
     return NextResponse.json({ success: true, execution });
   } catch (error) {
-    console.error("Error creating execution:", error);
+    console.error("Error creating execution:", failureWithStack(error));
     // Do not echo error details — driver/DB messages can leak internals.
     return NextResponse.json(
       { error: "Internal server error" },

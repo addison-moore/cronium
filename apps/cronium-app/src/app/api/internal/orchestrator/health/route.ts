@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { verifyOrchestratorKey } from "@/lib/internal-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Health check endpoint
 export async function GET(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
       database: "connected",
     });
   } catch (error) {
-    console.error("Health check failed:", error);
+    console.error("Health check failed:", failureWithStack(error));
     return NextResponse.json(
       {
         status: "unhealthy",
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error processing health report:", error);
+    console.error("Error processing health report:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

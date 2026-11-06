@@ -39,6 +39,21 @@ export interface TRPCError extends Error {
   data?: TRPCErrorData;
 }
 
+/**
+ * What to tell a person when a tRPC call fails. A failed input validation's
+ * `message` is its Zod issues as a JSON array, so for those this gives the
+ * sentences from `data.zodError`, which the error formatter in
+ * server/api/trpc.ts adds.
+ */
+export function trpcErrorMessage(error: unknown, fallback: string): string {
+  const { message = "", data } = (error ?? {}) as Partial<TRPCError>;
+  const zodError = data?.zodError;
+  const sentences = zodError
+    ? [...zodError.formErrors, ...Object.values(zodError.fieldErrors).flat()]
+    : [];
+  return sentences.join("; ") || message || fallback;
+}
+
 // Common query options for different data types
 export const QUERY_OPTIONS = {
   // Fast-changing data (real-time updates)

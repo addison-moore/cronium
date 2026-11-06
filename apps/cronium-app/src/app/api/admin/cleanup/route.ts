@@ -13,6 +13,7 @@ import {
   auditAdminAction,
 } from "@/lib/security/admin-mutation";
 import { getCleanupService } from "@/lib/services/workflow-cleanup-service";
+import { failureWithStack } from "@/lib/pg-errors";
 
 const MAX_POSTGRES_INT = 2_147_483_647;
 
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       message: `Found ${stats.stuckWorkflows} stuck workflows and ${stats.stuckJobs} stuck jobs`,
     });
   } catch (error) {
-    console.error("[Cleanup] Error getting stats:", error);
+    console.error("[Cleanup] Error getting stats:", failureWithStack(error));
     return NextResponse.json(
       { error: "Failed to get cleanup stats" },
       { status: 500 },
@@ -137,7 +138,10 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("[Cleanup] Error during manual cleanup:", error);
+    console.error(
+      "[Cleanup] Error during manual cleanup:",
+      failureWithStack(error),
+    );
     if (auditAction) auditAdminAction(auth.userId, auditAction, "error");
     return NextResponse.json(
       { error: "Failed to perform cleanup" },

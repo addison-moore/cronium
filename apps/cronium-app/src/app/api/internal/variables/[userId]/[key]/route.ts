@@ -11,6 +11,7 @@ import {
   encryptVariableValue,
   decryptVariableValue,
 } from "@/lib/security/variable-secret";
+import { failureWithStack } from "@/lib/pg-errors";
 
 export async function GET(
   request: NextRequest,
@@ -60,7 +61,7 @@ export async function GET(
       updatedAt: varData.updatedAt,
     });
   } catch (error) {
-    console.error("Error fetching variable:", error);
+    console.error("Error fetching variable:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -113,7 +114,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error updating variable:", error);
+    console.error("Error updating variable:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

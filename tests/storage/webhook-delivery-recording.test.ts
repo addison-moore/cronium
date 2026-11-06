@@ -1,16 +1,18 @@
 /**
  * What a webhook delivery reports and records when the database won't take what
- * happened, through the real tRPC mutation and the real queue, against real
- * Postgres and a real HTTP receiver.
+ * happened, or when a receiver's answer doesn't arrive whole, through the real tRPC
+ * mutation and the real queue, against real Postgres and a real HTTP receiver.
  *
  * Real on purpose: what's under test is how many requests a receiver gets and what
  * Postgres accepts. A mocked insert can't refuse a NUL byte, and its errors don't
  * have Drizzle's wrapper, whose message repeats every value in the query. That
  * message used to reach the mutation's answer and the `error` column, and a 200
- * nobody could record used to be sent again by the queue.
+ * nobody could record used to be sent again by the queue. So did a 200 whose body
+ * ran past the cap or was cut off, because axios rejected the request over it.
  */
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import zlib from "node:zlib";
 import axios from "axios";
 import { asc, eq } from "drizzle-orm";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
@@ -37,6 +39,28 @@ jest.mock("@/lib/ssrf-guard", () => ({
   ssrfHttpsAgent: undefined,
 }));
 
+// The 30 second limits on a receiver, too long for a test to wait out. A test that
+// waits one out shortens it here. The body's limit has its own setting so that a test
+// stopping on it isn't also racing the request's: on a busy machine, a short limit on
+// the request could fire before the status arrives.
+let mockRequestTimeoutMs: number | undefined;
+let mockBodyTimeoutMs: number | undefined;
+jest.mock("@/lib/webhooks/response-body", () => {
+  const actual = jest.requireActual<
+    typeof import("@/lib/webhooks/response-body")
+  >("@/lib/webhooks/response-body");
+  return {
+    ...actual,
+    get WEBHOOK_TIMEOUT_MS() {
+      return mockRequestTimeoutMs ?? actual.WEBHOOK_TIMEOUT_MS;
+    },
+    readResponseBody: (
+      ...[body, maxBytes, timeoutMs]: Parameters<typeof actual.readResponseBody>
+    ) =>
+      actual.readResponseBody(body, maxBytes, mockBodyTimeoutMs ?? timeoutMs),
+  };
+});
+
 // Sessions are built below. The real NextAuth stack needs a request scope.
 jest.mock("@/lib/auth-cache", () => ({
   getCachedServerSession: jest.fn().mockResolvedValue(null),
@@ -50,6 +74,10 @@ const RETRIES = { maxRetries: 3, retryDelay: 100, backoffMultiplier: 1 };
 
 const NOT_RECORDED =
   "It couldn't be recorded, so it won't show in the webhook's history.";
+
+// MAX_WEBHOOK_RESPONSE_BYTES and MAX_RECORDED_RESPONSE_CHARS, which are private.
+const CAP_BYTES = 1024 * 1024;
+const RECORDED_CHARS = 1000;
 
 const createCaller = createCallerFactory(
   createTRPCRouter({ webhookSystem: webhookSystemRouter }),
@@ -76,7 +104,10 @@ function callerFor(userId: string) {
 
 interface Answer {
   status?: number;
-  body?: string;
+  headers?: http.OutgoingHttpHeaders;
+  body?: string | Buffer;
+  /** Answers by hand, in place of the three above. */
+  respond?: (res: http.ServerResponse) => void;
 }
 
 const openReceivers: Array<() => Promise<void>> = [];
@@ -93,11 +124,15 @@ async function startReceiver(
   const server = http.createServer((req, res) => {
     req.resume();
     req.on("end", () => {
-      const { status = 200, body = "from the receiver" } =
-        answers[Math.min(deliveryIds.length, answers.length - 1)]!;
+      const {
+        status = 200,
+        headers,
+        body = "from the receiver",
+        respond,
+      } = answers[Math.min(deliveryIds.length, answers.length - 1)]!;
       deliveryIds.push(String(req.headers["x-delivery-id"]));
       void Promise.resolve(meanwhile?.()).then(() =>
-        res.writeHead(status).end(body),
+        respond ? respond(res) : res.writeHead(status, headers).end(body),
       );
     });
   });
@@ -136,10 +171,11 @@ async function refuseDeliveryRows(condition = "true") {
 }
 
 /**
- * What Node says about a header name holding a NUL, which it quotes. Only a webhook's
- * custom headers can put one there. A test can't get this from a real request:
- * Node's error comes from outside Jest's sandbox, where it isn't `instanceof Error`
- * and so would be recorded as "Unknown error".
+ * What Node says about a header name holding a NUL, which it quotes. A delivery now
+ * fails before Node sees such a name, so this stands for any error that quotes what it
+ * was given. A test can't get it from a real request either: Node's error comes from
+ * outside Jest's sandbox, where it isn't `instanceof Error` and so would be recorded as
+ * "Unknown error".
  */
 function nodeRefusalOfHeaderName(): string {
   try {
@@ -148,6 +184,45 @@ function nodeRefusalOfHeaderName(): string {
     return (error as Error).message;
   }
   throw new Error("Node took a header name holding a NUL");
+}
+
+/** A status and the start of a body, and then the connection drops. */
+const dropsAfter = (
+  start: string,
+  status = 200,
+  headers: http.OutgoingHttpHeaders = { "Content-Length": 5000 },
+): Answer => ({
+  respond: (res) => {
+    res.writeHead(status, headers);
+    res.write(start, () => res.destroy());
+  },
+});
+
+/**
+ * An answer that doesn't end by itself, and the promise of seeing its connection
+ * closed. `respond` starts it, and its receiver can only stop when that happens.
+ */
+function untilClosed(respond: (res: http.ServerResponse) => void) {
+  let closed!: () => void;
+  const connectionClosed = new Promise<void>((resolve) => {
+    closed = resolve;
+  });
+  const answer: Answer = {
+    respond: (res) => {
+      res.once("close", closed);
+      respond(res);
+    },
+  };
+  return {
+    answer,
+    closedSoon: () =>
+      Promise.race([
+        connectionClosed,
+        sleep(10_000).then(() => {
+          throw new Error("The connection stayed open");
+        }),
+      ]),
+  };
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -195,6 +270,8 @@ const loggedErrors = () => errorLog.mock.calls.flat().map(String);
 
 beforeEach(async () => {
   mockAssertRequestUrlIsPublic.mockReset();
+  mockRequestTimeoutMs = undefined;
+  mockBodyTimeoutMs = undefined;
   await resetDatabase();
   owner = await seedUser({ role: UserRole.USER, status: UserStatus.ACTIVE });
   errorLog = jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -572,5 +649,581 @@ describe("a webhook deleted while its request is in flight", () => {
 
     expect(receiver.deliveryIds).toHaveLength(1);
     expect(await deliveriesOf(webhookId)).toEqual([]);
+  });
+});
+
+describe("an answer past the size cap", () => {
+  const recorded = "a".repeat(RECORDED_CHARS);
+  const long = `${recorded}${"b".repeat(2 * CAP_BYTES)}`;
+
+  it("reports a 2xx as delivered, and records its status and how it starts", async () => {
+    const receiver = await startReceiver([{ body: long }]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    expect(answer).toMatchObject({
+      success: true,
+      data: {
+        id: receiver.deliveryIds[0],
+        success: true,
+        statusCode: 200,
+        response: recorded,
+      },
+      message: "Test webhook delivered",
+    });
+    expect(answer.data.error).toBeUndefined();
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      deliveryId: answer.data.id,
+      status: "success",
+      statusCode: 200,
+      response: recorded,
+      error: null,
+    });
+    expect(Object.keys(rows[0]!.headers as object)).toContain("X-Delivery-Id");
+  });
+
+  it("isn't sent again by the queue after a 2xx", async () => {
+    const receiver = await startReceiver([{ body: long }]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      deliveryId: receiver.deliveryIds[0],
+      status: "success",
+      statusCode: 200,
+      response: recorded,
+    });
+  });
+
+  it("reports a refusal as refused, and records its status", async () => {
+    const receiver = await startReceiver([{ status: 503, body: long }]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: false,
+      data: { success: false, statusCode: 503, response: recorded },
+      message: "Test webhook failed: HTTP 503",
+    });
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      statusCode: 503,
+      response: recorded,
+      error: null,
+    });
+  });
+
+  it("is sent again by the queue after a refusal, as any refusal is", async () => {
+    const receiver = await startReceiver([{ status: 503, body: long }]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(RETRIES.maxRetries);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows.map(({ status, statusCode }) => [status, statusCode])).toEqual([
+      ["failed", 503],
+      ["failed", 503],
+      ["failed", 503],
+    ]);
+  });
+
+  it("stops reading a body with no end, and closes its connection", async () => {
+    let sent = 0;
+    const chunk = Buffer.alloc(64 * 1024, "x");
+    const endless = untilClosed((res) => {
+      res.writeHead(200);
+      const send = () => {
+        while (!res.destroyed && res.write(chunk)) sent += chunk.length;
+        if (!res.destroyed) res.once("drain", send);
+      };
+      send();
+    });
+    const receiver = await startReceiver([endless.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer.data).toMatchObject({
+      success: true,
+      statusCode: 200,
+      response: "x".repeat(RECORDED_CHARS),
+    });
+    await endless.closedSoon();
+    // What's past the cap here is in socket buffers, which the machine sizes. Reading
+    // to the limit on the whole read would take gigabytes.
+    expect(sent).toBeLessThan(64 * CAP_BYTES);
+  });
+
+  it("counts what decompression produces, not what was sent", async () => {
+    const small = zlib.gzipSync(Buffer.alloc(8 * CAP_BYTES, "z"));
+    expect(small.length).toBeLessThan(CAP_BYTES);
+    const receiver = await startReceiver([
+      { headers: { "Content-Encoding": "gzip" }, body: small },
+    ]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const [row] = await deliveriesOf(webhook.id);
+    expect(row).toMatchObject({
+      status: "success",
+      statusCode: 200,
+      response: "z".repeat(RECORDED_CHARS),
+    });
+  });
+
+  it("closes the connection under a compressed body too", async () => {
+    const open = untilClosed((res) => {
+      res.writeHead(200, { "Content-Encoding": "gzip" });
+      const gzip = zlib.createGzip();
+      gzip.pipe(res);
+      gzip.write(Buffer.alloc(2 * CAP_BYTES, "z"));
+      gzip.flush();
+    });
+    const receiver = await startReceiver([open.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer.data).toMatchObject({
+      success: true,
+      statusCode: 200,
+      response: "z".repeat(RECORDED_CHARS),
+    });
+    await open.closedSoon();
+  });
+});
+
+describe("an answer with no body", () => {
+  it("is delivered, with an empty response", async () => {
+    const receiver = await startReceiver([{ status: 204, body: "" }]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: { statusCode: 204, response: "" },
+      message: "Test webhook delivered",
+    });
+  });
+});
+
+describe("a 2xx whose connection drops before its body ends", () => {
+  const UNFINISHED = "The response didn't finish (aborted)";
+
+  it.each([
+    ["a length", { "Content-Length": 5000 }],
+    ["chunks", {}],
+  ])(
+    "reports it as delivered, says the body didn't finish, and records what came, with %s",
+    async (_name, headers) => {
+      const receiver = await startReceiver([
+        dropsAfter("start of the answer", 200, headers),
+      ]);
+      const webhook = await webhookAt(receiver.url);
+
+      const answer = await testWebhook(webhook.id);
+
+      expect(receiver.deliveryIds).toHaveLength(1);
+      expect(answer).toMatchObject({
+        success: true,
+        data: {
+          id: receiver.deliveryIds[0],
+          success: true,
+          statusCode: 200,
+          response: "start of the answer",
+          error: UNFINISHED,
+        },
+        message: `Test webhook delivered. ${UNFINISHED}`,
+      });
+      const rows = await deliveriesOf(webhook.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        deliveryId: answer.data.id,
+        status: "success",
+        statusCode: 200,
+        response: "start of the answer",
+        error: UNFINISHED,
+      });
+      expect(loggedErrors()).toEqual([]);
+    },
+  );
+
+  it("isn't sent again by the queue", async () => {
+    const receiver = await startReceiver([dropsAfter("start of the answer")]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      deliveryId: receiver.deliveryIds[0],
+      status: "success",
+      statusCode: 200,
+      response: "start of the answer",
+      error: UNFINISHED,
+    });
+  });
+
+  it("counts as a successful delivery", async () => {
+    const receiver = await startReceiver([dropsAfter("start of the answer")]);
+    const webhook = await webhookAt(receiver.url);
+
+    await testWebhook(webhook.id);
+
+    const stats = await callerFor(owner).webhookSystem.getStats({
+      webhookId: webhook.id,
+    });
+    expect(stats.metrics).toMatchObject({
+      totalDeliveries: 1,
+      successfulDeliveries: 1,
+      failedDeliveries: 0,
+    });
+  });
+
+  it("records an empty response when only the status arrived", async () => {
+    const receiver = await startReceiver([
+      {
+        respond: (res) => {
+          res.writeHead(200, { "Content-Length": 5000 });
+          res.flushHeaders();
+          setTimeout(() => res.destroy(), 50);
+        },
+      },
+    ]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: { statusCode: 200, response: "", error: UNFINISHED },
+    });
+  });
+
+  it("says both things when the row won't go in either", async () => {
+    await refuseDeliveryRows();
+    const receiver = await startReceiver([dropsAfter("start of the answer")]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: { recorded: false, statusCode: 200, error: UNFINISHED },
+      message: `Test webhook delivered. ${UNFINISHED}. ${NOT_RECORDED}`,
+    });
+  });
+
+  it("counts a compressed body the same way", async () => {
+    const receiver = await startReceiver([
+      {
+        respond: (res) => {
+          res.writeHead(200, { "Content-Encoding": "gzip" });
+          res.flushHeaders();
+          const gzip = zlib.createGzip();
+          gzip.pipe(res, { end: false });
+          gzip.write("start of the answer");
+          gzip.flush(() => res.destroy());
+        },
+      },
+    ]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "success", statusCode: 200 });
+    expect(rows[0]!.error).toContain("The response didn't finish");
+  });
+});
+
+describe("a refusal whose connection drops before its body ends", () => {
+  const UNFINISHED = "The response didn't finish (aborted)";
+
+  it("reports the status first, and records it", async () => {
+    const receiver = await startReceiver([dropsAfter("start of it", 503)]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: false,
+      data: {
+        success: false,
+        statusCode: 503,
+        response: "start of it",
+        error: UNFINISHED,
+      },
+      message: `Test webhook failed: HTTP 503. ${UNFINISHED}`,
+    });
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      statusCode: 503,
+      response: "start of it",
+      error: UNFINISHED,
+    });
+  });
+
+  it("is sent again by the queue, as any refusal is", async () => {
+    const receiver = await startReceiver([dropsAfter("start of it", 503)]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(RETRIES.maxRetries);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows.map(({ status, statusCode }) => [status, statusCode])).toEqual([
+      ["failed", 503],
+      ["failed", 503],
+      ["failed", 503],
+    ]);
+  });
+});
+
+describe("a 2xx whose body can't be decompressed", () => {
+  it("reports it as delivered, and isn't sent again by the queue", async () => {
+    const receiver = await startReceiver([
+      { headers: { "Content-Encoding": "gzip" }, body: "this isn't gzip" },
+    ]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: "success",
+      statusCode: 200,
+      response: "",
+      error: "The response didn't finish (incorrect header check)",
+    });
+  });
+});
+
+describe("a retry whose answer doesn't arrive whole", () => {
+  const retry = (deliveryId: string) =>
+    callerFor(owner).webhookSystem.retryDelivery({ deliveryId });
+
+  it("reports a 2xx past the cap as delivered", async () => {
+    const receiver = await startReceiver([
+      { status: 503 },
+      { body: "x".repeat(2 * CAP_BYTES) },
+    ]);
+    const webhook = await webhookAt(receiver.url);
+    const first = await testWebhook(webhook.id);
+
+    const answer = await retry(first.data.id);
+
+    expect(receiver.deliveryIds).toHaveLength(2);
+    expect(answer).toMatchObject({
+      success: true,
+      data: {
+        statusCode: 200,
+        response: "x".repeat(RECORDED_CHARS),
+      },
+      message: "Webhook delivery retry succeeded",
+    });
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows.map(({ status, statusCode }) => [status, statusCode])).toEqual([
+      ["failed", 503],
+      ["success", 200],
+    ]);
+  });
+
+  it("says a 2xx didn't finish", async () => {
+    const receiver = await startReceiver([
+      { status: 503 },
+      dropsAfter("start of the answer"),
+    ]);
+    const webhook = await webhookAt(receiver.url);
+    const first = await testWebhook(webhook.id);
+
+    const answer = await retry(first.data.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: { statusCode: 200, response: "start of the answer" },
+      message:
+        "Webhook delivery retry succeeded. The response didn't finish (aborted)",
+    });
+  });
+
+  it("puts the status first when a refusal doesn't finish", async () => {
+    const receiver = await startReceiver([
+      { status: 503 },
+      dropsAfter("start of it", 502),
+    ]);
+    const webhook = await webhookAt(receiver.url);
+    const first = await testWebhook(webhook.id);
+
+    const answer = await retry(first.data.id);
+
+    expect(answer).toMatchObject({
+      success: false,
+      data: { statusCode: 502, response: "start of it" },
+      message:
+        "Webhook delivery retry failed: HTTP 502. The response didn't finish (aborted)",
+    });
+  });
+
+  it("says when it couldn't be recorded", async () => {
+    const receiver = await startReceiver([{ status: 503 }, {}]);
+    const webhook = await webhookAt(receiver.url);
+    const first = await testWebhook(webhook.id);
+    await refuseDeliveryRows();
+
+    const answer = await retry(first.data.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: { recorded: false, statusCode: 200 },
+      message: `Webhook delivery retry succeeded. ${NOT_RECORDED}`,
+    });
+  });
+});
+
+describe("a receiver that goes quiet", () => {
+  const LIMIT_MS = 200;
+  const UNFINISHED = "The response didn't finish within 0.2 seconds";
+
+  const quietAfter = (start: string, status = 200) =>
+    untilClosed((res) => {
+      res.writeHead(status, { "Content-Length": 5000 });
+      res.write(start);
+    });
+
+  beforeEach(() => {
+    mockBodyTimeoutMs = LIMIT_MS;
+  });
+
+  it("reports a 2xx as delivered, and closes the connection at the limit", async () => {
+    const quiet = quietAfter("start of the answer");
+    const receiver = await startReceiver([quiet.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: true,
+      data: {
+        statusCode: 200,
+        response: "start of the answer",
+        error: UNFINISHED,
+      },
+      message: `Test webhook delivered. ${UNFINISHED}`,
+    });
+    expect(answer.data.duration).toBeGreaterThanOrEqual(LIMIT_MS);
+    await quiet.closedSoon();
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status: "success",
+      statusCode: 200,
+      response: "start of the answer",
+      error: UNFINISHED,
+    });
+  });
+
+  it("isn't sent again by the queue after a 2xx", async () => {
+    const quiet = quietAfter("start of the answer");
+    const receiver = await startReceiver([quiet.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows.map(({ status, statusCode }) => [status, statusCode])).toEqual([
+      ["success", 200],
+    ]);
+  });
+
+  it("reports a refusal as refused, and the queue sends it again", async () => {
+    const quiet = quietAfter("start of it", 503);
+    const receiver = await startReceiver([quiet.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+    expect(answer.message).toBe(`Test webhook failed: HTTP 503. ${UNFINISHED}`);
+
+    await sendThroughQueue();
+
+    expect(receiver.deliveryIds).toHaveLength(1 + RETRIES.maxRetries);
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1 + RETRIES.maxRetries);
+    expect(new Set(rows.map(({ statusCode }) => statusCode))).toEqual(
+      new Set([503]),
+    );
+  });
+
+  it("doesn't let a body sent a little at a time outlast the limit", async () => {
+    const dribble = untilClosed((res) => {
+      res.writeHead(200);
+      const timer = setInterval(() => res.write("."), 20);
+      res.once("close", () => clearInterval(timer));
+    });
+    const receiver = await startReceiver([dribble.answer]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer.data).toMatchObject({
+      success: true,
+      statusCode: 200,
+      error: UNFINISHED,
+    });
+    await dribble.closedSoon();
+  });
+
+  it("still times out a request that gets no status, and retries it", async () => {
+    mockRequestTimeoutMs = LIMIT_MS;
+    const timedOut = `timeout of ${LIMIT_MS}ms exceeded`;
+    const receiver = await startReceiver([{ respond: () => undefined }]);
+    const webhook = await webhookAt(receiver.url);
+
+    const answer = await testWebhook(webhook.id);
+
+    expect(answer).toMatchObject({
+      success: false,
+      data: { success: false, error: timedOut },
+      message: `Test webhook failed: ${timedOut}`,
+    });
+    expect(answer.data.statusCode).toBeUndefined();
+
+    await sendThroughQueue();
+
+    // By its rows, not its requests: a request this short can time out on a busy
+    // machine before the receiver has seen it.
+    const rows = await deliveriesOf(webhook.id);
+    expect(rows).toHaveLength(1 + RETRIES.maxRetries);
+    for (const row of rows) {
+      expect(row).toMatchObject({
+        status: "failed",
+        statusCode: null,
+        error: timedOut,
+      });
+    }
   });
 });
