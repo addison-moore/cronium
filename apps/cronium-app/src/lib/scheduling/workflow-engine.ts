@@ -42,6 +42,7 @@ import {
 } from "@/shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveWorkflowInput } from "@/lib/unified-io/resolve-input";
+import { describeFailure, isQueryFailure } from "@/lib/pg-errors";
 import { dispatchEventJob } from "./dispatch";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
 
@@ -213,12 +214,18 @@ export async function startWorkflowRun(
 
     return { success: true, executionId: run.id, status: "RUNNING" };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     console.error(
       `[WorkflowEngine] Failed to start workflow ${workflowId}:`,
-      message,
+      describeFailure(error),
     );
-    return { success: false, output: message };
+    // This goes back over tRPC and into a schedule incident, and a failed query's
+    // message holds the run's input.
+    const output = isQueryFailure(error)
+      ? "The workflow run could not be saved"
+      : error instanceof Error
+        ? error.message
+        : String(error);
+    return { success: false, output };
   }
 }
 

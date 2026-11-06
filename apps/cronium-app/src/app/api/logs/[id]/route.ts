@@ -7,6 +7,7 @@ import {
   authenticateRestPrincipal,
   restPrincipalErrorResponse,
 } from "@/lib/api-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // GET details for a specific log
 export async function GET(
@@ -67,7 +68,10 @@ export async function GET(
       eventType: event.type,
     });
   } catch (error) {
-    console.error(`Error fetching log ${(await params).id}:`, error);
+    console.error(
+      `Error fetching log ${(await params).id}:`,
+      failureWithStack(error),
+    );
     return new NextResponse(
       JSON.stringify({ error: "Internal server error" }),
       {

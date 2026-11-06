@@ -8,6 +8,7 @@ import {
   credentialEncryption,
   type EncryptedData,
 } from "@/lib/security/credential-encryption";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Slack-specific schemas
 const slackSendSchema = z.object({
@@ -47,7 +48,10 @@ async function getSlackTool(userId: string, toolId: number) {
           ? (JSON.parse(decrypted) as Record<string, unknown>)
           : (decrypted as Record<string, unknown>);
     } catch (error) {
-      console.error("Failed to decrypt Slack credentials:", error);
+      console.error(
+        "Failed to decrypt Slack credentials:",
+        failureWithStack(error),
+      );
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to decrypt credentials",

@@ -9,6 +9,7 @@ import { storage } from "@/server/storage";
 import { db } from "@/server/db";
 import { userSettings } from "@/shared/schema";
 import { eq } from "drizzle-orm";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Define editor settings type for type safety
 type EditorSettings = {
@@ -83,7 +84,10 @@ export const settingsRouter = createTRPCRouter({
                 console.warn("Invalid editor settings format, using defaults");
               }
             } catch (error) {
-              console.error("Failed to parse editor settings:", error);
+              console.error(
+                "Failed to parse editor settings:",
+                failureWithStack(error),
+              );
             }
           }
 

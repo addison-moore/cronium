@@ -171,10 +171,11 @@ async function refuseDeliveryRows(condition = "true") {
 }
 
 /**
- * What Node says about a header name holding a NUL, which it quotes. Only a webhook's
- * custom headers can put one there. A test can't get this from a real request:
- * Node's error comes from outside Jest's sandbox, where it isn't `instanceof Error`
- * and so would be recorded as "Unknown error".
+ * What Node says about a header name holding a NUL, which it quotes. A delivery now
+ * fails before Node sees such a name, so this stands for any error that quotes what it
+ * was given. A test can't get it from a real request either: Node's error comes from
+ * outside Jest's sandbox, where it isn't `instanceof Error` and so would be recorded as
+ * "Unknown error".
  */
 function nodeRefusalOfHeaderName(): string {
   try {

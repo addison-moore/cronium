@@ -27,6 +27,7 @@ import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
 import { hashApiToken } from "@/lib/api-token-hash";
 import { listAvailableModels } from "@/lib/ai";
 import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Use centralized admin authentication from trpc.ts
 
@@ -117,7 +118,10 @@ export const adminRouter = createTRPCRouter({
             await sendInvitationEmail(input.email, inviteToken);
             console.log(`Invitation email sent to ${input.email}`);
           } catch (emailError) {
-            console.error("Failed to send invitation email:", emailError);
+            console.error(
+              "Failed to send invitation email:",
+              failureWithStack(emailError),
+            );
             // Note: We still return success since the user was created
             // The admin can resend the invitation if needed
           }
@@ -294,7 +298,7 @@ export const adminRouter = createTRPCRouter({
                     } catch (emailError) {
                       console.error(
                         "Failed to resend invitation email:",
-                        emailError,
+                        failureWithStack(emailError),
                       );
                       results.push({
                         id: userId,
@@ -926,7 +930,10 @@ export const adminRouter = createTRPCRouter({
               console.log(`Invitation email resent to ${user.email}`);
             }
           } catch (emailError) {
-            console.error("Failed to resend invitation email:", emailError);
+            console.error(
+              "Failed to resend invitation email:",
+              failureWithStack(emailError),
+            );
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
               message: "Failed to send invitation email",
