@@ -3,7 +3,7 @@
  */
 
 import { db } from "@/server/db";
-import { driverError } from "@/lib/pg-errors";
+import { describeFailure, driverError } from "@/lib/pg-errors";
 import {
   quotedForLog,
   serializeEntry,
@@ -152,12 +152,6 @@ function isDatabaseFault(error: unknown): boolean {
 function isEntryFault(error: unknown): boolean {
   const { code, name } = driverError(error);
   return isEncodingFailure(name) || ENTRY_FAULT.test(code ?? "");
-}
-
-/** Leaves out Drizzle's own message, which repeats every value in the batch. */
-function describeFailure(error: unknown): string {
-  const { code, message, name } = driverError(error);
-  return quotedForLog(`${String(code ?? name)}: ${String(message)}`);
 }
 
 /** Returns the error if the row didn't go in; a database fault is thrown. */

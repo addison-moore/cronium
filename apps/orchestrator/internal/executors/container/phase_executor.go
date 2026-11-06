@@ -134,6 +134,24 @@ func (e *Executor) executeWithPhaseTimeouts(ctx context.Context, job *types.Job,
 // runContainer handles the execution phase of the container. It reports whether
 // the container holds a result still to be reported.
 func (e *Executor) runContainer(ctx context.Context, containerID string, job *types.Job, updates chan types.ExecutionUpdate, executionID string, timing *ExecutionTiming) bool {
+	// Attach to stdin before starting, as `docker run -i` does, because that is how the
+	// script gets in (see buildCommand). The connection stays open until the job ends.
+	attached, err := e.dockerClient.ContainerAttach(ctx, containerID, client.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  true,
+	})
+	if err != nil {
+		e.sendError(updates, fmt.Errorf("failed to attach to container: %w", err), true)
+		e.updateExecutionError(ctx, executionID, err)
+		e.sendUpdate(updates, types.UpdateTypeComplete, &types.StatusUpdate{
+			Status:  types.JobStatusFailed,
+			Message: "Failed to attach to container",
+		})
+		return false
+	}
+	stdin := &attached.HijackedResponse
+	defer stdin.Close()
+
 	// Start the container
 	if _, err := e.dockerClient.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
 		e.sendError(updates, fmt.Errorf("failed to start container: %w", err), true)
@@ -145,11 +163,28 @@ func (e *Executor) runContainer(ctx context.Context, containerID string, job *ty
 		return false
 	}
 
-	// From here the script runs whether or not this process does. A job with other
-	// halves can't outlive this process, because those halves can't.
-	if !job.LocalBranch {
-		e.setHandOver(job.ID, true)
-	}
+	// Deliver the script without holding up log streaming, because a write can block
+	// until the container reads it. If delivery fails, the bootstrap's size check is what
+	// ends the job. Closing the connection releases a write still blocked at the end.
+	//
+	// Once it's delivered the script runs whether or not this process does. Not before:
+	// this process stopping would end the delivery, and with it the job. A job with
+	// other halves can't outlive this process at all, because those halves can't.
+	delivered := make(chan struct{})
+	go func() {
+		defer close(delivered)
+		if err := deliverScript(ctx, stdin, scriptSource(job.Execution.Script)); err != nil {
+			e.log.WithError(err).WithField("jobID", job.ID).Warn("Script delivery failed")
+			return
+		}
+		if !job.LocalBranch {
+			e.setHandOver(job.ID, true)
+		}
+	}()
+	defer func() {
+		stdin.Close()
+		<-delivered
+	}()
 
 	return e.superviseContainer(ctx, containerID, job, updates, executionID, timing)
 }

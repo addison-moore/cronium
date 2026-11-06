@@ -326,9 +326,14 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 
 	// Build container configuration
 	containerConfig := &container.Config{
-		Image:        image,
-		Cmd:          e.buildCommand(job.Execution.Script),
-		Env:          e.buildEnvironment(job),
+		Image: image,
+		Cmd:   e.buildCommand(job.Execution.Script),
+		Env:   e.buildEnvironment(job),
+		// The script arrives on stdin (see buildCommand). StdinOnce closes stdin when
+		// the attached connection stops sending, which is the end the bootstrap reads to.
+		OpenStdin:    true,
+		StdinOnce:    true,
+		AttachStdin:  true,
 		WorkingDir:   "/workspace",
 		AttachStdout: true,
 		AttachStderr: true,
@@ -400,25 +405,130 @@ func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
 	return "cronium/runner:bash-alpine"
 }
 
-// buildCommand builds the container command.
+// scriptNotDeliveredExitCode is what a job exits with when its script reached the
+// container incomplete, and scriptNotDeliveredMessage what it prints. The message has
+// no quote marks because all three bootstraps quote it as it is.
+const (
+	scriptNotDeliveredExitCode = 125
+	scriptNotDeliveredMessage  = "cronium: the script did not arrive in full, so it was not run"
+)
+
+// scriptLoader is the line a job runs before its script.
 //
 // Each runtime image ships the cronium helper SDK but does not auto-load it, so
-// we prepend a loader that exposes `cronium` to the user's script without an
-// explicit import — matching the runner path and the documented no-import usage
-// (e.g. `cronium.output(...)`). Without this the script fails with
+// the loader exposes `cronium` to the user's script without an explicit import —
+// matching the runner path and the documented no-import usage (e.g.
+// `cronium.output(...)`). Without this the script fails with
 // NameError/ReferenceError: cronium is not defined.
-func (e *Executor) buildCommand(script *types.Script) []string {
-	switch script.Type {
-	case types.ScriptTypeBash:
-		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
-		return []string{"/bin/bash", "-c", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n" + script.Content}
+func scriptLoader(scriptType types.ScriptType) string {
+	switch scriptType {
 	case types.ScriptTypePython:
-		return []string{"python", "-c", "import cronium\n" + script.Content}
+		return "import cronium\n"
 	case types.ScriptTypeNode:
-		return []string{"node", "-e", "globalThis.cronium = require('cronium');\n" + script.Content}
+		// The comment names the code as `node -e` does. It has to come first: V8 finds
+		// it while parsing, so a syntax error further up would otherwise be reported
+		// against <anonymous_script>.
+		return "globalThis.cronium = require('cronium'); //# sourceURL=[eval]\n"
 	default:
-		return []string{"/bin/bash", "-c", "source /usr/local/bin/cronium.sh 2>/dev/null || true\n" + script.Content}
+		// cronium.sh is also auto-sourced via BASH_ENV; source explicitly for safety.
+		return "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"
 	}
+}
+
+// scriptSource is the text a job runs: the helper loader, then the user's script.
+func scriptSource(script *types.Script) []byte {
+	return []byte(scriptLoader(script.Type) + script.Content)
+}
+
+// scriptSize is the length of scriptSource's result, measured without copying the
+// script. The command carries this size and the container is sent that text, so the two
+// must agree: if they don't, the bootstrap refuses to run the script.
+func scriptSize(script *types.Script) int {
+	return len(scriptLoader(script.Type)) + len(script.Content)
+}
+
+// buildCommand builds the container command, which holds no part of the script.
+//
+// Linux won't exec with any one argument over 131,072 bytes, or about 2 MiB across all
+// of them and the environment, and a job past that fails as it starts with "argument
+// list too long". So the script arrives on stdin (see deliverScript), and the command
+// is a bootstrap that reads all of it and runs it in the interpreter's own process, as
+// -c and -e would. A file isn't an option: Docker refuses to copy to a read-only rootfs,
+// and a copy to a tmpfs mount reports success but never appears in the container,
+// before or after it starts.
+//
+// Reading to the end before running anything matters twice over. The script finds stdin
+// at its end, as it would /dev/null, rather than reading its own source as under `bash
+// -s`. And the size check comes before any of the script: if the connection breaks
+// partway, stdin just ends early, and half a script must not run. The check has to be
+// in the container, because the orchestrator may be what died.
+//
+// Each bootstrap leaves no name behind for the script to see or collide with.
+func (e *Executor) buildCommand(script *types.Script) []string {
+	size := scriptSize(script)
+	switch script.Type {
+	case types.ScriptTypePython:
+		return []string{"python", "-c", pythonBootstrap(size)}
+	case types.ScriptTypeNode:
+		return []string{"node", "-e", nodeBootstrap(size)}
+	default:
+		return []string{"/bin/bash", "-c", bashBootstrap(size)}
+	}
+}
+
+// bashBootstrap reads the script into a variable and evals it. `echo .` keeps trailing
+// newlines, which $(...) would strip, so the count is exact. LC_ALL=C makes ${#...}
+// count bytes, in a subshell so the script keeps its locale. It is all one line so that
+// the script's line numbers come out as they would under -c.
+func bashBootstrap(size int) string {
+	return `__cronium_script="$(cat; echo .)"; ` +
+		`(LC_ALL=C; [ "${#__cronium_script}" -eq ` + strconv.Itoa(size+1) + ` ]) || ` +
+		`{ echo "` + scriptNotDeliveredMessage + `" >&2; exit ` + strconv.Itoa(scriptNotDeliveredExitCode) + `; }; ` +
+		`eval "unset __cronium_script; ${__cronium_script%.}"`
+}
+
+// pythonBootstrap compiles and runs the script in __main__. "<string>" is the name -c
+// gives it, and compiling text rather than bytes ignores a coding cookie, also as -c does.
+func pythonBootstrap(size int) string {
+	return `exec(compile((lambda sys, source:
+    source if len(source) == ` + strconv.Itoa(size) + `
+    else (print("` + scriptNotDeliveredMessage + `", file=sys.stderr), sys.exit(` + strconv.Itoa(scriptNotDeliveredExitCode) + `))
+)(__import__("sys"), __import__("sys").stdin.buffer.read()).decode(), "<string>", "exec"))`
+}
+
+// nodeBootstrap runs the script with an indirect eval, which runs it as global code
+// like -e does. vm.runInThisContext is what -e itself uses, but from a script it can
+// only offer import() through an option that prints an ExperimentalWarning.
+func nodeBootstrap(size int) string {
+	return `(0, eval)((() => {
+  const source = require('fs').readFileSync(0);
+  if (source.length !== ` + strconv.Itoa(size) + `) {
+    console.error('` + scriptNotDeliveredMessage + `');
+    process.exit(` + strconv.Itoa(scriptNotDeliveredExitCode) + `);
+  }
+  return source.toString();
+})());`
+}
+
+// deliverScript writes the script to the container's stdin and ends it. It half-closes
+// the connection, as `docker run -i` does, which ends stdin once the daemon has read
+// everything sent. On any failure it closes the connection, so the bootstrap still sees
+// an end and refuses what it got rather than waiting until the job times out.
+func deliverScript(ctx context.Context, stdin *client.HijackedResponse, source []byte) (err error) {
+	stop := context.AfterFunc(ctx, stdin.Close)
+	defer stop()
+	defer func() {
+		if err != nil {
+			stdin.Close()
+		}
+	}()
+	if _, err := stdin.Conn.Write(source); err != nil {
+		return fmt.Errorf("failed to write the script to stdin: %w", err)
+	}
+	if err := stdin.CloseWrite(); err != nil {
+		return fmt.Errorf("failed to close stdin: %w", err)
+	}
+	return nil
 }
 
 // buildEnvironment builds the container environment variables
@@ -428,6 +538,12 @@ func (e *Executor) buildEnvironment(job *types.Job) []string {
 	// Add execution environment variables
 	for k, v := range job.Execution.Environment {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// The images set HOME to /home/cronium, which the tmpfs at /home hides, so it
+	// wouldn't exist. A job that sets its own HOME keeps it.
+	if _, ownHome := job.Execution.Environment["HOME"]; !ownHome {
+		env = append(env, "HOME="+jobHomeDir)
 	}
 
 	// Get execution token
@@ -522,19 +638,32 @@ func (e *Executor) buildResourceLimits(job *types.Job) container.Resources {
 	}
 }
 
+// jobHomeDir is a job's $HOME, unless the job sets its own. It is the tmpfs mount itself
+// because a new tmpfs is empty: a directory under it, like the /home/cronium the images
+// set, would need a step in every job to create it first.
+const jobHomeDir = "/home"
+
+// jobWritableDirMode lets a job write to a tmpfs mount whichever user it runs as. A
+// tmpfs comes up owned by root, and a mount can't change that: the daemon refuses uid
+// and gid in its options ("invalid option: uid"). The user can't be assumed anyway. It
+// is configurable, may be a name only the image can resolve, and differs by image if
+// left unset. The open mode gives nothing away: a job runs as one user with no
+// capabilities, so no other user is there to use it.
+const jobWritableDirMode = 0o1777
+
 // buildMounts builds container mounts
 func (e *Executor) buildMounts(_ *types.Job) []mount.Mount {
 	// With a read-only root filesystem (3.1), every writable path a job needs
 	// must be an explicit tmpfs mount. /workspace is the working directory,
-	// /tmp is scratch, and /home gives nonroot tooling (pip/npm caches, etc.) a
-	// writable HOME. Everything else stays read-only.
+	// /tmp is scratch, and /home is $HOME, for nonroot tooling (pip/npm caches,
+	// etc.). Everything else stays read-only.
 	return []mount.Mount{
 		{
 			Type:   mount.TypeTmpfs,
 			Target: "/tmp",
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 100 * 1024 * 1024, // 100MB
-				Mode:      0o1777,
+				Mode:      jobWritableDirMode,
 			},
 		},
 		{
@@ -542,15 +671,15 @@ func (e *Executor) buildMounts(_ *types.Job) []mount.Mount {
 			Target: "/workspace",
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 500 * 1024 * 1024, // 500MB
-				Mode:      0o755,
+				Mode:      jobWritableDirMode,
 			},
 		},
 		{
 			Type:   mount.TypeTmpfs,
-			Target: "/home",
+			Target: jobHomeDir,
 			TmpfsOptions: &mount.TmpfsOptions{
 				SizeBytes: 100 * 1024 * 1024, // 100MB
-				Mode:      0o1777,
+				Mode:      jobWritableDirMode,
 			},
 		},
 	}

@@ -23,9 +23,10 @@ jest.mock("../WebhookQueue", () => ({
   WebhookQueue: jest.fn().mockImplementation(() => ({})),
 }));
 jest.mock("../WebhookSecurity", () => ({
-  WebhookSecurity: jest
-    .fn()
-    .mockImplementation(() => ({ generateSignature: () => "signature" })),
+  WebhookSecurity: jest.fn().mockImplementation(() => ({
+    generateSignature: () => "signature",
+    generateDeliverySignature: () => "signature-v2",
+  })),
 }));
 jest.mock("nanoid", () => ({ nanoid: () => "delivery-id" }));
 
@@ -127,6 +128,14 @@ describe("webhook delivery behind the SSRF guard", () => {
       expect(connections).toBe(0);
     },
   );
+
+  it("refuses a URL naming an internal address, and reports why", async () => {
+    const result = await deliver(`http://127.0.0.1:${port}/hook`);
+
+    expect(result).toMatchObject({ success: false, statusCode: 0 });
+    expect(result.error).toContain("disallowed");
+    expect(connections).toBe(0);
+  });
 
   it("does not follow a redirect", async () => {
     resolvesTo("127.0.0.1");

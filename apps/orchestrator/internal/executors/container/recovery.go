@@ -179,6 +179,9 @@ func (e *Executor) FindLeftoverJobs(ctx context.Context) ([]types.LeftoverJob, e
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.leftovers == nil {
+		e.leftovers = make(map[string]jobResources)
+	}
 	for jobID, res := range resources {
 		e.leftovers[jobID] = *res
 	}
@@ -394,6 +397,9 @@ func (e *Executor) finishRun(ctx context.Context, job *types.Job, res jobResourc
 
 	hold := &resultHold{release: make(chan struct{}), removed: make(chan struct{})}
 	e.mu.Lock()
+	if e.holds == nil {
+		e.holds = make(map[string]*resultHold)
+	}
 	e.holds[job.ID] = hold
 	e.mu.Unlock()
 
@@ -451,6 +457,9 @@ func (e *Executor) setHandOver(jobID string, can bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if can {
+		if e.handOver == nil {
+			e.handOver = make(map[string]bool)
+		}
 		e.handOver[jobID] = true
 	} else {
 		delete(e.handOver, jobID)

@@ -95,6 +95,11 @@ Compose binds host port 5002 to loopback; never proxy `/broadcast/*`. Those
 routes are intended only for Cronium services and require
 `Authorization: Bearer $SOCKET_BROADCAST_KEY`.
 
+A reverse proxy in front of the app also carries saves, so let it pass request
+bodies of at least 10 MB, the most one save can carry. nginx's
+`client_max_body_size` defaults to 1 MB, and past that it refuses a script before
+Cronium sees it.
+
 The socket server accepts browser handshakes only from exact trusted origins.
 It uses `PUBLIC_APP_URL` and `AUTH_URL` by default. If more than one frontend
 origin is legitimate, set `SOCKET_ALLOWED_ORIGINS` to a comma-separated list
@@ -219,6 +224,16 @@ docker compose up -d
   remain, and
   [Encrypting values saved before encryption at rest](ENVIRONMENT_VARIABLES.md#encrypting-values-saved-before-encryption-at-rest)
   has the command.
+- **Since November 2026, container jobs need Docker's attach endpoint.** A job's script
+  reaches its container on stdin, so the orchestrator calls
+  `POST /containers/{id}/attach` before it starts any container job, however short the
+  script. The compose files here mount the Docker socket directly, so this only matters
+  if your orchestrator goes through a Docker socket proxy. In that case, before you
+  upgrade, allow that route and let the connection upgrade through. Otherwise every
+  container job fails at once with
+  `failed to attach to container: unable to upgrade to tcp, received 403`, with whatever
+  status your proxy answers, and its container is never started. Remote jobs don't use
+  this endpoint.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
 - **Running jobs carry on.** See [Jobs during a restart](#jobs-during-a-restart).

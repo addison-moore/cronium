@@ -69,32 +69,6 @@ func TestValidate(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported script type")
 }
 
-func TestBuildCommand_PrependsCroniumLoader(t *testing.T) {
-	e := newUnitExecutor()
-	content := "echo 'user script'"
-
-	tests := []struct {
-		name       string
-		scriptType types.ScriptType
-		wantArgv   []string
-		wantPrefix string
-	}{
-		{"bash", types.ScriptTypeBash, []string{"/bin/bash", "-c"}, "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"},
-		{"python", types.ScriptTypePython, []string{"python", "-c"}, "import cronium\n"},
-		{"node", types.ScriptTypeNode, []string{"node", "-e"}, "globalThis.cronium = require('cronium');\n"},
-		{"unknown falls back to bash", "RUBY", []string{"/bin/bash", "-c"}, "source /usr/local/bin/cronium.sh 2>/dev/null || true\n"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cmd := e.buildCommand(&types.Script{Type: tc.scriptType, Content: content})
-			require.Len(t, cmd, 3)
-			assert.Equal(t, tc.wantArgv, cmd[:2])
-			// Loader is prepended and the user script kept verbatim after it.
-			assert.Equal(t, tc.wantPrefix+content, cmd[2])
-		})
-	}
-}
-
 func TestGetImageForScript(t *testing.T) {
 	e := newUnitExecutor()
 

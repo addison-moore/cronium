@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -398,6 +399,30 @@ echo "CRONIUM_API_TOKEN=$CRONIUM_API_TOKEN"
 		if !found {
 			t.Errorf("child environment missing %q; stdout = %#v", line, got)
 		}
+	}
+}
+
+// 128,000 bytes is the most the app accepts for one value.
+func TestExecuteScriptGetsALongEnvironmentValueWhole(t *testing.T) {
+	requireTool(t, "bash")
+
+	e, hook := setupScript(t, types.ScriptTypeBash, "script.sh", `
+echo "LENGTH=${#LONG_VALUE}"
+echo "START=${LONG_VALUE:0:6}"
+echo "END=${LONG_VALUE: -6}"
+`)
+	e.manifest.Environment = map[string]string{
+		"LONG_VALUE": "start-" + strings.Repeat("x", 128_000-12) + "-end-!",
+	}
+
+	if err := runWithWatchdog(t, e, 10*time.Second); err != nil {
+		t.Fatalf("script failed: %v", err)
+	}
+
+	got := hook.streamLines("stdout")
+	want := []string{"LENGTH=128000", "START=start-", "END=-end-!"}
+	if !slices.Equal(got, want) {
+		t.Errorf("stdout = %q, want %q", got, want)
 	}
 }
 

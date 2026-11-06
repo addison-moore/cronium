@@ -24,7 +24,12 @@
  *
  * Scenario 5 — triggering from CI: the REST run routes, over HTTP with a bearer token.
  * Only this stack shows the proxy letting them through and the run actually finishing.
+ *
+ * Scenario 6 — a long env var: the longest value the app accepts, from the API through
+ * the job's payload and the orchestrator into a real container. Only a real exec shows
+ * the kernel taking it.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -521,5 +526,69 @@ describe("scenario 5 — triggering runs from CI over REST", () => {
     expect(((await res.json()) as { error: string }).error).toBe(
       "Unauthorized",
     );
+  });
+});
+
+describe("scenario 6 — a long env var reaches the script whole", () => {
+  it("runs with the longest value the app accepts, and refuses one byte more", async () => {
+    // Line breaks, spaces and quotes, as a PEM key or a JSON credential has.
+    const line = `line with spaces and "quotes" ${"x".repeat(60)}\n`;
+    const longest = line
+      .repeat(Math.ceil(128_000 / line.length))
+      .slice(0, 128_000);
+    const sha256 = createHash("sha256").update(longest).digest("hex");
+
+    const refused = await fetch(`${APP_URL}/api/events`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: "e2e-env-refused",
+        type: "BASH",
+        status: "DRAFT",
+        content: "echo never",
+        scheduleNumber: 1,
+        scheduleUnit: "MINUTES",
+        runLocation: "LOCAL",
+        timeoutValue: 30,
+        timeoutUnit: "SECONDS",
+        retries: 0,
+        envVars: [{ key: "LONG_VALUE", value: `${longest}x` }],
+      }),
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.text()).toContain("at most 128 KB");
+
+    const event = await trpc<EventDto>(token, "events.create", {
+      name: `e2e-env-${Date.now().toString(36)}`,
+      type: "BASH",
+      content: `printf 'LONG_VALUE_SHA:%s\\n' "$(printf '%s' "$LONG_VALUE" | sha256sum | cut -d' ' -f1)"`,
+      triggerType: "MANUAL",
+      status: "DRAFT",
+      envVars: [{ key: "LONG_VALUE", value: longest }],
+    });
+
+    const started = await fetch(`${APP_URL}/api/events/${event.id}/execute`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(started.status).toBe(202);
+    const { logId } = (await started.json()) as { logId: number };
+
+    const log = await poll<{ output: string }>(
+      `log ${logId} to finish`,
+      async () => {
+        const res = await fetch(`${APP_URL}/api/logs/${logId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const body = (await res.json()) as { status: string; output: string };
+        if (["FAILURE", "TIMEOUT", "PARTIAL"].includes(body.status)) {
+          throw new FatalPollError(`run ended: ${JSON.stringify(body)}`);
+        }
+        return body.status === "SUCCESS" ? body : undefined;
+      },
+      { timeoutMs: 150_000 },
+    );
+
+    expect(log.output).toContain(`LONG_VALUE_SHA:${sha256}`);
   });
 });

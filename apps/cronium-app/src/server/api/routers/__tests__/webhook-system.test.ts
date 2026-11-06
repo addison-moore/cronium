@@ -105,6 +105,7 @@ jest.mock("@/lib/webhooks", () => {
     getEventHistory: jest.fn(),
     retryDelivery: jest.fn(),
     triggerEvent: jest.fn(),
+    sendTestEvent: jest.fn(),
   };
   const generateSecret = jest.fn(() => "regenerated-plaintext-secret");
   class WebhookSecurity {
@@ -125,6 +126,7 @@ jest.mock("@/lib/webhooks/webhook-secret", () => ({
   ),
 }));
 
+import { TRPCError } from "@trpc/server";
 import type { Session } from "next-auth";
 // Pull the next-auth module augmentation (id/role/status/sessionVersion) into
 // this test's TypeScript program.
@@ -141,7 +143,9 @@ import {
   webhookEvents,
 } from "@/shared/schema";
 import { db } from "@/server/db";
+import { RateLimitService } from "@/lib/rate-limit-service";
 import { WebhookManager } from "@/lib/webhooks";
+import { WebhookPreconditionError } from "@/lib/webhooks/webhook-errors";
 import { encryptWebhookSecret } from "@/lib/webhooks/webhook-secret";
 
 // Mount under its production name so enforceRouteCapability sees the same
@@ -158,6 +162,7 @@ const managerMock = WebhookManager.getInstance() as unknown as {
   getEventHistory: jest.Mock;
   retryDelivery: jest.Mock;
   triggerEvent: jest.Mock;
+  sendTestEvent: jest.Mock;
 };
 const encryptSecretMock = encryptWebhookSecret as unknown as jest.Mock;
 
@@ -630,20 +635,116 @@ describe("webhookSystem.getStats", () => {
 });
 
 describe("webhookSystem.retryDelivery", () => {
-  it("retries a delivery owned by the caller", async () => {
-    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
-    managerMock.retryDelivery.mockResolvedValue({ queued: true });
+  const attempt = (overrides: Record<string, unknown>) => ({
+    id: "dl_new",
+    webhookId: 42,
+    duration: 12,
+    ...overrides,
+  });
 
-    const result = await userCaller().webhookSystem.retryDelivery({
-      deliveryId: "dl_123",
-    });
+  async function retryOwned(result: Record<string, unknown>) {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockResolvedValue(result);
+    return userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" });
+  }
+
+  it("reports success when the receiver took a delivery owned by the caller", async () => {
+    const delivered = attempt({ success: true, statusCode: 200 });
+
+    const result = await retryOwned(delivered);
 
     expect(managerMock.retryDelivery).toHaveBeenCalledWith("dl_123");
     expect(result).toEqual({
       success: true,
-      data: { queued: true },
-      message: "Webhook delivery retry initiated",
+      data: delivered,
+      message: "Webhook delivery retry succeeded",
     });
+  });
+
+  it("reports failure when the receiver answered with an error", async () => {
+    const refused = attempt({ success: false, statusCode: 500 });
+
+    expect(await retryOwned(refused)).toEqual({
+      success: false,
+      data: refused,
+      message: "Webhook delivery retry failed: HTTP 500",
+    });
+  });
+
+  it("reports why when the attempt got no answer at all", async () => {
+    const unreachable = attempt({
+      success: false,
+      error: "connect ECONNREFUSED",
+    });
+
+    expect(await retryOwned(unreachable)).toEqual({
+      success: false,
+      data: unreachable,
+      message: "Webhook delivery retry failed: connect ECONNREFUSED",
+    });
+  });
+
+  it("says so when a delivered retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry succeeded. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a refused retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: false,
+      statusCode: 500,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: false,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry failed: HTTP 500. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("passes on a refusal to send, with its message", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    managerMock.retryDelivery.mockRejectedValue(
+      new WebhookPreconditionError("Webhook is disabled"),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Webhook is disabled",
+    });
+  });
+
+  it("is limited per user, and past the limit does nothing", async () => {
+    mockDbState.results.set(webhookDeliveries, [{ webhookUserId: USER_ID }]);
+    const checkLimit = RateLimitService.checkLimit as jest.Mock;
+    checkLimit.mockRejectedValueOnce(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Slow down" }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.retryDelivery({ deliveryId: "dl_123" }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    expect(checkLimit).toHaveBeenCalledWith(
+      USER_ID,
+      "webhookSystem.retryDelivery",
+      { maxRequests: 10, windowMs: 60000 },
+    );
+    expect(managerMock.retryDelivery).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND when the delivery belongs to another tenant", async () => {
@@ -680,29 +781,126 @@ describe("webhookSystem.retryDelivery", () => {
 });
 
 describe("webhookSystem.test", () => {
-  it("triggers a test event inside the owner's tenant", async () => {
-    mockDbState.results.set(webhooks, [ownedWebhookRow()]);
-    managerMock.triggerEvent.mockResolvedValue(undefined);
+  const attempt = (overrides: Record<string, unknown>) => ({
+    id: "dl_new",
+    webhookId: 42,
+    duration: 12,
+    ...overrides,
+  });
 
-    const result = await userCaller().webhookSystem.test({
+  async function testOwned(result: Record<string, unknown>) {
+    mockDbState.results.set(webhooks, [ownedWebhookRow()]);
+    managerMock.sendTestEvent.mockResolvedValue(result);
+    return userCaller().webhookSystem.test({
       webhookId: 42,
       testData: { hello: "world" },
     });
+  }
 
-    expect(managerMock.triggerEvent).toHaveBeenCalledWith(
-      "webhook.test",
+  it("sends to the webhook it's given, and reports success when the receiver took it", async () => {
+    const delivered = attempt({ success: true, statusCode: 200 });
+
+    const result = await testOwned(delivered);
+
+    expect(managerMock.sendTestEvent).toHaveBeenCalledWith(
+      ownedWebhookRow(),
       expect.objectContaining({ test: true, hello: "world" }),
-      USER_ID,
       { webhookId: 42, triggeredBy: USER_ID },
     );
+    expect(managerMock.triggerEvent).not.toHaveBeenCalled();
     expect(result).toEqual({
       success: true,
-      data: { webhookId: 42 },
-      message: "Test webhook sent",
+      data: delivered,
+      message: "Test webhook delivered",
     });
 
     const cols = whereColumnsFor(webhooks);
     expect(cols).toContain("user_id");
+  });
+
+  it("reports failure when the receiver answered with an error", async () => {
+    const refused = attempt({ success: false, statusCode: 503 });
+
+    expect(await testOwned(refused)).toEqual({
+      success: false,
+      data: refused,
+      message: "Test webhook failed: HTTP 503",
+    });
+  });
+
+  it("says so when a delivered test couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await testOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Test webhook delivered. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a refused test couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: false,
+      statusCode: 503,
+      recorded: false,
+    });
+
+    expect(await testOwned(unrecorded)).toEqual({
+      success: false,
+      data: unrecorded,
+      message:
+        "Test webhook failed: HTTP 503. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("reports why when the attempt got no answer at all", async () => {
+    const unreachable = attempt({
+      success: false,
+      error: "connect ECONNREFUSED",
+    });
+
+    expect(await testOwned(unreachable)).toEqual({
+      success: false,
+      data: unreachable,
+      message: "Test webhook failed: connect ECONNREFUSED",
+    });
+  });
+
+  it("passes on a refusal to send, with its message", async () => {
+    mockDbState.results.set(webhooks, [ownedWebhookRow({ active: false })]);
+    managerMock.sendTestEvent.mockRejectedValue(
+      new WebhookPreconditionError("Webhook is disabled"),
+    );
+
+    await expect(
+      userCaller().webhookSystem.test({ webhookId: 42 }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Webhook is disabled",
+    });
+  });
+
+  it("is limited per user, and past the limit does nothing", async () => {
+    mockDbState.results.set(webhooks, [ownedWebhookRow()]);
+    const checkLimit = RateLimitService.checkLimit as jest.Mock;
+    checkLimit.mockRejectedValueOnce(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Slow down" }),
+    );
+
+    await expect(
+      userCaller().webhookSystem.test({ webhookId: 42 }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+
+    expect(checkLimit).toHaveBeenCalledWith(USER_ID, "webhookSystem.test", {
+      maxRequests: 10,
+      windowMs: 60000,
+    });
+    expect(managerMock.sendTestEvent).not.toHaveBeenCalled();
   });
 
   it("returns NOT_FOUND for a webhook the caller does not own", async () => {
@@ -710,7 +908,7 @@ describe("webhookSystem.test", () => {
     await expect(
       userCaller().webhookSystem.test({ webhookId: 42 }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(managerMock.triggerEvent).not.toHaveBeenCalled();
+    expect(managerMock.sendTestEvent).not.toHaveBeenCalled();
   });
 
   it("rejects a Viewer with FORBIDDEN", async () => {
