@@ -8,6 +8,8 @@
  * refused, and console.error prints all of those for an error passed as it is, as
  * well as a stack that starts with the message. So a catch block logs
  * describeFailure or failureWithStack, never the error or its `.message`.
+ *
+ * Handing one back to whoever called is the same: messageForCaller, not `.message`.
  */
 import { quotedForLog } from "@/lib/security/audit-entry";
 
@@ -19,6 +21,9 @@ export interface DriverError {
   /** Only on an error Postgres itself sent. */
   severity?: string;
 }
+
+/** What a caller reads in place of a failed query's message. */
+export const QUERY_FAILED_MESSAGE = "A database query failed";
 
 /** More than any wrapping here takes, and it also stops a cycle. */
 const MAX_CAUSES = 8;
@@ -65,6 +70,22 @@ export function isQueryFailure(error: unknown): boolean {
     ({ message, severity }) =>
       severity !== undefined || String(message).includes(DRIZZLE_MESSAGE),
   );
+}
+
+/**
+ * An error's message, for a place that sends it back to whoever called. Most of them
+ * are written for that person, such as a refusal or what an SMTP server said, so they
+ * stay. A failed query's is the SQL and every bound value, so that becomes a fixed line,
+ * and the reason goes to the log, since the caller no longer gets it and many of these
+ * catch blocks log nothing else. One that does should use isQueryFailure directly.
+ */
+export function messageForCaller(error: unknown, otherwise?: string): string {
+  if (isQueryFailure(error)) {
+    console.error("Query failed:", failureWithStack(error));
+    return QUERY_FAILED_MESSAGE;
+  }
+  const { message } = causeChain(error)[0] ?? {};
+  return typeof message === "string" ? message : (otherwise ?? String(error));
 }
 
 /** Longest first, so one that contains another doesn't leave its remainder behind. */

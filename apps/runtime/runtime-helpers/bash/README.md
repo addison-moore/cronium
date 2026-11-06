@@ -128,3 +128,5 @@ In a container, everything is in the image. The SDK there needs:
 A script still runs if `curl`, `jq` or one of these variables is missing. Each function except `cronium_info` checks when it's called, and if something is missing it prints why on stderr, makes no request and returns 1.
 
 On a remote server, the functions need only `bash`, because they run on helper binaries that the runner brings with it. A script that calls `jq` itself, like the examples above, needs `jq` installed on that server.
+
+Loading the SDK overwrites none of an event's env vars, so an event can use a name like `CRONIUM_TOKEN` for a REST API token. Names starting with `_cronium_` are the SDK's own.
