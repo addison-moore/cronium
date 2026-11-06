@@ -30,7 +30,9 @@ done
 body=
 if [ "$length" -gt 0 ]; then
   IFS= read -r -N "$length" body
-  body=$(jq -c . <<<"$body")
+  # Only to compact what jq spread over lines. A body on one line stays as it was sent, as
+  # jq would write a number in it its own way.
+  case "$body" in *$'\n'*) body=$(jq -c . <<<"$body") ;; esac
 fi
 route=${target#/executions/*/}
 echo "$method $route${body:+ $body}" >> /tmp/runtime-requests
@@ -57,12 +59,18 @@ case "$method $route" in
     fi
     ;;
   'PUT variables/'*)
-    if [ "$(jq -r .value <<<"$body")" = null ]; then
-      reply 400 '{"error":"Bad Request","message":"variable value must not be null"}'
-    else
-      jq -j '.value | if type == "string" then . else tojson end' <<<"$body" > "/tmp/runtime-vars/${route#variables/}"
-      reply 200 '{"success":true}'
-    fi
+    # What the runtime stores: a string's text, or any other value as it was written.
+    value=${body#'{"value":'}
+    value=${value%'}'}
+    case "$value" in
+      null)
+        reply 400 '{"error":"Bad Request","message":"variable value must not be null"}'
+        exit 0
+        ;;
+      '"'*) jq -j . <<<"$value" > "/tmp/runtime-vars/${route#variables/}" ;;
+      *) printf '%s' "$value" > "/tmp/runtime-vars/${route#variables/}" ;;
+    esac
+    reply 200 '{"success":true}'
     ;;
   'GET context') reply 200 '{"success":true,"data":{"name":"Demo","flag":false}}' ;;
   'GET input') reply 200 '{"success":true,"data":{"a":1}}' ;;
@@ -464,6 +472,145 @@ func TestFailedWritesAreReportedInTheSandbox(t *testing.T) {
 answer 'PUT variables_LOG' 403 '{"message":"nope"}'
 ` + tryLines(want)
 
+	for _, strict := range strictModes {
+		t.Run(strict.name, func(t *testing.T) {
+			assert.Equal(t, want, runHelperCalls(t, e, strict.mode, script))
+		})
+	}
+}
+
+// TestNumbersInTheSandbox covers what jq and $((...)) did to a number, in the image's own bash
+// and jq. A stored 010 was octal and became 9, 09 was an error, and an increment was an
+// expression, so abc counted as 0. jq read 010, +5, inf and nan as numbers and wrote them its
+// own way, so a value set as 010 was stored as 10, and 1e3 as 1E+3.
+func TestNumbersInTheSandbox(t *testing.T) {
+	e := childBashSandbox(t)
+
+	set := func(value, sent, stored string) helperCall {
+		return helperCall{
+			Call:     "cronium_set_variable NEW " + value,
+			Requests: []string{`PUT variables/NEW {"value":` + sent + `}`},
+			Stored:   storedAtFirst("NEW", stored),
+		}
+	}
+	// The call stores a number in COUNT first.
+	incremented := func(call, output string) helperCall {
+		return helperCall{
+			Call:     call,
+			Stdout:   output,
+			Requests: []string{"GET variables/COUNT", `PUT variables/COUNT {"value":` + output + `}`},
+			Stored:   storedAtFirst("COUNT", output),
+		}
+	}
+	badIncrement := func(increment, shown string) helperCall {
+		return helperCall{
+			Call:   "cronium_increment_variable COUNT " + increment,
+			Status: 1,
+			Stderr: []string{"Error: Increment '" + shown + "' is not a 64-bit integer, so variable 'COUNT' was not changed"},
+			Stored: storedAtFirst(),
+		}
+	}
+	// A stored value that can't be counted is only read.
+	unchanged := func(value, reason string) helperCall {
+		return helperCall{
+			Call:     "stored " + value + "; cronium_increment_variable COUNT",
+			Status:   1,
+			Stderr:   []string{reason},
+			Requests: []string{"GET variables/COUNT"},
+			Stored:   storedAtFirst("COUNT", value),
+		}
+	}
+	const notAnInteger = "Error: Variable 'COUNT' is not a 64-bit integer, so it was not changed"
+	const badConfig = "Error: Invalid JSON configuration for tool action"
+
+	want := []helperCall{
+		// Not JSON, whatever jq reads them as, so they go as strings.
+		set("010", `"010"`, "010"),
+		set("09", `"09"`, "09"),
+		set("-010", `"-010"`, "-010"),
+		set("+5", `"+5"`, "+5"),
+		set(".5", `".5"`, ".5"),
+		set("5.", `"5."`, "5."),
+		set("nan", `"nan"`, "nan"),
+		set("inf", `"inf"`, "inf"),
+		set("Infinity", `"Infinity"`, "Infinity"),
+		set(`"{\"a\":010}"`, `"{\"a\":010}"`, `{"a":010}`),
+
+		// JSON, so they go as written.
+		set("0", "0", "0"),
+		set("42", "42", "42"),
+		set("1e3", "1e3", "1e3"),
+		set("1E+3", "1E+3", "1E+3"),
+		set("1e-3", "1e-3", "1e-3"),
+		set("1.50", "1.50", "1.50"),
+		set("12345678901234567890", "12345678901234567890", "12345678901234567890"),
+		set(`"{\"a\":1e3}"`, `{"a":1e3}`, `{"a":1e3}`),
+		set(`\"010\"`, `"010"`, "010"),
+
+		{Call: "cronium_output 010", Requests: []string{`POST output {"data":"010"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output nan", Requests: []string{`POST output {"data":"nan"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output 1e3", Requests: []string{`POST output {"data":1e3}`}, Stored: storedAtFirst()},
+		{Call: `cronium_execute_tool_action sql run "{\"n\":010}"`, Status: 1, Stderr: []string{badConfig}, Stored: storedAtFirst()},
+		{Call: `cronium_execute_tool_action sql run "[nan]"`, Status: 1, Stderr: []string{badConfig}, Stored: storedAtFirst()},
+		{
+			Call:     "stored 0; cronium_append_variable COUNT 10",
+			Requests: []string{"GET variables/COUNT", `PUT variables/COUNT {"value":"010"}`},
+			Stored:   storedAtFirst("COUNT", "010"),
+		},
+
+		// A stored number counts in decimal.
+		incremented("stored 010; cronium_increment_variable COUNT", "11"),
+		incremented("stored 09; cronium_increment_variable COUNT", "10"),
+		incremented("stored 00; cronium_increment_variable COUNT", "1"),
+		incremented("stored -010; cronium_increment_variable COUNT", "-9"),
+		incremented("stored -09; cronium_increment_variable COUNT", "-8"),
+		incremented("stored -0; cronium_increment_variable COUNT", "1"),
+
+		// So does an increment.
+		incremented("cronium_increment_variable COUNT 010", "51"),
+		incremented("cronium_increment_variable COUNT 09", "50"),
+		incremented("cronium_increment_variable COUNT -010", "31"),
+		incremented("cronium_increment_variable COUNT +1", "42"),
+		incremented("stored 010; cronium_increment_variable COUNT 010", "20"),
+
+		// An increment that isn't an integer changes nothing, and nothing is even read.
+		badIncrement("abc", "abc"),
+		badIncrement("1.5", "1.5"),
+		badIncrement("0x10", "0x10"),
+		badIncrement("1+1", "1+1"),
+		badIncrement(`""`, ""),
+		badIncrement(`" 5"`, " 5"),
+		badIncrement(`"a[\$(touch /tmp/injected)]"`, "a[$(touch /tmp/injected)]"),
+		{Call: "[ ! -e /tmp/injected ]", Stored: storedAtFirst()},
+
+		// Neither does a stored value that isn't one.
+		unchanged("abc", notAnInteger),
+		unchanged("1.5", notAnInteger),
+		unchanged("1e3", notAnInteger),
+
+		// $((...)) has 64 bits, and past them it wraps without saying so.
+		incremented("stored 9223372036854775806; cronium_increment_variable COUNT", "9223372036854775807"),
+		unchanged("9223372036854775807", "Error: Adding 1 to variable 'COUNT' goes past 64 bits, so it was not changed"),
+		unchanged("9223372036854775808", notAnInteger),
+		unchanged("99999999999999999999", notAnInteger),
+		unchanged("18446744073709551616", notAnInteger),
+
+		// A bash the script starts has all of this too.
+		incremented(`stored 010; bash -c "cronium_increment_variable COUNT"`, "11"),
+		{
+			Call:   `bash -u -c "cronium_increment_variable COUNT abc"`,
+			Status: 1,
+			Stderr: []string{"Error: Increment 'abc' is not a 64-bit integer, so variable 'COUNT' was not changed"},
+			Stored: storedAtFirst(),
+		},
+		{
+			Call:     `bash -c "cronium_set_variable NEW 010"`,
+			Requests: []string{`PUT variables/NEW {"value":"010"}`},
+			Stored:   storedAtFirst("NEW", "010"),
+		},
+	}
+
+	script := "stored() { printf %s \"$1\" > /tmp/runtime-vars/COUNT; }\n" + tryLines(want)
 	for _, strict := range strictModes {
 		t.Run(strict.name, func(t *testing.T) {
 			assert.Equal(t, want, runHelperCalls(t, e, strict.mode, script))

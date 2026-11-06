@@ -655,6 +655,9 @@ describe("scenario 7 — variables with no value, and ones that can't be read", 
       `echo "COUNT:$(cronium_increment_variable ${marker}_COUNT 4)"`,
       `cronium_append_variable ${marker}_LOG one`,
       `cronium_append_variable ${marker}_LOG two ,`,
+      `cronium_set_variable ${marker}_PADDED 010`,
+      `cronium_set_variable ${marker}_EXPONENT 1e3`,
+      `cronium_set_variable ${marker}_WORD inf`,
     ]);
     expect(first).toContain("NEW:[]");
     expect(first).toContain("NEW_EXISTS:1");
@@ -667,11 +670,22 @@ describe("scenario 7 — variables with no value, and ones that can't be read", 
       `echo "LOG:[$(cronium_get_variable ${marker}_LOG)]"`,
       `cronium_increment_variable ${marker}_UNREADABLE || echo "INCREMENT:$?"`,
       `cronium_variable_exists ${marker}_UNREADABLE || echo "EXISTS:$?"`,
+      `echo "PADDED:[$(cronium_get_variable ${marker}_PADDED)]"`,
+      `echo "EXPONENT:[$(cronium_get_variable ${marker}_EXPONENT)]"`,
+      `echo "WORD:[$(cronium_get_variable ${marker}_WORD)]"`,
+      `echo "PADDED:$(cronium_increment_variable ${marker}_PADDED)"`,
+      `cronium_increment_variable ${marker}_COUNT abc || echo "BAD_INCREMENT:$?"`,
     ]);
     expect(second).toContain("COUNT:6");
     expect(second).toContain("LOG:[one,two]");
     expect(second).toContain("INCREMENT:1");
     expect(second).toContain("EXISTS:2");
+    // A number comes back as it was written, and counts in decimal.
+    expect(second).toContain("PADDED:[010]");
+    expect(second).toContain("EXPONENT:[1e3]");
+    expect(second).toContain("WORD:[inf]");
+    expect(second).toContain("PADDED:11");
+    expect(second).toContain("BAD_INCREMENT:1");
 
     const { rows } = await pool.query<{ value: string }>(
       `SELECT value FROM user_variables WHERE user_id = $1 AND key = $2`,
