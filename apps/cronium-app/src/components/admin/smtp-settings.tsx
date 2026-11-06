@@ -23,6 +23,8 @@ const copy = {
   save: "Save",
   sendTest: "Send test email",
   sendTestHint: "Sends a test email to your account using the saved settings.",
+  passwordUnreadable:
+    "The saved password can't be decrypted, so email can't be sent. This usually means ENCRYPTION_KEY changed. Enter the password again and save.",
 } as const;
 
 const smtpSettingsSchema = z.object({
@@ -41,6 +43,7 @@ interface SystemSettings {
   smtpPassword?: string;
   smtpFromEmail?: string;
   smtpFromName?: string;
+  unreadableSecrets?: string[];
 }
 
 interface SmtpSettingsProps {
@@ -57,6 +60,8 @@ export function SmtpSettings({
   isSendingTest,
 }: SmtpSettingsProps) {
   const [showPassword, setShowPassword] = React.useState(false);
+  const passwordUnreadable =
+    settings.unreadableSecrets?.includes("smtpPassword") ?? false;
 
   const form = useForm<z.infer<typeof smtpSettingsSchema>>({
     resolver: zodResolver(smtpSettingsSchema),
@@ -152,7 +157,9 @@ export function SmtpSettings({
                 aria-describedby={
                   form.formState.errors.smtpPassword
                     ? "smtpPassword-error"
-                    : undefined
+                    : passwordUnreadable
+                      ? "smtpPassword-unreadable"
+                      : undefined
                 }
                 {...form.register("smtpPassword")}
               />
@@ -171,10 +178,20 @@ export function SmtpSettings({
                 )}
               </Button>
             </div>
-            <p className="text-muted-foreground text-xs">
-              For security the current password is never shown. Leave this blank
-              to keep the existing password, or enter a new one to replace it.
-            </p>
+            {passwordUnreadable ? (
+              <p
+                id="smtpPassword-unreadable"
+                className="text-destructive text-sm"
+              >
+                {copy.passwordUnreadable}
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                For security the current password is never shown. Leave this
+                blank to keep the existing password, or enter a new one to
+                replace it.
+              </p>
+            )}
             {form.formState.errors.smtpPassword && (
               <p id="smtpPassword-error" className="text-destructive text-sm">
                 {form.formState.errors.smtpPassword.message}

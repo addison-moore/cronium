@@ -617,8 +617,10 @@ backups can't be read without it.
   section encrypts them.
 - **Settings stored outside the vault.** The driver reports these as `skipped`, not
   `legacy`. The bootstrap seed writes `SMTP_PASSWORD` this way. After step 3 the app
-  can't read it and uses the ciphertext as the password, with only a log line to show
-  for it. Save each one again in the admin settings:
+  can't read it, so email stops, and password resets answer that email isn't configured.
+  Nothing goes out with the ciphertext, and the admin settings say the value can't be
+  read. Save each one again in the admin settings, typing the value, since a blank
+  keeps the old one:
 
   ```bash
   docker compose exec postgres psql -U cronium -d cronium -c \

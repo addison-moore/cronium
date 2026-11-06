@@ -26,6 +26,7 @@ import { count } from "drizzle-orm";
 import { sendInvitationEmail, sendEmailDetailed } from "@/lib/email";
 import { hashApiToken } from "@/lib/api-token-hash";
 import { listAvailableModels } from "@/lib/ai";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 import { AI_PROVIDER_IDS } from "@/shared/ai-providers";
 
 // Use centralized admin authentication from trpc.ts
@@ -113,6 +114,7 @@ export const adminRouter = createTRPCRouter({
 
           // Send invitation email. Never log the invite token — it is a
           // single-use credential that grants account activation.
+          let warning: string | undefined;
           try {
             await sendInvitationEmail(input.email, inviteToken);
             console.log(`Invitation email sent to ${input.email}`);
@@ -120,12 +122,18 @@ export const adminRouter = createTRPCRouter({
             console.error("Failed to send invitation email:", emailError);
             // Note: We still return success since the user was created
             // The admin can resend the invitation if needed
+            if (emailError instanceof UnreadableSettingError) {
+              warning = `The user was created, but no invitation was sent. ${emailError.message} Then resend the invitation.`;
+            }
           }
 
-          return mutationResponse(
-            toUserApiDto(newUser),
-            "Invitation sent successfully",
-          );
+          return {
+            ...mutationResponse(
+              toUserApiDto(newUser),
+              warning ?? "Invitation sent successfully",
+            ),
+            warning,
+          };
         },
         {
           component: "adminRouter",
@@ -299,7 +307,10 @@ export const adminRouter = createTRPCRouter({
                       results.push({
                         id: userId,
                         success: false,
-                        error: "Failed to send invitation email",
+                        error:
+                          emailError instanceof UnreadableSettingError
+                            ? emailError.message
+                            : "Failed to send invitation email",
                       });
                       continue;
                     }
@@ -553,7 +564,7 @@ export const adminRouter = createTRPCRouter({
     return withErrorHandling(
       async () => {
         // Get all settings from database
-        const settings = await storage.getAllSettings();
+        const { settings, unreadable } = await storage.getAllSettings();
 
         // Transform settings array to an object for easier consumption by the client
         const settingsObject = settings.reduce(
@@ -603,7 +614,9 @@ export const adminRouter = createTRPCRouter({
 
         // Write-only secrets: never return SMTP/AI secret values to the client
         // (HI-09). Report only whether each is configured; the update path keeps
-        // the existing value when a blank is submitted.
+        // the existing value when a blank is submitted. One that can't be
+        // decrypted isn't configured, since nothing can use it. It's listed in
+        // unreadableSecrets instead, so the form can ask for it again.
         const secretSettings = {
           smtpPassword: "",
           openaiApiKey: "",
@@ -615,6 +628,7 @@ export const adminRouter = createTRPCRouter({
           hasAnthropicApiKey: Boolean(settingsObject.anthropicApiKey),
           hasGeminiApiKey: Boolean(settingsObject.geminiApiKey),
           hasCustomAiApiKey: Boolean(settingsObject.customAiApiKey),
+          unreadableSecrets: unreadable,
         };
 
         return resourceResponse({ ...systemSettings, ...secretSettings });
@@ -927,6 +941,12 @@ export const adminRouter = createTRPCRouter({
             }
           } catch (emailError) {
             console.error("Failed to resend invitation email:", emailError);
+            if (emailError instanceof UnreadableSettingError) {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: emailError.message,
+              });
+            }
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
               message: "Failed to send invitation email",

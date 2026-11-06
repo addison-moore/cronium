@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { storage } from "@/server/storage";
 import { assertUrlResolvesPublic, ssrfGuardedFetch } from "@/lib/ssrf-guard";
 import { SsrfBlockedError } from "@/lib/tools/safe-fetch";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 import { env } from "../env.mjs";
 import {
   AI_PROVIDER_IDS,
@@ -78,8 +79,23 @@ function isAiProviderId(value: string): value is AiProviderId {
   return (AI_PROVIDER_IDS as readonly string[]).includes(value);
 }
 
+// A provider's platform key. For OpenAI, the OPENAI_API_KEY env var takes precedence
+// over the admin-entered key, so an admin-entered key that can't be decrypted only
+// matters without it: that's when this throws UnreadableSettingError.
+async function readPlatformKey(
+  provider: AiProviderId,
+): Promise<string | undefined> {
+  if (provider === "openai" && env.OPENAI_API_KEY !== undefined) {
+    return env.OPENAI_API_KEY;
+  }
+  const keySetting = await storage.getSetting(
+    AI_PROVIDER_KEY_SETTING[provider],
+  );
+  return keySetting?.value ?? undefined;
+}
+
 // Resolve the configured provider, model, and credentials from system settings.
-// For OpenAI, the OPENAI_API_KEY env var takes precedence over the admin-entered key.
+// Throws UnreadableSettingError if the key it needs can't be decrypted.
 export async function getAiConfig(): Promise<AiConfig> {
   const providerSetting = await storage.getSetting("aiProvider");
   const provider: AiProviderId =
@@ -90,13 +106,7 @@ export async function getAiConfig(): Promise<AiConfig> {
   const modelSetting = await storage.getSetting("aiModel");
   const model = modelSetting?.value ?? DEFAULT_AI_MODEL[provider];
 
-  const keySetting = await storage.getSetting(
-    AI_PROVIDER_KEY_SETTING[provider],
-  );
-  let apiKey = keySetting?.value ?? undefined;
-  if (provider === "openai") {
-    apiKey = env.OPENAI_API_KEY ?? apiKey;
-  }
+  const apiKey = await readPlatformKey(provider);
 
   let baseUrl: string | undefined;
   if (provider === "custom") {
@@ -135,7 +145,9 @@ async function openAiEndpointOptions(
   return { baseURL: baseUrl, fetch: ssrfGuardedFetch };
 }
 
-// Whether the configured provider has everything it needs to serve requests.
+// Whether the configured provider has everything it needs to serve requests. Throws
+// UnreadableSettingError rather than answer false for a saved key that can't be
+// decrypted, since "not configured" would send an administrator the wrong way.
 export async function isAiConfigured(): Promise<boolean> {
   const config = await getAiConfig();
   if (!config.apiKey) return false;
@@ -470,8 +482,9 @@ async function listGeminiModels(apiKey: string): Promise<AiModelOption[]> {
 export interface ListModelsResult {
   models: AiModelOption[];
   source: "provider" | "fallback";
-  // Set when the provider fetch was attempted and failed (bad key, network,
-  // ...), so the admin UI can tell the user why it's showing a fallback list.
+  // Set when the provider fetch was attempted and failed (bad key, network, ...),
+  // or couldn't be attempted because the saved key can't be decrypted, so the admin
+  // UI can tell the user why it's showing a fallback list.
   error: string | undefined;
 }
 
@@ -491,14 +504,14 @@ export async function listAvailableModels(
   // platform key is used only with the Admin-configured origin (no caller URL).
   const callerSuppliedBaseUrl = baseUrl?.trim() ? baseUrl.trim() : undefined;
 
+  let fetchError: string | undefined;
   let resolvedKey = apiKey;
   if (!resolvedKey && !callerSuppliedBaseUrl) {
-    const keySetting = await storage.getSetting(
-      AI_PROVIDER_KEY_SETTING[provider],
-    );
-    resolvedKey = keySetting?.value ?? undefined;
-    if (provider === "openai") {
-      resolvedKey = env.OPENAI_API_KEY ?? resolvedKey;
+    try {
+      resolvedKey = await readPlatformKey(provider);
+    } catch (error) {
+      if (!(error instanceof UnreadableSettingError)) throw error;
+      fetchError = error.message;
     }
   }
 
@@ -517,7 +530,6 @@ export async function listAvailableModels(
     };
   }
 
-  let fetchError: string | undefined;
   if (resolvedKey && (provider !== "custom" || resolvedBaseUrl)) {
     try {
       let models: AiModelOption[];

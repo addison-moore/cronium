@@ -4,8 +4,10 @@ import { env } from "../env.mjs";
 import { systemSettings } from "@/shared/schema";
 import fs from "fs";
 import path from "path";
-import { isSystemSettingSensitive } from "./encryption-service";
-import { decryptSystemSetting } from "@/lib/security/field-secret";
+import {
+  readSensitiveSetting,
+  UnreadableSettingError,
+} from "@/lib/security/unreadable-setting";
 
 // Interface for email message
 interface EmailMessage {
@@ -36,47 +38,28 @@ export interface EmailSendResult {
   rejected: string[];
 }
 
-// Get SMTP settings from database
+// Get SMTP settings from database. Throws UnreadableSettingError if the saved
+// password can't be decrypted, because there's no password to report.
 export async function getSmtpSettings() {
   // Fetch all settings
   const allSettings = await db.select().from(systemSettings);
-
-  // Decrypt sensitive settings
-  const decryptedSettings = allSettings.map((setting) => {
-    if (isSystemSettingSensitive(setting.key)) {
-      try {
-        return {
-          ...setting,
-          value: decryptSystemSetting(setting.value, setting.key),
-        };
-      } catch (error) {
-        console.error(`Error decrypting system setting ${setting.key}:`, error);
-        // Return setting without decryption rather than failing
-        return setting;
-      }
-    }
-    return setting;
-  });
+  const stored = (key: string) => allSettings.find((s) => s.key === key)?.value;
 
   // Extract SMTP settings
-  const smtpHost = decryptedSettings.find((s) => s.key === "smtpHost")?.value;
-  const smtpPort = Number(
-    decryptedSettings.find((s) => s.key === "smtpPort")?.value ?? 587,
-  );
-  const smtpUser = decryptedSettings.find((s) => s.key === "smtpUser")?.value;
-  const smtpPassword = decryptedSettings.find(
-    (s) => s.key === "smtpPassword",
-  )?.value;
-  const smtpFromEmail = decryptedSettings.find(
-    (s) => s.key === "smtpFromEmail",
-  )?.value;
-  const smtpFromName = decryptedSettings.find(
-    (s) => s.key === "smtpFromName",
-  )?.value;
+  const smtpHost = stored("smtpHost");
+  const smtpPort = Number(stored("smtpPort") ?? 587);
+  const smtpUser = stored("smtpUser");
+  // The only secret decrypted here, so an AI key that can't be read can't stop email.
+  const storedPassword = stored("smtpPassword");
+  const smtpPassword =
+    storedPassword === undefined
+      ? undefined
+      : readSensitiveSetting(storedPassword, "smtpPassword");
+  const smtpFromEmail = stored("smtpFromEmail");
+  const smtpFromName = stored("smtpFromName");
 
   // System name for email sender fallback
-  const systemName =
-    decryptedSettings.find((s) => s.key === "systemName")?.value ?? "Cronium";
+  const systemName = stored("systemName") ?? "Cronium";
 
   return {
     host: smtpHost,
@@ -114,8 +97,9 @@ export function buildSmtpTransport(opts: {
   });
 }
 
-// Send an email and return the SMTP server's delivery info. Throws on
-// missing config or send failure (callers that need a boolean use sendEmail).
+// Send an email and return the SMTP server's delivery info. Throws on missing
+// config, a saved password that can't be decrypted, or send failure (callers that
+// need a boolean use sendEmail).
 export async function sendEmailDetailed(
   message: EmailMessage,
   customSmtp?: SmtpCredentials,
@@ -177,7 +161,11 @@ export async function sendEmail(
     await sendEmailDetailed(message, customSmtp);
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message === "SMTP_CONFIG_MISSING") {
+    // Both of these name something an administrator has to fix, not a bad send.
+    if (
+      error instanceof UnreadableSettingError ||
+      (error instanceof Error && error.message === "SMTP_CONFIG_MISSING")
+    ) {
       throw error;
     }
     console.error("Error sending email:", error);
