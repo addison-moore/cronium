@@ -671,6 +671,51 @@ describe("webhookSystem.retryDelivery", () => {
     });
   });
 
+  it("says so when a successful retry's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await retryOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message:
+        "Webhook delivery retry succeeded. The response didn't finish (aborted)",
+    });
+  });
+
+  it("puts the status first when a refused retry's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: false,
+      statusCode: 503,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await retryOwned(unfinished)).toEqual({
+      success: false,
+      data: unfinished,
+      message:
+        "Webhook delivery retry failed: HTTP 503. The response didn't finish (aborted)",
+    });
+  });
+
+  it("says so when a retry couldn't be recorded", async () => {
+    const unrecorded = attempt({
+      success: true,
+      statusCode: 200,
+      recorded: false,
+    });
+
+    expect(await retryOwned(unrecorded)).toEqual({
+      success: true,
+      data: unrecorded,
+      message:
+        "Webhook delivery retry succeeded. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
   it("reports why when the attempt got no answer at all", async () => {
     const unreachable = attempt({
       success: false,
@@ -855,6 +900,65 @@ describe("webhookSystem.test", () => {
       data: unrecorded,
       message:
         "Test webhook failed: HTTP 503. It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("says so when a delivered test's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message: "Test webhook delivered. The response didn't finish (aborted)",
+    });
+  });
+
+  it("puts the status first when a refused test's body didn't finish", async () => {
+    const unfinished = attempt({
+      success: false,
+      statusCode: 503,
+      error: "The response didn't finish (aborted)",
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: false,
+      data: unfinished,
+      message:
+        "Test webhook failed: HTTP 503. The response didn't finish (aborted)",
+    });
+  });
+
+  it("says all of it when a delivered test neither finished nor was recorded", async () => {
+    const unfinished = attempt({
+      success: true,
+      statusCode: 200,
+      error: "The response didn't finish (aborted)",
+      recorded: false,
+    });
+
+    expect(await testOwned(unfinished)).toEqual({
+      success: true,
+      data: unfinished,
+      message:
+        "Test webhook delivered. The response didn't finish (aborted). It couldn't be recorded, so it won't show in the webhook's history.",
+    });
+  });
+
+  it("gives the guard's reason when it stopped the attempt", async () => {
+    const blocked = attempt({
+      success: false,
+      statusCode: 0,
+      error: "Host is a disallowed (internal) address",
+    });
+
+    expect(await testOwned(blocked)).toEqual({
+      success: false,
+      data: blocked,
+      message: "Test webhook failed: Host is a disallowed (internal) address",
     });
   });
 
