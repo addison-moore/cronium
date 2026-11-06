@@ -89,7 +89,6 @@ import {
   encryptServerSecret,
   decryptServerSecret,
   encryptEnvVarValue,
-  decryptEnvVarValue,
   isEnvVarCiphertext,
   encryptSystemSetting,
   decryptSystemSetting,
@@ -211,6 +210,90 @@ function changesTerminalAuthorization(
 // Type alias for backward compatibility
 type Script = Event;
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** A variable as a caller supplies it: storage adds the event and encrypts the value. */
+export type EnvVarInput = Pick<InsertEnvVar, "key" | "value">;
+
+/** What an event is saved with, in the same transaction as its own row. */
+export interface EventRelations {
+  envVars?: EnvVarInput[] | undefined;
+  serverIds?: number[] | undefined;
+}
+
+/** A save to an existing event: a relation left out stays as it is. */
+export interface EventRelationsUpdate extends EventRelations {
+  /** Who is saving. They have to own the event and any server it's linked to. */
+  userId: string;
+}
+
+/**
+ * The row to store for a variable, with its value encrypted record-bound to
+ * (eventId, key) (2.1). A value that is already ciphertext for this binding is kept
+ * as is, so a client resubmitting what it read cannot wrap the secret a second time.
+ */
+function toEnvVarRow(
+  eventId: number,
+  { key, value }: EnvVarInput,
+): InsertEnvVar {
+  return {
+    eventId,
+    key,
+    value:
+      !value || isEnvVarCiphertext(value, eventId, key)
+        ? value
+        : encryptEnvVarValue(value, eventId, key),
+  };
+}
+
+/** The id the next event will have, for a value that has to be encrypted under it. */
+async function reserveEventId(): Promise<number> {
+  const { rows } = await db.execute<{ id: string | null }>(
+    sql`SELECT nextval(pg_get_serial_sequence('events', 'id')) AS id`,
+  );
+  const id = Number(rows[0]?.id);
+  if (!id) throw new Error("Could not reserve an event id");
+  return id;
+}
+
+async function writeEventServers(
+  tx: Tx,
+  eventId: number,
+  serverIds: number[],
+  userId: string,
+): Promise<void> {
+  const [ownedEvent] = await tx
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.id, eventId), eq(events.userId, userId)))
+    .limit(1);
+  if (!ownedEvent) throw new Error("Unauthorized event relationship");
+
+  const ids = [...new Set(serverIds)];
+  if (ids.length > 0) {
+    const ownedServers = await tx
+      .select({ id: servers.id })
+      .from(servers)
+      .where(
+        and(
+          inArray(servers.id, ids),
+          eq(servers.userId, userId),
+          eq(servers.isArchived, false),
+        ),
+      );
+    if (ownedServers.length !== ids.length) {
+      throw new Error("Unauthorized event server relationship");
+    }
+  }
+
+  await tx.delete(eventServers).where(eq(eventServers.eventId, eventId));
+  if (ids.length > 0) {
+    await tx
+      .insert(eventServers)
+      .values(ids.map((serverId) => ({ eventId, serverId })));
+  }
+}
+
 // Type definitions for complex return types
 export interface EventWithRelations extends Script {
   envVars: EnvVar[];
@@ -308,13 +391,17 @@ export interface IStorage {
     query: EventQueryInput,
   ): Promise<PaginatedResult<Event>>;
   getEventsByServerId(serverId: number, userId: string): Promise<Event[]>;
-  createScript(insertScript: InsertEvent): Promise<Event>;
-  updateScript(id: number, updateData: Partial<InsertEvent>): Promise<Event>;
+  createScript(
+    insertScript: InsertEvent,
+    relations?: EventRelations,
+  ): Promise<Event>;
+  updateScript(
+    id: number,
+    updateData: Partial<InsertEvent>,
+    relations?: EventRelationsUpdate,
+  ): Promise<Event>;
   recordEventDispatch(id: number, at?: Date): Promise<void>;
   deleteScript(id: number): Promise<void>;
-
-  createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar>;
-  deleteEnvVarsByEventId(eventId: number): Promise<void>;
 
   // Log methods
   getLog(id: number): Promise<Log | undefined>;
@@ -387,11 +474,6 @@ export interface IStorage {
 
   // Event-Server relationship methods
   getEventServers(eventId: number): Promise<EventServer[]>;
-  setEventServers(
-    eventId: number,
-    serverIds: number[],
-    userId: string,
-  ): Promise<void>;
 
   // Settings methods
   getSetting(key: string): Promise<Setting | undefined>;
@@ -1101,7 +1183,26 @@ class DatabaseStorage implements IStorage {
     return enrichedScripts;
   }
 
-  async createScript(insertScript: InsertEvent): Promise<Event> {
+  /**
+   * Creates an event along with its variables and server links, all or nothing. The
+   * dispatcher schedules any ACTIVE + SCHEDULE event it finds without a next run, so
+   * an event left behind by a failed create would run without what it was given.
+   */
+  async createScript(
+    insertScript: InsertEvent,
+    relations: EventRelations = {},
+  ): Promise<Event> {
+    // Values are encrypted under the event's id, and before the transaction opens so
+    // the vault is never called with one held. So an event with values takes its id
+    // first.
+    const newEnvVars = relations.envVars ?? [];
+    const reservedId =
+      newEnvVars.length > 0 ? await reserveEventId() : undefined;
+    const envVarRows =
+      reservedId === undefined
+        ? []
+        : newEnvVars.map((envVar) => toEnvVarRow(reservedId, envVar));
+
     return db.transaction(async (tx) => {
       if (
         insertScript.serverId !== null &&
@@ -1123,18 +1224,42 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      const [script] = await tx.insert(events).values(insertScript).returning();
+      const [script] = await tx
+        .insert(events)
+        .values({
+          ...insertScript,
+          ...(reservedId !== undefined && { id: reservedId }),
+        })
+        .returning();
 
       if (!script) {
         throw new Error("Failed to create script");
+      }
+
+      if (envVarRows.length > 0) {
+        await tx.insert(envVars).values(envVarRows);
+      }
+      if (relations.serverIds && relations.serverIds.length > 0) {
+        await writeEventServers(
+          tx,
+          script.id,
+          relations.serverIds,
+          insertScript.userId,
+        );
       }
       return script;
     });
   }
 
+  /**
+   * Saves an event's fields, and any variables and server links it's given, all or
+   * nothing. A failure at any point keeps what it had, and a job dispatched meanwhile
+   * reads the old variables whole.
+   */
   async updateScript(
     id: number,
     updateData: Partial<InsertEvent>,
+    relations?: EventRelationsUpdate,
   ): Promise<Event> {
     // Ownership/provenance are immutable at the storage boundary. This keeps
     // a future route from reintroducing the legacy mass-assignment flaw.
@@ -1164,6 +1289,11 @@ class DatabaseStorage implements IStorage {
       );
     }
 
+    // First, so the vault is never called with a transaction held.
+    const envVarRows = relations?.envVars?.map((envVar) =>
+      toEnvVarRow(id, envVar),
+    );
+
     return db.transaction(async (tx) => {
       if (
         mutableUpdateData.serverId !== null &&
@@ -1192,14 +1322,34 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      const [script] = await tx
-        .update(events)
-        .set(mutableUpdateData)
-        .where(eq(events.id, id))
-        .returning();
+      // Either way this locks the event's row, so saves to it take turns. Otherwise
+      // each delete below misses the rows another save hasn't committed yet, and both
+      // sets survive, with duplicate keys.
+      const [script] =
+        Object.keys(mutableUpdateData).length > 0
+          ? await tx
+              .update(events)
+              .set(mutableUpdateData)
+              .where(eq(events.id, id))
+              .returning()
+          : await tx
+              .select()
+              .from(events)
+              .where(eq(events.id, id))
+              .for("no key update");
 
       if (!script) {
         throw new Error("Failed to update script - script not found");
+      }
+
+      if (envVarRows) {
+        await tx.delete(envVars).where(eq(envVars.eventId, id));
+        if (envVarRows.length > 0) {
+          await tx.insert(envVars).values(envVarRows);
+        }
+      }
+      if (relations?.serverIds) {
+        await writeEventServers(tx, id, relations.serverIds, relations.userId);
       }
       return script;
     });
@@ -1297,46 +1447,6 @@ class DatabaseStorage implements IStorage {
       console.error(`Error in deleteScript for id ${id}:`, error);
       throw error;
     }
-  }
-
-  async createEnvVar(insertEnvVar: InsertEnvVar): Promise<EnvVar> {
-    // Encrypt the value record-bound to (eventId, key) before storing (2.1). A
-    // value that is already ciphertext for this binding is kept as is, so a
-    // client resubmitting what it read cannot wrap the secret a second time.
-    const storedValue =
-      !insertEnvVar.value ||
-      isEnvVarCiphertext(
-        insertEnvVar.value,
-        insertEnvVar.eventId,
-        insertEnvVar.key,
-      )
-        ? insertEnvVar.value
-        : encryptEnvVarValue(
-            insertEnvVar.value,
-            insertEnvVar.eventId,
-            insertEnvVar.key,
-          );
-
-    const [envVar] = await db
-      .insert(envVars)
-      .values({ ...insertEnvVar, value: storedValue })
-      .returning();
-
-    if (!envVar) {
-      throw new Error("Failed to create environment variable");
-    }
-
-    // Return decrypted data for immediate use
-    return {
-      ...envVar,
-      value: envVar.value
-        ? decryptEnvVarValue(envVar.value, envVar.eventId, envVar.key)
-        : envVar.value,
-    };
-  }
-
-  async deleteEnvVarsByEventId(eventId: number): Promise<void> {
-    await db.delete(envVars).where(eq(envVars.eventId, eventId));
   }
 
   // Log methods
@@ -2648,45 +2758,6 @@ class DatabaseStorage implements IStorage {
       .where(eq(eventServers.eventId, eventId));
 
     return eventServerList;
-  }
-
-  async setEventServers(
-    eventId: number,
-    serverIds: number[],
-    userId: string,
-  ): Promise<void> {
-    await db.transaction(async (tx) => {
-      const [ownedEvent] = await tx
-        .select({ id: events.id })
-        .from(events)
-        .where(and(eq(events.id, eventId), eq(events.userId, userId)))
-        .limit(1);
-      if (!ownedEvent) throw new Error("Unauthorized event relationship");
-
-      const ids = [...new Set(serverIds)];
-      if (ids.length > 0) {
-        const ownedServers = await tx
-          .select({ id: servers.id })
-          .from(servers)
-          .where(
-            and(
-              inArray(servers.id, ids),
-              eq(servers.userId, userId),
-              eq(servers.isArchived, false),
-            ),
-          );
-        if (ownedServers.length !== ids.length) {
-          throw new Error("Unauthorized event server relationship");
-        }
-      }
-
-      await tx.delete(eventServers).where(eq(eventServers.eventId, eventId));
-      if (ids.length > 0) {
-        await tx
-          .insert(eventServers)
-          .values(ids.map((serverId) => ({ eventId, serverId })));
-      }
-    });
   }
 
   // API Token methods
