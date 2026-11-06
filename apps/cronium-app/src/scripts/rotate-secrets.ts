@@ -2,11 +2,11 @@
  * At-rest secret maintenance CLI (security plan Phase 2.1).
  *
  * With no flag it rotates: it re-encrypts every at-rest secret from a retired key
- * onto the active key. The running services must hold both keys first, or they can't
- * read what this moves. Run it until it reports 0 re-encrypted, then drop <old> from
- * ENCRYPTION_KEYS_RETIRED and restart them. The full order is "Key rotation" in
- * docs/ENVIRONMENT_VARIABLES.md. See src/lib/security/secret-rotation.ts for the
- * safety model (idempotent, resumable).
+ * onto the active key, and hashes API tokens from before tokens were hashed. The
+ * running services must hold both keys first, or they can't read what this moves. Run
+ * it until it reports 0 re-encrypted, then drop <old> from ENCRYPTION_KEYS_RETIRED and
+ * restart them. The full order is "Key rotation" in docs/ENVIRONMENT_VARIABLES.md. See
+ * src/lib/security/secret-rotation.ts for the safety model (idempotent, resumable).
  *
  * With --encrypt-legacy it instead encrypts what's still stored the way it was before
  * the vault: plaintext, and older ciphertext a key change would orphan. See
@@ -41,13 +41,22 @@ async function rotate(dryRun: boolean): Promise<number> {
 
   const report = await rotateAllSecrets({ dryRun });
   for (const s of report.surfaces) {
+    const moved =
+      s.hashed === undefined
+        ? `re-encrypted=${s.reencrypted}`
+        : `hashed=${s.hashed}`;
     console.log(
-      `  ${s.surface}: scanned=${s.scanned} re-encrypted=${s.reencrypted} skipped=${s.skipped} legacy=${s.legacy} changed-during-run=${s.changedDuringRun} errors=${s.errors}`,
+      `  ${s.surface}: scanned=${s.scanned} ${moved} skipped=${s.skipped} legacy=${s.legacy} changed-during-run=${s.changedDuringRun} errors=${s.errors}`,
     );
   }
+  // Left out at 0, so the line the runbook waits for only appears with nothing left.
+  const hashes =
+    report.totalHashed > 0
+      ? `; ${dryRun ? "to hash" : "hashed"}: ${report.totalHashed}`
+      : "";
   const changed = report.totalChangedDuringRun;
   console.log(
-    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}; errors: ${report.totalErrors}${changed > 0 ? `; changed during this run: ${changed}` : ""}`,
+    `Total ${dryRun ? "to re-encrypt" : "re-encrypted"}: ${report.totalReencrypted}${hashes}; errors: ${report.totalErrors}${changed > 0 ? `; changed during this run: ${changed}` : ""}`,
   );
   const withOwnAdvice = report.surfaces.filter(
     (s) => s.legacy > 0 && s.legacyAdvice,
