@@ -85,7 +85,18 @@ The orchestrator renews leases via `POST /api/internal/jobs/heartbeat`
 (which also carries cancellation requests back to the running executor). A
 job whose lease stops being renewed is re-queued or failed by the scheduling
 worker's sweeper according to its lease-loss policy — there is no separate
-acknowledge/release/orphan-recovery machinery.
+acknowledge/release machinery.
+
+A container job doesn't depend on the orchestrator process that started it. On
+SIGTERM the orchestrator stops claiming and exits, leaving running containers in
+place; it waits only for what can't be left, which is remote jobs and jobs still
+starting. Before claiming anything, the next process lists the containers and networks
+labelled with its orchestrator ID and stack, and asks to renew those jobs' leases. A
+job whose lease renews is followed to its end and reported, using the capability token
+in its container's environment, even if the script already exited. One whose lease
+doesn't renew has been failed, re-queued or finished, so its containers are removed.
+A job's containers stay until its result has been reported or spooled, so a process
+killed at any point leaves the next one something to work from.
 
 ### Step 5: Job Routing
 

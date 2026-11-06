@@ -84,6 +84,7 @@ services:
       dockerfile: apps/orchestrator/Dockerfile
     image: cronium/orchestrator:e2e
     container_name: cronium-e2e-orchestrator
+    stop_grace_period: 40s
     environment:
       CRONIUM_API_ENDPOINT: http://${E2E_BACKEND_HOST:-host.docker.internal}:${E2E_APP_PORT:-55001}
       CRONIUM_API_TOKEN: ${E2E_ORCH_KEY:?set by run-e2e-tests.sh}

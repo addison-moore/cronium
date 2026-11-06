@@ -62,6 +62,8 @@ import {
   TIMEOUT_GRACE_MS,
   DEFAULT_TIMEOUT_MS,
   CLAIM_STALL_MS,
+  SWEEP_START_GRACE_MS,
+  sweepGraceOver,
 } from "../sweeper";
 import { transitionJob } from "../job-transition";
 import { storage } from "@/server/storage";
@@ -440,5 +442,24 @@ describe("runSweepTick — execution log resolution", () => {
     const result = await runSweepTick(NOW);
 
     expect(result.requeued).toBe(1);
+  });
+});
+
+describe("sweepGraceOver", () => {
+  const STARTED = NOW.getTime();
+
+  it("holds off for one claim lease after the worker starts", () => {
+    expect(SWEEP_START_GRACE_MS).toBeGreaterThanOrEqual(60_000);
+    expect(sweepGraceOver(STARTED, STARTED)).toBe(false);
+    expect(sweepGraceOver(STARTED, STARTED + SWEEP_START_GRACE_MS - 1)).toBe(
+      false,
+    );
+  });
+
+  it("lets sweeping start once a lease's length has passed", () => {
+    expect(sweepGraceOver(STARTED, STARTED + SWEEP_START_GRACE_MS)).toBe(true);
+    expect(sweepGraceOver(STARTED, STARTED + 10 * SWEEP_START_GRACE_MS)).toBe(
+      true,
+    );
   });
 });

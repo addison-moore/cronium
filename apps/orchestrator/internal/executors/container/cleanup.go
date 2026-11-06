@@ -11,6 +11,43 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// orphanContainerFilters narrows the search to job containers and runtime sidecars.
+// Docker matches these against the whole name, so they're anchored. They only narrow
+// the search: isOrphanCandidate is what decides.
+func orphanContainerFilters() client.Filters {
+	return make(client.Filters).Add("name", "^/cronium-job-", "^/cronium-runtime-")
+}
+
+// isOrphanCandidate reports whether a container is one this process may remove if
+// nothing is tracking it. A sidecar has always carried the managed label, and a name
+// alone isn't enough to go on: the stack's own runtime service is named
+// <project>-cronium-runtime-1, and a project could be called cronium-runtime. A job
+// container from before it was labelled can only be known by its name.
+func (e *Executor) isOrphanCandidate(names []string, labels map[string]string) bool {
+	if e.foreignToThisStack(labels) {
+		return false
+	}
+	if labels[labelManaged] == "true" {
+		return true
+	}
+	for _, name := range names {
+		if strings.HasPrefix(strings.TrimPrefix(name, "/"), "cronium-job-") {
+			return true
+		}
+	}
+	return false
+}
+
+// orphanedAfter is how old an untracked container must be to count as orphaned. One
+// labelled by this orchestrator is only untracked while it's being set up, so past
+// that its removal failed. An older one may be anything's, so it gets longer.
+func (e *Executor) orphanedAfter(labels map[string]string) time.Duration {
+	if _, labelled := labels[labelOrchestratorID]; labelled && e.timeoutConfig.SetupTimeout > 0 {
+		return e.timeoutConfig.SetupTimeout
+	}
+	return time.Hour
+}
+
 // CleanupManager handles cleanup of Docker resources
 type CleanupManager struct {
 	executor     *Executor
@@ -53,14 +90,13 @@ func (cm *CleanupManager) CleanupOrphanedResources(ctx context.Context) error {
 	return nil
 }
 
-// cleanupOrphanedContainers removes containers that are no longer tracked
+// cleanupOrphanedContainers removes containers that are no longer tracked. What an
+// earlier process left is dealt with at startup, so this catches removals that
+// failed, and containers from before they carried this orchestrator's labels.
 func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
-	// List all containers with cronium-job prefix
-	filters := make(client.Filters).Add("name", "cronium-job-", "cronium-sidecar-")
-
 	result, err := cm.executor.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
-		Filters: filters,
+		Filters: orphanContainerFilters(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -76,13 +112,19 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 	for _, sidecarID := range cm.executor.sidecars {
 		trackedContainers[sidecarID] = true
 	}
+	for _, res := range cm.executor.leftovers {
+		trackedContainers[res.containerID] = true
+		trackedContainers[res.sidecarID] = true
+	}
 	cm.executor.mu.RUnlock()
 
 	// Clean up untracked containers
 	for _, container := range containers {
+		if !cm.executor.isOrphanCandidate(container.Names, container.Labels) {
+			continue
+		}
 		if !trackedContainers[container.ID] {
-			// Check if container is old enough (e.g., created more than 1 hour ago)
-			if time.Since(time.Unix(container.Created, 0)) > time.Hour {
+			if time.Since(time.Unix(container.Created, 0)) > cm.executor.orphanedAfter(container.Labels) {
 				cm.log.WithFields(logrus.Fields{
 					"containerID":   container.ID[:12],
 					"containerName": container.Names[0],
@@ -114,8 +156,8 @@ func (cm *CleanupManager) cleanupOrphanedContainers(ctx context.Context) error {
 
 // cleanupOrphanedNetworks removes networks that are no longer tracked
 func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
-	// List all networks with cronium-job prefix
-	filters := make(client.Filters).Add("name", "cronium-job-")
+	// Job networks have always carried this label
+	filters := make(client.Filters).Add("label", labelManaged+"=true")
 
 	result, err := cm.executor.dockerClient.NetworkList(ctx, client.NetworkListOptions{
 		Filters: filters,
@@ -131,10 +173,16 @@ func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
 	for _, networkID := range cm.executor.networks {
 		trackedNetworks[networkID] = true
 	}
+	for _, res := range cm.executor.leftovers {
+		trackedNetworks[res.networkID] = true
+	}
 	cm.executor.mu.RUnlock()
 
 	// Clean up untracked networks
 	for _, network := range networks {
+		if cm.executor.foreignToThisStack(network.Labels) {
+			continue
+		}
 		if !trackedNetworks[network.ID] {
 			// Check if network is old enough and not in use
 			inspectResult, err := cm.executor.dockerClient.NetworkInspect(ctx, network.ID, client.NetworkInspectOptions{})
@@ -161,103 +209,6 @@ func (cm *CleanupManager) cleanupOrphanedNetworks(ctx context.Context) error {
 					cm.log.WithError(err).Error("Failed to remove orphaned network")
 				}
 			}
-		}
-	}
-
-	return nil
-}
-
-// CleanupJobResources ensures all resources for a specific job are cleaned up
-func (cm *CleanupManager) CleanupJobResources(ctx context.Context, jobID string) error {
-	cm.log.WithField("jobID", jobID).Info("Performing comprehensive job cleanup")
-
-	var errors []error
-
-	// Clean up by job ID pattern in container/network names
-	jobPattern := fmt.Sprintf("job-%s", jobID)
-
-	// Clean up containers
-	if err := cm.cleanupContainersByPattern(ctx, jobPattern); err != nil {
-		errors = append(errors, fmt.Errorf("container cleanup failed: %w", err))
-	}
-
-	// Clean up networks
-	if err := cm.cleanupNetworksByPattern(ctx, jobPattern); err != nil {
-		errors = append(errors, fmt.Errorf("network cleanup failed: %w", err))
-	}
-
-	// Note: executor.Cleanup requires a specific job, so we don't call it here
-	// The container and network cleanup above handles orphaned resources
-
-	if len(errors) > 0 {
-		return fmt.Errorf("job cleanup completed with errors: %v", errors)
-	}
-
-	return nil
-}
-
-// cleanupContainersByPattern removes containers matching a pattern
-func (cm *CleanupManager) cleanupContainersByPattern(ctx context.Context, pattern string) error {
-	filters := make(client.Filters).Add("name", pattern)
-
-	result, err := cm.executor.dockerClient.ContainerList(ctx, client.ContainerListOptions{
-		All:     true,
-		Filters: filters,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
-	}
-	containers := result.Items
-
-	for _, container := range containers {
-		cm.log.WithFields(logrus.Fields{
-			"containerID":   container.ID[:12],
-			"containerName": container.Names[0],
-		}).Debug("Cleaning up container")
-
-		// Stop if running
-		if container.State == "running" {
-			timeout := 10
-			if _, err := cm.executor.dockerClient.ContainerStop(ctx, container.ID, client.ContainerStopOptions{
-				Timeout: &timeout,
-			}); err != nil && !strings.Contains(err.Error(), "not running") {
-				cm.log.WithError(err).Warn("Failed to stop container")
-			}
-		}
-
-		// Remove container
-		if _, err := cm.executor.dockerClient.ContainerRemove(ctx, container.ID, client.ContainerRemoveOptions{
-			Force: true,
-		}); err != nil && !strings.Contains(err.Error(), "No such container") {
-			cm.log.WithError(err).Error("Failed to remove container")
-		}
-	}
-
-	return nil
-}
-
-// cleanupNetworksByPattern removes networks matching a pattern
-func (cm *CleanupManager) cleanupNetworksByPattern(ctx context.Context, pattern string) error {
-	filters := make(client.Filters).Add("name", pattern)
-
-	result, err := cm.executor.dockerClient.NetworkList(ctx, client.NetworkListOptions{
-		Filters: filters,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list networks: %w", err)
-	}
-	networks := result.Items
-
-	for _, network := range networks {
-		cm.log.WithFields(logrus.Fields{
-			"networkID":   network.ID[:12],
-			"networkName": network.Name,
-		}).Debug("Cleaning up network")
-
-		if _, err := cm.executor.dockerClient.NetworkRemove(ctx, network.ID, client.NetworkRemoveOptions{}); err != nil &&
-			!strings.Contains(err.Error(), "No such network") &&
-			!strings.Contains(err.Error(), "has active endpoints") {
-			cm.log.WithError(err).Error("Failed to remove network")
 		}
 	}
 

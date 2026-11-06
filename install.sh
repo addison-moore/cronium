@@ -329,6 +329,13 @@ main() {
       die "No installation found in ${INSTALL_DIR}"
     cd "$INSTALL_DIR"
     log "Stopping Cronium"
+    # The orchestrator leaves running jobs in place for its next process, and there
+    # won't be one. Their sidecars would also keep the network from being removed.
+    docker compose stop cronium-orchestrator
+    docker ps -aq --filter label=cronium.managed=true --filter label=cronium.stack=cronium |
+      xargs -r docker rm -f >/dev/null
+    docker network ls -q --filter label=cronium.managed=true --filter label=cronium.stack=cronium |
+      xargs -r docker network rm >/dev/null
     docker compose down
     log "Stopped. Data volumes were kept — remove them with: docker compose down -v"
     exit 0
