@@ -22,7 +22,7 @@ import { createServer } from "http";
 import os from "os";
 import { Client as PgClient } from "pg";
 import { runDispatchTick } from "./src/lib/scheduling/dispatcher";
-import { runSweepTick } from "./src/lib/scheduling/sweeper";
+import { runSweepTick, sweepGraceOver } from "./src/lib/scheduling/sweeper";
 import { retentionWindows, runRetention } from "./src/lib/scheduling/retention";
 import {
   consumeJobTransitions,
@@ -127,7 +127,10 @@ const claimLoop = startLoop("claim", CLAIM_INTERVAL_MS, async () => {
   }
 });
 
+const workerStartedAt = Date.now();
+
 const sweepLoop = startLoop("sweep", SWEEP_INTERVAL_MS, async () => {
+  if (!sweepGraceOver(workerStartedAt)) return;
   const result = await runSweepTick();
   if (result.requeued || result.failed || result.timedOut) {
     console.log(
@@ -300,7 +303,6 @@ async function main(): Promise<void> {
   retentionLoop.poke();
   dispatchLoop.poke();
   claimLoop.poke();
-  sweepLoop.poke();
   workflowLoop.poke();
 }
 
