@@ -99,6 +99,10 @@ describe("around the clocks changing, in America/Los_Angeles", () => {
     expect(shownFor(stored)).toBe("2027-11-07T01:30");
     expect(savedUntouched(stored)).toBe(stored);
   });
+
+  it("reads a typed 01:30 from that hour as the first", () => {
+    expect(savedFrom("2027-11-07T01:30")).toBe("2027-11-07T08:30:00.000Z");
+  });
 });
 
 describe("after the field changes, in America/Los_Angeles", () => {
