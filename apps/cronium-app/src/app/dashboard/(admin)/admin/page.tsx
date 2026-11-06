@@ -35,6 +35,7 @@ interface SystemSettings {
   geminiApiKey?: string;
   customAiApiKey?: string;
   customAiBaseUrl?: string;
+  unreadableSecrets?: string[];
   enableRegistration?: boolean;
   enableGuestAccess?: boolean;
   defaultUserRole?: UserRole;
@@ -147,10 +148,18 @@ export default function AdminPage() {
 
   const inviteUserMutation = trpc.admin.inviteUser.useMutation({
     onSuccess: (response) => {
-      toast({
-        title: "Success",
-        description: `Invitation sent to ${String(response.data.email ?? "user")}`,
-      });
+      toast(
+        response.warning
+          ? {
+              title: "Invitation not sent",
+              description: response.warning,
+              variant: "destructive",
+            }
+          : {
+              title: "Success",
+              description: `Invitation sent to ${String(response.data.email ?? "user")}`,
+            },
+      );
       void refetchUsers();
     },
   });

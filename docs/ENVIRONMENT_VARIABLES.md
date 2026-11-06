@@ -653,8 +653,11 @@ those values may still be under the old key, so don't take it as the last one.
   can't either. Replace each one it names in the app.
 - **It warns about sensitive settings.** Older ciphertext is stored outside the vault,
   which is how the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app
-  can't read it and uses the ciphertext as the value, so an SMTP login fails with only a
-  log line to show for it. Step 0 moves these too.
+  can't read it, so email stops, password resets answer that email isn't configured, and
+  AI requests that need the key fail and say why. Nothing goes out with the ciphertext,
+  and the admin settings say the value can't be read. Step 0 moves these too. Enter any it
+  can't move again in the admin settings: saving with the field blank keeps the old value,
+  so it has to be typed.
 - **It warns about API tokens.** These are from before tokens were hashed. Each is hashed
   the first time it's used. One nobody has used since stops working at step 3, with a
   401, and has to be replaced. Use each one it names once first, or issue a new one. It

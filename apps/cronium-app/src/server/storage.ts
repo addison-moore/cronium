@@ -91,6 +91,7 @@ import type { SQL } from "drizzle-orm";
 import {
   encryptionService,
   isSystemSettingSensitive,
+  type SensitiveSystemSetting,
 } from "../lib/encryption-service";
 import {
   encryptServerSecret,
@@ -98,10 +99,10 @@ import {
   encryptEnvVarValue,
   isEnvVarCiphertext,
   encryptSystemSetting,
-  decryptSystemSetting,
   encryptMfaSecret,
   decryptMfaSecret,
 } from "@/lib/security/field-secret";
+import { readSensitiveSetting } from "@/lib/security/unreadable-setting";
 import { hashApiToken } from "../lib/api-token-hash";
 
 /**
@@ -362,6 +363,15 @@ export interface ServerGroupWithServers extends ServerGroup {
   serverIds: number[];
 }
 
+/**
+ * Every setting that could be read, and the keys of the sensitive ones that couldn't.
+ * Those aren't in `settings`, because all their rows hold is ciphertext.
+ */
+export interface AllSettings {
+  settings: Setting[];
+  unreadable: SensitiveSystemSetting[];
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
@@ -490,8 +500,10 @@ export interface IStorage {
   getEventServers(eventId: number): Promise<EventServer[]>;
 
   // Settings methods
+  /** @throws UnreadableSettingError for a sensitive setting it can't decrypt. */
   getSetting(key: string): Promise<Setting | undefined>;
-  getAllSettings(): Promise<Setting[]>;
+  /** Never fails over a value it can't decrypt, so that value can be replaced. */
+  getAllSettings(): Promise<AllSettings>;
   upsertSetting(key: string, value: string): Promise<Setting>;
 
   // API Token methods
@@ -2172,46 +2184,34 @@ class DatabaseStorage implements IStorage {
 
     // Decrypt sensitive settings
     if (setting && isSystemSettingSensitive(key)) {
-      try {
-        return {
-          ...setting,
-          value: decryptSystemSetting(setting.value, key),
-        };
-      } catch (error) {
-        console.error(
-          `Error decrypting system setting ${key}:`,
-          failureWithStack(error),
-        );
-        // Return setting without decryption rather than failing
-        return setting;
-      }
+      return { ...setting, value: readSensitiveSetting(setting.value, key) };
     }
 
     return setting;
   }
 
-  async getAllSettings(): Promise<Setting[]> {
-    const allSettings = await db.select().from(systemSettings);
+  async getAllSettings(): Promise<AllSettings> {
+    const rows = await db.select().from(systemSettings);
+    const settings: Setting[] = [];
+    const unreadable: SensitiveSystemSetting[] = [];
 
-    // Decrypt sensitive settings
-    return allSettings.map((setting) => {
-      if (isSystemSettingSensitive(setting.key)) {
-        try {
-          return {
-            ...setting,
-            value: decryptSystemSetting(setting.value, setting.key),
-          };
-        } catch (error) {
-          console.error(
-            `Error decrypting system setting ${setting.key}:`,
-            failureWithStack(error),
-          );
-          // Return setting without decryption rather than failing
-          return setting;
-        }
+    for (const row of rows) {
+      if (!isSystemSettingSensitive(row.key)) {
+        settings.push(row);
+        continue;
       }
-      return setting;
-    });
+      try {
+        settings.push({
+          ...row,
+          value: readSensitiveSetting(row.value, row.key),
+        });
+      } catch {
+        // Already logged. The row's value is ciphertext, so it stays out of settings.
+        unreadable.push(row.key);
+      }
+    }
+
+    return { settings, unreadable };
   }
 
   async upsertSetting(key: string, value: string): Promise<Setting> {

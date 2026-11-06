@@ -373,7 +373,7 @@ async function rotateSystemSettings(dryRun: boolean): Promise<SurfaceResult> {
   const r: SurfaceResult = {
     ...emptyResult("system_settings.value"),
     legacyAdvice:
-      "sensitive setting(s) aren't in the vault. Older ciphertext can only be read while ENCRYPTION_KEY is the key it was saved under, and after that the app uses the ciphertext as the value. To move them into the vault, run this again with --encrypt-legacy before the key changes:",
+      "sensitive setting(s) aren't in the vault. Older ciphertext can only be read while ENCRYPTION_KEY is the key it was saved under. After that nothing can use it: email stops, and so does AI if it needs the key. To move them into the vault, run this again with --encrypt-legacy before the key changes:",
     legacyNames: legacySettings,
   };
   const rows = await db
