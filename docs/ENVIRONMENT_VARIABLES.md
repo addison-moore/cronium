@@ -271,6 +271,16 @@ These variables are only used by the orchestrator service and should NOT be incl
 | `JWT_SECRET`               | JWT secret for container auth                                                                  | `string` (32 chars) | -                                       | Yes      |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential (app verifies it on claim, heartbeat, health/metrics) | `string`            | -                                       | Yes      |
 
+Keep `ORCHESTRATOR_ID` the same across restarts, because job leases and containers belong
+to it. Jobs running when it changes are failed or re-queued when their leases run out, and
+their containers stay until removed by hand.
+
+`docker-compose.example.yml` gives the orchestrator and `cronium-runtime` only the
+variables it lists, not all of `.env`, so changing something only the app reads doesn't
+recreate them. The orchestrator's common tuning settings are listed there by name and
+are read from `.env` as usual. To set one that isn't listed, add its name to that
+service's `environment` the same way.
+
 #### Timeout Configuration
 
 | Variable                        | Description                         | Type     | Default | Required |

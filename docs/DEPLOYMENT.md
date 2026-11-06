@@ -216,11 +216,49 @@ docker compose up -d
   is deleted from it until you set a window.
 - The orchestrator's signing key persists in `orchestrator-data`, so remote
   runners keep working across upgrades.
+- **Running jobs carry on.** See [Jobs during a restart](#jobs-during-a-restart).
 
 Both compose files give `cronium-app` 20 seconds to stop and `cronium-worker` 40, so
 requests and jobs can finish and the last tool audit log entries can be written. If you
 run the images another way, allow them the same: a process killed sooner loses the
 entries it hadn't written.
+
+### Jobs during a restart
+
+A container job keeps running while the orchestrator restarts, whether for an upgrade, a
+`.env` change or a crash. The orchestrator exits as soon as it's told to stop and leaves
+the job's containers in place, and its next process picks them up. It follows the script
+to its end and reports the result, including for a script that ended while no
+orchestrator was running. A script that passed its timeout in the meantime is stopped
+when the orchestrator returns.
+
+- **If the orchestrator is down for longer than a job's lease,** which is about 60 to 90
+  seconds, the job has already been failed with `Lease expired`, or re-queued if it has
+  retries left. Its next process removes the old containers, script included.
+- **What can't be left running gets up to 30 seconds:** remote jobs, jobs that run both
+  locally and remotely, and jobs still starting. If one is still going after that, it's
+  stopped, and failed or re-queued once its lease runs out. The compose files give the
+  orchestrator 40 seconds to stop, for this. If you run it another way, allow it the same.
+- **A script calling `cronium.*` helpers while the app restarts** can see those calls
+  fail. The job itself isn't affected unless the script stops on the error.
+- **Changing `ORCHESTRATOR_ID`** hands nothing over: the new ID doesn't own the old
+  jobs, and their containers stay until you remove them.
+
+Changing `.env` only recreates the services that read what changed, so a value only the
+app and worker read doesn't touch the orchestrator at all.
+
+`docker compose stop` and `docker compose down` leave running jobs in place too. After
+`down`, Compose reports `Resource is still in use` for the network, because those jobs'
+sidecars are attached to it. This is harmless if you bring the stack back up, and the
+next orchestrator process deals with them: after `down -v` the database that knew them
+is gone, so they're removed. To remove them yourself, including when you won't bring the
+stack back (`install.sh --uninstall` does this for you):
+
+```bash
+docker ps -aq --filter label=cronium.managed=true --filter label=cronium.stack=cronium | xargs -r docker rm -f
+docker network ls -q --filter label=cronium.managed=true --filter label=cronium.stack=cronium | xargs -r docker network rm
+docker network rm cronium
+```
 
 ## Backup and Restore
 

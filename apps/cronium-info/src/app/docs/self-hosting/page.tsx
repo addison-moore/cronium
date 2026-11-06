@@ -617,7 +617,9 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                     <TableCell>Yes</TableCell>
                     <TableCell>
                       Unique identifier for this orchestrator instance (used for
-                      logging and job claims).
+                      logging and job claims). Keep it the same across restarts:
+                      running jobs belong to it, and the next process picks them
+                      up by it.
                     </TableCell>
                   </TableRow>
                   <TableRow>
