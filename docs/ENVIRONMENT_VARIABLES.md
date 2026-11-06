@@ -548,9 +548,10 @@ each row independently. Decryption is authenticated, so a wrong key/binding fail
 The steps below use Docker Compose and run the driver inside `cronium-worker`, which
 needs no source checkout and can reach the database. With
 `infra/docker/docker-compose.yml`, add `-f infra/docker/docker-compose.yml` to each
-`docker compose` command. Without Compose, restart every process holding the key
-instead: the app, the socket server and the worker. Run the driver as
-`node apps/cronium-app/dist/rotate-secrets.cjs` in the image, or as
+`docker compose` command, and `--env-file .env` if your `.env` is at the repo root,
+because Compose otherwise looks for it next to that file. Without Compose, restart every
+process holding the key instead: the app, the socket server and the worker. Run the
+driver as `node apps/cronium-app/dist/rotate-secrets.cjs` in the image, or as
 `pnpm --filter @cronium/app rotate:secrets` from a source checkout (it needs `tsx`, a
 devDependency), with its keys set for that command only. It also needs `DATABASE_URL`,
 `AUTH_SECRET`, `AUTH_URL` and `PUBLIC_APP_URL`.
