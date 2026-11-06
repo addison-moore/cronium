@@ -22,7 +22,11 @@ import {
   WorkflowLogLevel,
   WorkflowStepStatus,
 } from "@/shared/schema";
-import { settleTimedOutRunSteps } from "@/lib/scheduling/workflow-engine";
+import {
+  MAX_DURATION_MS,
+  durationBetween,
+  settleTimedOutRunSteps,
+} from "@/lib/scheduling/workflow-engine";
 
 const RUN_TIMED_OUT = "Workflow run timed out";
 const RUN_TIMED_OUT_BEFORE_JOB_STARTED =
@@ -35,9 +39,6 @@ const jobIsUnfinished = or(
   eq(jobs.status, JobStatus.QUEUED),
   inArray(jobs.status, [JobStatus.CLAIMED, JobStatus.RUNNING]),
 );
-
-// What workflow_executions.total_duration, an integer, can hold: about 24.8 days.
-const MAX_TOTAL_DURATION_MS = 2_147_483_647;
 
 interface CleanupOptions {
   maxWorkflowAge?: number; // Max time a workflow can run (ms)
@@ -239,7 +240,7 @@ export class WorkflowCleanupService {
         status: LogStatus.TIMEOUT,
         completedAt: now,
         // Capped so that a run stuck for weeks can still be updated
-        totalDuration: Math.min(elapsedMs, MAX_TOTAL_DURATION_MS),
+        totalDuration: Math.min(elapsedMs, MAX_DURATION_MS),
         updatedAt: now,
       })
       .where(
@@ -451,9 +452,7 @@ export class WorkflowCleanupService {
             endTime: now,
             error: logError,
             // A job that never started has no duration to report
-            duration: outcome.job.startedAt
-              ? now.getTime() - outcome.job.startedAt.getTime()
-              : null,
+            duration: durationBetween(outcome.job.startedAt, now),
           })
           .where(eq(logs.id, log.id));
       }

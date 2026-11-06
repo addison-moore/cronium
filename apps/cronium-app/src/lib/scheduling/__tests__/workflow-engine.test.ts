@@ -93,6 +93,7 @@ import { storage } from "@/server/storage";
 import { assertWorkflowGraphCapability } from "@/server/security/resource-access";
 import { dispatchEventJob } from "../dispatch";
 import {
+  MAX_DURATION_MS,
   advanceRunsForJob,
   advanceWorkflowRun,
   evaluateEdge,
@@ -1322,6 +1323,21 @@ describe("advanceWorkflowRun — a timed-out run", () => {
     await advanceWorkflowRun(run.id);
 
     expect(telemetry.duration).toBe(0);
+  });
+
+  it("caps a duration at what the column can hold", async () => {
+    const run = seedTimedOutRun();
+    seedStep(run.id, {
+      status: WorkflowStepStatus.FAILED,
+      completedAt: timedOutAt,
+    });
+    const telemetry = seedRunningTelemetry(run.id, 1, {
+      startedAt: new Date(timedOutAt.getTime() - 30 * 86_400_000),
+    });
+
+    await advanceWorkflowRun(run.id);
+
+    expect(telemetry.duration).toBe(MAX_DURATION_MS);
   });
 
   it("writes nothing to the run when no step is open", async () => {

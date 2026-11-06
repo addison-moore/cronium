@@ -11,7 +11,7 @@ import { db, pool } from "@/server/db";
 import { storage } from "@/server/storage";
 import { deriveNodeStatuses } from "@/components/workflows/lib/execution-graph";
 import * as httpEvents from "@/lib/scheduler/http-event-executor";
-import { transitionJob } from "@/lib/scheduling/job-transition";
+import { dispatchEventJob } from "@/lib/scheduling/dispatch";
 import { InProcessWorkerPool } from "@/lib/scheduling/worker-executor";
 import {
   advanceRunsForJob,
@@ -928,14 +928,20 @@ describe("a step job still queued when its run times out", () => {
   });
 
   it("gives up its overlap slot, so the event can run again", async () => {
-    const { jobId } = await startStuckRun({
+    const { jobId, firstEvent } = await startStuckRun({
       overlapPolicy: OverlapPolicy.SKIP,
     });
-    expect((await jobOf(jobId)).activeKey).not.toBeNull();
+    const event = (await storage.getEventWithRelations(firstEvent))!;
+    await expect(
+      dispatchEventJob(event, { triggeredBy: "manual" }),
+    ).resolves.toMatchObject({ job: null, skipped: "overlap" });
 
     await service.performCleanup();
 
     expect((await jobOf(jobId)).activeKey).toBeNull();
+    const next = await dispatchEventJob(event, { triggeredBy: "manual" });
+    expect(next.skipped).toBeUndefined();
+    expect(next.job?.id).toEqual(expect.any(String));
   });
 
   it("does not execute if the pool claimed it just as the timeout landed", async () => {
@@ -1265,6 +1271,66 @@ describe("the steps of a timed-out run", () => {
     expect(await telemetryOf(runId)).toEqual([
       expect.objectContaining({ status: LogStatus.FAILURE }),
     ]);
+  });
+
+  it("settle when a step has been open longer than a duration column can hold", async () => {
+    const { runId, firstNode, secondNode } = await startStuckRun();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000);
+    await db
+      .update(workflowExecutions)
+      .set({ startedAt: thirtyDaysAgo })
+      .where(eq(workflowExecutions.id, runId));
+    await db
+      .update(workflowStepRuns)
+      .set({ startedAt: thirtyDaysAgo })
+      .where(eq(workflowStepRuns.workflowExecutionId, runId));
+    await db
+      .update(workflowExecutionEvents)
+      .set({ startedAt: thirtyDaysAgo })
+      .where(eq(workflowExecutionEvents.workflowExecutionId, runId));
+
+    await service.performCleanup();
+
+    expect((await stepOf(runId, firstNode)).status).toBe(
+      WorkflowStepStatus.FAILED,
+    );
+    expect((await stepOf(runId, secondNode)).status).toBe(
+      WorkflowStepStatus.SKIPPED,
+    );
+    expect(await telemetryOf(runId)).toEqual([
+      expect.objectContaining({
+        status: LogStatus.FAILURE,
+        duration: MAX_TOTAL_DURATION_MS,
+      }),
+    ]);
+  });
+
+  it("report a job that ran longer than a duration column can hold", async () => {
+    const { jobId } = await startStuckRun();
+    await startJob(jobId);
+    await seedExecution(jobId, {
+      id: "exec-in-progress",
+      status: JobStatus.RUNNING,
+      completedAt: null,
+    });
+    await db
+      .update(jobs)
+      .set({ startedAt: new Date(Date.now() - 30 * 86_400_000) })
+      .where(eq(jobs.id, jobId));
+
+    await service.performCleanup();
+
+    expect(await jobStatus(jobId)).toBe(JobStatus.TIMED_OUT);
+    expect(await logOf(jobId)).toMatchObject({
+      status: LogStatus.TIMEOUT,
+      duration: MAX_TOTAL_DURATION_MS,
+    });
+    // Written after the log, so a failed log update would have skipped it
+    const [execution] = await db
+      .select()
+      .from(executions)
+      .where(eq(executions.jobId, jobId));
+    expect(execution).toMatchObject({ status: JobStatus.FAILED, exitCode: -1 });
   });
 
   it("settle through the admin route's entry point as well", async () => {

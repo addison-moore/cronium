@@ -62,6 +62,9 @@ const TERMINAL_STEP_STATUSES: WorkflowStepStatus[] = [
  * sweep: its job is re-attached by metadata, or it is failed loudly. */
 const DISPATCH_STALL_MS = 2 * 60_000;
 
+/** What a duration column, an integer of milliseconds, can hold: about 24.8 days. */
+export const MAX_DURATION_MS = 2_147_483_647;
+
 const STEP_NOT_STARTED_BEFORE_TIMEOUT =
   "Workflow run timed out before this step started";
 const NO_JOB_BEFORE_TIMEOUT =
@@ -761,9 +764,14 @@ export async function settleTimedOutRunSteps(runId: number): Promise<void> {
   });
 }
 
-/** Clocks can differ between processes, so a duration never goes negative. */
-function durationBetween(from: Date | null, to: Date): number | null {
-  return from ? Math.max(0, to.getTime() - from.getTime()) : null;
+/**
+ * Milliseconds for a duration column, or null with no start. Never negative, since
+ * clocks can differ between processes, and never more than the column can hold: a
+ * write past that fails, which here would stop a stuck step from ever settling.
+ */
+export function durationBetween(from: Date | null, to: Date): number | null {
+  if (!from) return null;
+  return Math.min(Math.max(0, to.getTime() - from.getTime()), MAX_DURATION_MS);
 }
 
 async function settleStep(
