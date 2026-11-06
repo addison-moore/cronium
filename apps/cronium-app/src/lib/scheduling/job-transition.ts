@@ -12,7 +12,7 @@ import { db } from "@/server/db";
 import { jobs, jobTransitions, JobStatus, type Job } from "@/shared/schema";
 import { eq, sql } from "drizzle-orm";
 
-const NON_TERMINAL: JobStatus[] = [
+export const NON_TERMINAL_JOB_STATUSES: JobStatus[] = [
   JobStatus.QUEUED,
   JobStatus.CLAIMED,
   JobStatus.RUNNING,
@@ -26,10 +26,10 @@ const LEGAL_SOURCES: Record<JobStatus, JobStatus[]> = {
   [JobStatus.CLAIMED]: [JobStatus.QUEUED],
   // In-process jobs start RUNNING straight from QUEUED (no claim step yet)
   [JobStatus.RUNNING]: [JobStatus.QUEUED, JobStatus.CLAIMED],
-  [JobStatus.COMPLETED]: NON_TERMINAL,
-  [JobStatus.FAILED]: NON_TERMINAL,
-  [JobStatus.TIMED_OUT]: NON_TERMINAL,
-  [JobStatus.CANCELLED]: NON_TERMINAL,
+  [JobStatus.COMPLETED]: NON_TERMINAL_JOB_STATUSES,
+  [JobStatus.FAILED]: NON_TERMINAL_JOB_STATUSES,
+  [JobStatus.TIMED_OUT]: NON_TERMINAL_JOB_STATUSES,
+  [JobStatus.CANCELLED]: NON_TERMINAL_JOB_STATUSES,
 };
 
 export interface TransitionOptions {
@@ -49,7 +49,7 @@ export type TransitionOutcome =
   | { ok: false; current?: JobStatus; error: string };
 
 function isTerminalStatus(status: JobStatus): boolean {
-  return !NON_TERMINAL.includes(status);
+  return !NON_TERMINAL_JOB_STATUSES.includes(status);
 }
 
 export async function transitionJob(

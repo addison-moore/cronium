@@ -7,6 +7,7 @@ import {
   authorizeCapability,
   assertServerScope,
 } from "@/lib/security/internal-route-auth";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Get server details
 export async function GET(
@@ -55,7 +56,7 @@ export async function GET(
 
     return NextResponse.json({ server: server[0] });
   } catch (error) {
-    console.error("Error fetching server:", error);
+    console.error("Error fetching server:", failureWithStack(error));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

@@ -23,6 +23,7 @@ import {
   healthCheckSchema,
 } from "@/shared/schemas/monitoring";
 import { storage } from "@/server/storage";
+import { failureWithStack } from "@/lib/pg-errors";
 
 // Helper types for monitoring data
 export interface SystemInfo {
@@ -85,7 +86,10 @@ async function getSystemInformation(): Promise<SystemInfo> {
       },
     };
   } catch (error) {
-    console.error("Error fetching system information:", error);
+    console.error(
+      "Error fetching system information:",
+      failureWithStack(error),
+    );
     const memory = process.memoryUsage();
     return {
       uptime: process.uptime(),
