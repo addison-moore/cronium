@@ -19,14 +19,19 @@
 #   cronium_set_variable "key" "value"
 #   value=$(cronium_get_variable "key")
 
-# Configuration from environment
-CRONIUM_API="${CRONIUM_RUNTIME_API:-http://localhost:8081}"
+# Configuration from environment. The functions below read these variables each
+# time they run, so that they work in a bash this script starts. That bash inherits
+# the functions (see `export -f` at the end of this file), but no plain shell
+# variable set here.
+export CRONIUM_RUNTIME_API="${CRONIUM_RUNTIME_API:-http://localhost:8081}"
+
+# For scripts that read these names. The token's copy also lets a script unset
+# CRONIUM_EXECUTION_TOKEN to keep it from what it runs, and still call the functions
+# itself, so it must stay unexported: `env -u CRONIUM_EXECUTION_TOKEN tool` has to
+# leave `tool` without the token.
+CRONIUM_API="$CRONIUM_RUNTIME_API"
 CRONIUM_TOKEN="${CRONIUM_EXECUTION_TOKEN}"
 CRONIUM_EXEC_ID="${CRONIUM_EXECUTION_ID}"
-
-# Retry configuration
-MAX_RETRIES=3
-RETRY_DELAY=1
 
 # Check required environment variables
 if [ -z "$CRONIUM_TOKEN" ]; then
@@ -52,18 +57,20 @@ _cronium_request() {
     local method="$1"
     local path="$2"
     local data="$3"
+    local max_retries=3
+    local retry_delay=1
     local attempt=1
     local response
     local status_code
     local curl_exit
     local temp_file=$(mktemp)
     
-    while [ $attempt -le $MAX_RETRIES ]; do
+    while [ $attempt -le $max_retries ]; do
         # Build curl command
         local curl_args=(
             -s
             -X "$method"
-            -H "Authorization: Bearer $CRONIUM_TOKEN"
+            -H "Authorization: Bearer ${CRONIUM_EXECUTION_TOKEN:-$CRONIUM_TOKEN}"
             -H "Content-Type: application/json"
             -H "Accept: application/json"
             -w "\n%{http_code}"
@@ -79,14 +86,14 @@ _cronium_request() {
         # propagated out of the substitution explicitly — the pipeline runs
         # in a subshell, so a bare `$?` afterwards only ever saw tail's
         # (always zero) exit status and network failures were never retried.
-        status_code=$(curl "${curl_args[@]}" "${CRONIUM_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}")
+        status_code=$(curl "${curl_args[@]}" "${CRONIUM_RUNTIME_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}")
         curl_exit=$?
 
         # Retry on network failures (connection refused/reset, timeout, DNS):
         # curl exits non-zero and/or reports an http_code of 000.
         if [ "$curl_exit" -ne 0 ] || [ "$status_code" = "000" ]; then
-            if [ $attempt -lt $MAX_RETRIES ]; then
-                sleep $((RETRY_DELAY * attempt))
+            if [ $attempt -lt $max_retries ]; then
+                sleep $((retry_delay * attempt))
                 ((attempt++))
                 continue
             fi
@@ -94,9 +101,9 @@ _cronium_request() {
             # Include curl's exit code and the target: "after N attempts" alone
             # can't distinguish DNS failure (6) from connection refused (7) or
             # timeout (28), which are very different operator problems.
-            echo "Error: Request failed after $MAX_RETRIES attempts" \
+            echo "Error: Request failed after $max_retries attempts" \
                 "(curl exit $curl_exit, http_code ${status_code:-none}," \
-                "url ${CRONIUM_API}${path})" >&2
+                "url ${CRONIUM_RUNTIME_API}${path})" >&2
             return 1
         fi
         
@@ -112,11 +119,11 @@ _cronium_request() {
             # Special case for variable not found
             echo '{"data":{"value":null}}'
             return 0
-        elif [ "$status_code" -ge 500 ] && [ "$status_code" -ne 501 ] && [ $attempt -lt $MAX_RETRIES ]; then
+        elif [ "$status_code" -ge 500 ] && [ "$status_code" -ne 501 ] && [ $attempt -lt $max_retries ]; then
             # Retry on server errors. 501 is excluded: it means the endpoint
             # is permanently unsupported in this execution context (e.g. tool
             # actions with no backing app route) — surface it immediately.
-            sleep $((RETRY_DELAY * attempt))
+            sleep $((retry_delay * attempt))
             ((attempt++))
             continue
         else
@@ -137,7 +144,7 @@ _cronium_request() {
 # Get input data for this execution
 cronium_input() {
     local response
-    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/input")
+    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXECUTION_ID}/input")
     if [ $? -eq 0 ]; then
         # `== null` (not `//`): jq's `//` also swallows a legitimate `false`
         # value; only absent/null data may collapse to empty.
@@ -159,7 +166,7 @@ cronium_output() {
     fi
     
     local payload=$(jq -n --argjson data "$data" '{data: $data}')
-    _cronium_request "POST" "/executions/${CRONIUM_EXEC_ID}/output" "$payload" >/dev/null
+    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/output" "$payload" >/dev/null
 }
 
 # Get a variable value
@@ -168,7 +175,7 @@ cronium_get_variable() {
     local encoded_key=$(printf '%s' "$key" | jq -sRr @uri)
     local response
     
-    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/variables/${encoded_key}")
+    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}")
     if [ $? -eq 0 ]; then
         # `== null` (not `//`): preserve a legitimate `false` variable value.
         echo "$response" | jq -r 'if .data.value == null then empty else .data.value end'
@@ -189,7 +196,7 @@ cronium_set_variable() {
     fi
     
     local payload=$(jq -n --argjson value "$value" '{value: $value}')
-    _cronium_request "PUT" "/executions/${CRONIUM_EXEC_ID}/variables/${encoded_key}" "$payload" >/dev/null
+    _cronium_request "PUT" "/executions/${CRONIUM_EXECUTION_ID}/variables/${encoded_key}" "$payload" >/dev/null
 }
 
 # Set workflow condition
@@ -207,13 +214,13 @@ cronium_set_condition() {
     esac
     
     local payload=$(jq -n --argjson cond "$condition" '{condition: $cond}')
-    _cronium_request "POST" "/executions/${CRONIUM_EXEC_ID}/condition" "$payload" >/dev/null
+    _cronium_request "POST" "/executions/${CRONIUM_EXECUTION_ID}/condition" "$payload" >/dev/null
 }
 
 # Get event context
 cronium_event() {
     local response
-    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXEC_ID}/context")
+    response=$(_cronium_request "GET" "/executions/${CRONIUM_EXECUTION_ID}/context")
     if [ $? -eq 0 ]; then
         echo "$response" | jq 'if .data == null then {} else .data end'
     else
@@ -391,10 +398,11 @@ cronium_append_variable() {
 
 # Print SDK info (useful for debugging)
 cronium_info() {
+    local token="${CRONIUM_EXECUTION_TOKEN:-$CRONIUM_TOKEN}"
     echo "Cronium Bash SDK v2.0.0"
-    echo "API URL: $CRONIUM_API"
-    echo "Execution ID: $CRONIUM_EXEC_ID"
-    echo "Token: ${CRONIUM_TOKEN:0:10}..." 
+    echo "API URL: $CRONIUM_RUNTIME_API"
+    echo "Execution ID: $CRONIUM_EXECUTION_ID"
+    echo "Token: ${token:0:10}..." 
 }
 
 # Export all functions

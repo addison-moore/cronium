@@ -61,8 +61,7 @@ RUN echo 'source /usr/local/bin/cronium.sh' > /home/cronium/.bashrc && \
 ENV HOME=/home/cronium \
     USER=cronium \
     LANG=C.UTF-8 \
-    TZ=UTC \
-    BASH_ENV=/home/cronium/.bashrc
+    TZ=UTC
 
 # Switch to non-root user
 USER cronium

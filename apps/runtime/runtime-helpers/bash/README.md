@@ -4,7 +4,7 @@ Runtime SDK for bash scripts in Cronium, in a container or on a remote server.
 
 ## Installation
 
-Nothing to install or load: the functions are already there when a script starts, in a container and on a remote server. A remote server has no `/usr/local/bin/cronium.sh`, so a script that sources it runs in a container but fails on a remote server under `set -e`.
+Nothing to install or load: the functions are already there when a script starts, in a container and on a remote server, and a `bash` the script starts inherits them. A remote server has no `/usr/local/bin/cronium.sh`, so a script that sources it runs in a container but fails on a remote server under `set -e`.
 
 For local development:
 
