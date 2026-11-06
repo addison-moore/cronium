@@ -291,6 +291,18 @@ recreate them. The orchestrator's common tuning settings are listed there by nam
 are read from `.env` as usual. To set one that isn't listed, add its name to that
 service's `environment` the same way.
 
+#### Job Images
+
+These choose what a job's containers run in. With none set, a job uses a local image under
+the name a source checkout builds, if there is one, and otherwise pulls the image published
+with your orchestrator. See
+[The images a job runs in](DEPLOYMENT.md#the-images-a-job-runs-in).
+
+| Variable                          | Description                                                                                                                     | Type     | Default | Required |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | -------- |
+| `CRONIUM_CONTAINER_IMAGES`        | Images by script type, such as `bash:my-bash:1.2,python:my-python:1.2,nodejs:my-node:1.2`. A language left out uses its default | `string` | -       | No       |
+| `CRONIUM_CONTAINER_RUNTIME_IMAGE` | Image for each job's runtime sidecar                                                                                            | `string` | -       | No       |
+
 #### Timeout Configuration
 
 | Variable                        | Description                         | Type     | Default | Required |
