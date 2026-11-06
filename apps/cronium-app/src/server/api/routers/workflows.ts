@@ -44,7 +44,7 @@ import {
   toWorkflowApiDto,
   toWorkflowListApiDto,
 } from "@/server/security/api-dto";
-import { failureWithStack } from "@/lib/pg-errors";
+import { failureWithStack, messageForCaller } from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -624,13 +624,7 @@ export const workflowsRouter = createTRPCRouter({
             results.push({
               id: workflowId,
               success: false,
-              error:
-                typeof error === "object" &&
-                error !== null &&
-                "message" in error &&
-                typeof error.message === "string"
-                  ? error.message
-                  : "Unknown error",
+              error: messageForCaller(error, "Unknown error"),
             });
           }
         }

@@ -1,3 +1,4 @@
+import { createHmac, hkdfSync } from "crypto";
 import {
   mintJobCapability,
   verifyJobCapability,
@@ -12,6 +13,7 @@ const NOW = 1_700_000_000;
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = KEY;
+  delete process.env.ENCRYPTION_KEYS_RETIRED;
   __resetJobCapabilityKeyForTests();
 });
 afterAll(() => __resetJobCapabilityKeyForTests());
@@ -128,5 +130,277 @@ describe("job capability tokens (HI-10)", () => {
     expect(() => assertCapability(v, "variable:write")).toThrow(
       CapabilityError,
     );
+  });
+});
+
+describe("job capability tokens across an ENCRYPTION_KEY change", () => {
+  const OLD = "a".repeat(64);
+  const NEW = "b".repeat(64);
+  const OTHER = "c".repeat(64);
+  const SCOPE = { jobId: "job-1", userId: "user-1", serverId: "7" };
+
+  /** The process restarting with these settings. */
+  function restartWith(active: string | undefined, retired?: string): void {
+    if (active === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = active;
+    if (retired === undefined) delete process.env.ENCRYPTION_KEYS_RETIRED;
+    else process.env.ENCRYPTION_KEYS_RETIRED = retired;
+    __resetJobCapabilityKeyForTests();
+  }
+
+  function mintUnder(active: string, ttlSeconds?: number): string {
+    restartWith(active);
+    return mintJobCapability({ ...SCOPE, ttlSeconds }, NOW);
+  }
+
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    warn.mockRestore();
+    restartWith(KEY);
+  });
+
+  describe("active key", () => {
+    it("verifies with no retired keys, or an empty list", () => {
+      const token = mintUnder(NEW);
+
+      restartWith(NEW);
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+      restartWith(NEW, "");
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+      restartWith(NEW, "[]");
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("verifies alongside a retired key", () => {
+      restartWith(NEW, JSON.stringify([OLD]));
+      const token = mintJobCapability(SCOPE, NOW);
+
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+    });
+
+    it("is the only key new tokens are signed with", () => {
+      restartWith(NEW, JSON.stringify([OLD]));
+      const token = mintJobCapability(SCOPE, NOW);
+
+      restartWith(OLD);
+      expect(() => verifyJobCapability(token, NOW + 10)).toThrow(
+        CapabilityError,
+      );
+      restartWith(NEW);
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+    });
+
+    it("is required: a retired key alone verifies and signs nothing", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(undefined, JSON.stringify([OLD]));
+      expect(() => verifyJobCapability(token, NOW + 10)).toThrow(
+        CapabilityError,
+      );
+      expect(() => mintJobCapability(SCOPE, NOW)).toThrow(CapabilityError);
+    });
+  });
+
+  describe("retired key", () => {
+    it("verifies a token signed before the change, with its claims intact", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(NEW, JSON.stringify([OLD]));
+      const verified = verifyJobCapability(token, NOW + 10);
+
+      expect(verified).toEqual({
+        jobId: "job-1",
+        userId: "user-1",
+        serverId: "7",
+        capabilities: DEFAULT_JOB_CAPABILITIES,
+        expiresAt: NOW + 60 * 60,
+      });
+    });
+
+    it("verifies under any key in the list", () => {
+      const first = mintUnder(OLD);
+      const second = mintUnder(OTHER);
+
+      restartWith(NEW, JSON.stringify([OLD, OTHER]));
+
+      expect(verifyJobCapability(first, NOW + 10).jobId).toBe("job-1");
+      expect(verifyJobCapability(second, NOW + 10).jobId).toBe("job-1");
+    });
+
+    it("reads a key the way the secret vault does", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(NEW, JSON.stringify([` ${OLD.toUpperCase()}\n`]));
+
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("still enforces expiry", () => {
+      const token = mintUnder(OLD, 30);
+
+      restartWith(NEW, JSON.stringify([OLD]));
+
+      expect(verifyJobCapability(token, NOW + 29).jobId).toBe("job-1");
+      expect(() => verifyJobCapability(token, NOW + 31)).toThrow(/expired/);
+    });
+
+    it("still rejects a changed signature or payload", () => {
+      const token = mintUnder(OLD);
+      const cut = token.lastIndexOf(".");
+      const signature = Buffer.from(token.slice(cut + 1), "base64url");
+
+      const wrongPayload = Buffer.from(
+        JSON.stringify({
+          jid: "job-2",
+          uid: "user-2",
+          cap: DEFAULT_JOB_CAPABILITIES,
+          iat: NOW,
+          exp: NOW + 60,
+        }),
+      ).toString("base64url");
+      const swapped = `cap.1.${wrongPayload}.${token.slice(cut + 1)}`;
+
+      signature[0]! ^= 0xff;
+      const tampered = `${token.slice(0, cut + 1)}${signature.toString("base64url")}`;
+
+      restartWith(NEW, JSON.stringify([OLD]));
+
+      expect(() => verifyJobCapability(tampered, NOW + 10)).toThrow(
+        /signature is invalid/,
+      );
+      expect(() => verifyJobCapability(swapped, NOW + 10)).toThrow(
+        /signature is invalid/,
+      );
+    });
+
+    it("carries the token's own capabilities, not more", () => {
+      restartWith(OLD);
+      const token = mintJobCapability(
+        { ...SCOPE, capabilities: ["job:status"] },
+        NOW,
+      );
+
+      restartWith(NEW, JSON.stringify([OLD]));
+      const verified = verifyJobCapability(token, NOW + 10);
+
+      expect(() => assertCapability(verified, "job:status")).not.toThrow();
+      expect(() => assertCapability(verified, "variable:read")).toThrow(
+        CapabilityError,
+      );
+    });
+  });
+
+  describe("removed key", () => {
+    it("rejects a token once its key has left the list", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(NEW, JSON.stringify([OLD]));
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+
+      restartWith(NEW);
+      expect(() => verifyJobCapability(token, NOW + 10)).toThrow(
+        /signature is invalid/,
+      );
+    });
+
+    it("rejects it when other keys are still listed", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(NEW, JSON.stringify([OTHER]));
+
+      expect(() => verifyJobCapability(token, NOW + 10)).toThrow(
+        /signature is invalid/,
+      );
+    });
+  });
+
+  describe("malformed retired keys", () => {
+    /** Sign the way the module does, from a master key it should refuse to use. */
+    function forge(master: Buffer): string {
+      const key = Buffer.from(
+        hkdfSync(
+          "sha256",
+          master,
+          Buffer.alloc(0),
+          Buffer.from("cronium-job-capability-v1"),
+          32,
+        ),
+      );
+      const payload = Buffer.from(
+        JSON.stringify({
+          jid: "job-1",
+          uid: "user-1",
+          cap: DEFAULT_JOB_CAPABILITIES,
+          iat: NOW,
+          exp: NOW + 60,
+        }),
+      ).toString("base64url");
+      const signingInput = `cap.1.${payload}`;
+      const signature = createHmac("sha256", key)
+        .update(signingInput)
+        .digest("base64url");
+      return `${signingInput}.${signature}`;
+    }
+
+    it.each([
+      ["not JSON", "not json"],
+      ["shell-stripped quotes", `[${OLD}]`],
+      ["a JSON string", JSON.stringify(OLD)],
+      ["a JSON object", JSON.stringify({ key: OLD })],
+      ["a JSON number", "123"],
+      ["JSON null", "null"],
+      ["an empty string entry", '[""]'],
+      ["non-string entries", "[123, null, {}]"],
+      ["a short entry", '["abc123"]'],
+      ["a 32-character entry", JSON.stringify(["a".repeat(32)])],
+      ["a too-long entry", JSON.stringify([`${OLD}00`])],
+      ["a non-hex entry", JSON.stringify(["z".repeat(64)])],
+    ])("%s: rejects the old token and keeps the active key", (_, list) => {
+      const old = mintUnder(OLD);
+
+      restartWith(NEW, list);
+      const current = mintJobCapability(SCOPE, NOW);
+
+      expect(verifyJobCapability(current, NOW + 10).jobId).toBe("job-1");
+      expect(() => verifyJobCapability(old, NOW + 10)).toThrow(CapabilityError);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the good entries in a list with a bad one", () => {
+      const token = mintUnder(OLD);
+
+      restartWith(NEW, JSON.stringify(["nope", OLD, 42]));
+
+      expect(verifyJobCapability(token, NOW + 10).jobId).toBe("job-1");
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["an empty string", "", Buffer.alloc(0)],
+      ["a short string", "abc123", Buffer.from("abc123")],
+    ])(
+      "never treats %s as a key anyone could sign with",
+      (_, entry, master) => {
+        restartWith(NEW, JSON.stringify([entry]));
+
+        expect(() => verifyJobCapability(forge(master), NOW + 10)).toThrow(
+          /signature is invalid/,
+        );
+      },
+    );
+
+    it("keeps key material out of the warning", () => {
+      restartWith(NEW, JSON.stringify([OLD.slice(0, 40)]));
+      mintJobCapability(SCOPE, NOW);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(OLD.slice(0, 40));
+    });
   });
 });

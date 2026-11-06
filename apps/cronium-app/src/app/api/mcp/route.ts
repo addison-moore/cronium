@@ -17,6 +17,7 @@ import { sessionFromApiToken } from "@/server/api/trpc";
 import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
 import { getBearerToken } from "@/lib/api-auth";
 import { getBaseUrl, resourceMetadataUrl } from "@/lib/mcp-oauth/metadata";
+import { messageForCaller } from "@/lib/pg-errors";
 import { readBodyWithin } from "@/lib/request-body";
 import {
   EVENT_TOO_LONG_MESSAGE,
@@ -109,14 +110,10 @@ async function handleMessage(
         });
       } catch (err) {
         // Tool execution errors are returned as a tool result (isError), not a
-        // protocol error, so the model can read and correct them.
+        // protocol error, so the model can read and correct them. createCaller
+        // skips the error formatter, so nothing else stands in front of this.
         return rpcResult(id, {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
+          content: [{ type: "text", text: `Error: ${messageForCaller(err)}` }],
           isError: true,
         });
       }

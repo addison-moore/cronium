@@ -17,6 +17,17 @@
  * and an explicit capability set, and expires. An internal route verifies the
  * signature + expiry AND that the resource in its path is inside the token's
  * scope, so a leaked token can only act on its own job for a short window.
+ *
+ * Across a key rotation: new tokens are signed with the active key only, and a
+ * token signed under a key in ENCRYPTION_KEYS_RETIRED still verifies, so a script
+ * running at the key change can finish and report its result.
+ *
+ * The retired path has no cutoff on purpose. A rule such as "only if `iat` predates
+ * the key change" would stop nobody: every honest token under a retired key already
+ * predates it, and `iat` is part of what a holder of that key signs, so a forger
+ * just backdates it. Only taking the key out of the list ends its trust. That is why
+ * a rotation because a key leaked never lists it on a running app: see "If the old
+ * key leaked" in docs/ENVIRONMENT_VARIABLES.md.
  */
 
 import { createHmac, hkdfSync, timingSafeEqual } from "crypto";
@@ -24,6 +35,8 @@ import { createHmac, hkdfSync, timingSafeEqual } from "crypto";
 const SCHEME = "cap.1";
 const HKDF_INFO = "cronium-job-capability-v1";
 const KEY_LENGTH = 32;
+// What env.mjs and the secret vault require of an ENCRYPTION_KEY.
+const MASTER_KEY_FORMAT = /^[0-9a-fA-F]{64}$/;
 
 /**
  * Fine-grained capabilities a job token may carry. Each job-scoped internal
@@ -94,21 +107,16 @@ export class CapabilityError extends Error {}
 const MAX_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_TTL_SECONDS = 60 * 60; // 1h
 
-let cachedKey: Buffer | null = null;
+interface SigningKeys {
+  /** Signs every new token, and verifies. */
+  active: Buffer;
+  /** Only verify: tokens signed before an ENCRYPTION_KEY change. */
+  retired: Buffer[];
+}
 
-/**
- * Derive the capability-signing key lazily from ENCRYPTION_KEY. Lazy so merely
- * importing this module (e.g. during `next build`) never requires a secret; the
- * key is only needed when a token is actually minted or verified.
- */
-function signingKey(): Buffer {
-  if (cachedKey) return cachedKey;
-  const master = process.env.ENCRYPTION_KEY;
-  if (!master) {
-    throw new CapabilityError(
-      "ENCRYPTION_KEY is required to mint or verify job capability tokens",
-    );
-  }
+let cachedKeys: SigningKeys | null = null;
+
+function deriveSigningKey(master: string): Buffer {
   const derived = hkdfSync(
     "sha256",
     Buffer.from(master, "hex").length === KEY_LENGTH
@@ -118,18 +126,77 @@ function signingKey(): Buffer {
     Buffer.from(HKDF_INFO),
     KEY_LENGTH,
   );
-  cachedKey = Buffer.from(derived);
-  return cachedKey;
+  return Buffer.from(derived);
+}
+
+/**
+ * The former ENCRYPTION_KEY values in ENCRYPTION_KEYS_RETIRED. Anything else in
+ * there is dropped, never derived from: HKDF happily takes an empty string, and
+ * the key that gives is one anyone can compute.
+ *
+ * A bad list must not throw. authorizeCapability only turns CapabilityError into a
+ * 403, and the orchestrator drops a completion report that gets a 403, so a typo here
+ * must not cost active-key tokens anything. Tokens under the unreadable keys just
+ * stop verifying, which fails closed.
+ */
+function retiredMasterKeys(): string[] {
+  const raw = process.env.ENCRYPTION_KEYS_RETIRED;
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = undefined;
+  }
+  const entries: unknown[] = Array.isArray(parsed) ? parsed : [];
+  const keys = entries
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => MASTER_KEY_FORMAT.test(entry));
+
+  if (!Array.isArray(parsed) || keys.length !== entries.length) {
+    // The value stays out of the log: even a malformed list holds key material.
+    console.warn(
+      "[Security] ENCRYPTION_KEYS_RETIRED should be a JSON array of 64-hex keys. Ignoring what isn't, so job tokens signed under those keys won't verify.",
+    );
+  }
+  return keys;
+}
+
+/**
+ * Derive the capability-signing keys lazily from ENCRYPTION_KEY and
+ * ENCRYPTION_KEYS_RETIRED. Lazy so merely importing this module (e.g. during
+ * `next build`) never requires a secret; a key is only needed when a token is
+ * actually minted or verified.
+ */
+function signingKeys(): SigningKeys {
+  if (cachedKeys) return cachedKeys;
+  const master = process.env.ENCRYPTION_KEY;
+  if (!master) {
+    throw new CapabilityError(
+      "ENCRYPTION_KEY is required to mint or verify job capability tokens",
+    );
+  }
+  cachedKeys = {
+    active: deriveSigningKey(master),
+    retired: retiredMasterKeys().map(deriveSigningKey),
+  };
+  return cachedKeys;
 }
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64url");
 }
 
-function sign(signingInput: string): string {
-  return b64url(
-    createHmac("sha256", signingKey()).update(signingInput).digest(),
-  );
+function sign(key: Buffer, signingInput: string): string {
+  return b64url(createHmac("sha256", key).update(signingInput).digest());
+}
+
+function signedBy(key: Buffer, signingInput: string, sig: string): boolean {
+  const a = Buffer.from(sig);
+  const b = Buffer.from(sign(key, signingInput));
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function clampTtl(ttl: number | undefined): number {
@@ -159,7 +226,7 @@ export function mintJobCapability(
   };
   const payload = b64url(Buffer.from(JSON.stringify(claims), "utf8"));
   const signingInput = `${SCHEME}.${payload}`;
-  return `${signingInput}.${sign(signingInput)}`;
+  return `${signingInput}.${sign(signingKeys().active, signingInput)}`;
 }
 
 export interface VerifiedCapability {
@@ -171,10 +238,10 @@ export interface VerifiedCapability {
 }
 
 /**
- * Verify a token's scheme, signature, and expiry. Returns the claims on
- * success; throws `CapabilityError` on any failure (fail closed). Does NOT
- * check capabilities or resource scope — callers do that with
- * `assertCapability`/`assertJobScope` against their own path parameters.
+ * Verify a token's scheme, signature (under the active key or a retired one), and
+ * expiry. Returns the claims on success; throws `CapabilityError` on any failure
+ * (fail closed). Does NOT check capabilities or resource scope — callers do that
+ * with `assertCapability`/`assertJobScope` against their own path parameters.
  */
 export function verifyJobCapability(
   token: string,
@@ -195,10 +262,8 @@ export function verifyJobCapability(
   const sig = rest.slice(dot + 1);
 
   const signingInput = `${SCHEME}.${payload}`;
-  const expected = sign(signingInput);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+  const { active, retired } = signingKeys();
+  if (![active, ...retired].some((key) => signedBy(key, signingInput, sig))) {
     throw new CapabilityError("Capability token signature is invalid");
   }
 
@@ -237,7 +302,7 @@ export function assertCapability(
   }
 }
 
-/** Test hook: reset the memoized signing key so env changes take effect. */
+/** Test hook: reset the memoized signing keys so env changes take effect. */
 export function __resetJobCapabilityKeyForTests(): void {
-  cachedKey = null;
+  cachedKeys = null;
 }
