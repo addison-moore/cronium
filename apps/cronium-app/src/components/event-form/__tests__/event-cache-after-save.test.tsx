@@ -604,8 +604,35 @@ describe("the copy of an event the edit form starts from", () => {
         focusManager.setFocused(true);
       });
 
-      expect(sent("events.getById")).toHaveLength(reads);
+      await waitFor(() =>
+        expect(sent("events.getById").length).toBeGreaterThan(reads),
+      );
       expect(screen.getByText("unsaved")).toBeInTheDocument();
+    });
+
+    it("keeps the form and says nothing when a read fails once it's open", async () => {
+      const { user } = setUp(workflowNode);
+      await openModal(user);
+      await nameField();
+      await addTag(user, "unsaved");
+      const reads = sent("events.getById").length;
+
+      mockFailingPaths.add("events.getById");
+      letTimePass(90_000);
+      await act(async () => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+      await waitFor(() =>
+        expect(sent("events.getById").length).toBeGreaterThan(reads),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      expect(screen.getByText("unsaved")).toBeInTheDocument();
+      expect(screen.queryByText("Failed to load event data")).toBeNull();
+      expect(mockModalToast).not.toHaveBeenCalled();
     });
 
     it("keeps the edits on screen when the save fails, and shows the server's values next time", async () => {

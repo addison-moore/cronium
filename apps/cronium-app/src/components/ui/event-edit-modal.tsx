@@ -15,23 +15,13 @@ interface EventEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   eventId: number;
-  onEventUpdated?: () => void;
 }
 
 export function EventEditModal({
   isOpen,
   onClose,
   eventId,
-  onEventUpdated,
 }: EventEditModalProps) {
-  const handleEventUpdate = () => {
-    // Close modal and notify parent component
-    onClose();
-    if (onEventUpdated) {
-      onEventUpdated();
-    }
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -44,7 +34,7 @@ export function EventEditModal({
       {/* Inside the Modal so it mounts on each opening, which is what reads the event. */}
       <EventEditModalContent
         eventId={eventId}
-        onSaved={handleEventUpdate}
+        onSaved={onClose}
         onCancel={onClose}
       />
     </Modal>
@@ -67,9 +57,11 @@ function EventEditModalContent({
   // A save sends the whole form back, so the form has to start from the event as it is
   // now. A cached copy can be older than the last save, and saving it would put the old
   // values back, so read the event on every opening and hold the form until the answer
-  // is in. Focus refetches are off so that no read can land on a form being edited.
+  // is in. Coming back to the window reads it again, and the form takes that only in the
+  // fields nobody has edited, so what changed elsewhere isn't written back either.
   const {
     data: eventData,
+    dataUpdatedAt,
     isFetching: isFetchingEvent,
     isFetchedAfterMount,
     error: eventError,
@@ -79,10 +71,13 @@ function EventEditModalContent({
       enabled: !!eventId,
       ...QUERY_OPTIONS.dynamic,
       refetchOnMount: "always",
-      refetchOnWindowFocus: false,
     },
   );
   const isLoadingEvent = isFetchingEvent && !isFetchedAfterMount;
+  const [openedAt] = React.useState(Date.now);
+  // Once this opening has read the event, the form can be showing edits, and a read that
+  // fails after that keeps the event it has. Replacing the form would lose them.
+  const hasReadEvent = dataUpdatedAt >= openedAt;
 
   const { isLoading: isLoadingServers } = trpc.servers.getAll.useQuery(
     { limit: 100 },
@@ -94,7 +89,7 @@ function EventEditModalContent({
   // Handle error from event query, once this opening's read has finished: an earlier
   // opening's error stays on the query until a read succeeds.
   React.useEffect(() => {
-    if (eventError && !isLoadingEvent) {
+    if (eventError && !isLoadingEvent && !hasReadEvent) {
       toast({
         title: "Error",
         description:
@@ -102,7 +97,7 @@ function EventEditModalContent({
         variant: "destructive",
       });
     }
-  }, [eventError, isLoadingEvent]);
+  }, [eventError, isLoadingEvent, hasReadEvent]);
 
   if (isLoading) {
     return (
@@ -114,7 +109,7 @@ function EventEditModalContent({
   }
 
   // A copy from before the failed read may still be cached. It's not one to offer to save.
-  if (eventError || !eventData) {
+  if ((eventError && !hasReadEvent) || !eventData) {
     return (
       <div className="py-8 text-center">
         <p className="text-muted-foreground mb-4">

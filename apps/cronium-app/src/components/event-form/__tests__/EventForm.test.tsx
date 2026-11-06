@@ -1412,6 +1412,19 @@ describe("EventForm", () => {
         ).toBeInTheDocument();
         expect(rowNames()).toEqual(["location-local", "server-6"]);
       });
+
+      it("doesn't carry what was typed over to a different event", async () => {
+        const { again } = renderWithRerender();
+        fireEvent.change(screen.getByLabelText("Event Name"), {
+          target: { value: "typed for event 5" },
+        });
+
+        again(eventOn([sandbox], { id: 6, name: "event six" }));
+
+        expect(await screen.findByLabelText("Event Name")).toHaveValue(
+          "event six",
+        );
+      });
     });
 
     it("shows no extra rows when creating an event", () => {

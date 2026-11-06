@@ -13,9 +13,9 @@
  */
 import http from "http";
 import https from "https";
-import { lookup as dnsLookup } from "dns/promises";
 import net from "net";
 import axios from "axios";
+import { resolveHost } from "@/lib/resolve-host";
 import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
 
 /**
@@ -32,6 +32,8 @@ import { isDisallowedIp, SsrfBlockedError } from "@/lib/tools/safe-fetch";
  *
  * Every resolved address is checked, including ones the family filter would drop,
  * so a host cannot pass by publishing one public record next to an internal one.
+ * `resolveHost` asks for each family separately and fails if either query fails, so
+ * this always sees both.
  */
 export const guardedLookup: net.LookupFunction = (
   hostname,
@@ -46,7 +48,7 @@ export const guardedLookup: net.LookupFunction = (
         ? 6
         : (options?.family ?? 0);
 
-  dnsLookup(hostname, { all: true })
+  resolveHost(hostname)
     .then((addresses) => {
       for (const { address } of addresses) {
         if (isDisallowedIp(address)) {
@@ -127,7 +129,7 @@ export async function assertUrlResolvesPublic(rawUrl: string): Promise<void> {
   const host = hostname.replace(/^\[|\]$/g, "");
   if (net.isIP(host)) return;
 
-  const addresses = await dnsLookup(host, { all: true }).catch(() => []);
+  const addresses = await resolveHost(host).catch(() => []);
   const internal = addresses.find(({ address }) => isDisallowedIp(address));
   if (internal) {
     throw new SsrfBlockedError(
