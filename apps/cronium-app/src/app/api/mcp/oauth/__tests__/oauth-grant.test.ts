@@ -14,6 +14,9 @@ jest.mock("@/lib/mcp-oauth/store", () => ({
     store.set(`code:${code}`, data);
     return Promise.resolve();
   }),
+  peekAuthCode: jest.fn((code: string) =>
+    Promise.resolve(store.get(`code:${code}`) ?? null),
+  ),
   takeAuthCode: jest.fn((code: string) => {
     const data = store.get(`code:${code}`) ?? null;
     store.delete(`code:${code}`);
@@ -23,6 +26,9 @@ jest.mock("@/lib/mcp-oauth/store", () => ({
     store.set(`rt:${jti}`, data);
     return Promise.resolve();
   }),
+  peekRefresh: jest.fn((jti: string) =>
+    Promise.resolve(store.get(`rt:${jti}`) ?? null),
+  ),
   consumeRefresh: jest.fn((jti: string) => {
     const data = store.get(`rt:${jti}`) ?? null;
     store.delete(`rt:${jti}`);
