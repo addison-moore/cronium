@@ -35,7 +35,9 @@ export function Pagination({
   }
 
   return (
-    <div className={`flex items-center justify-between ${className}`}>
+    <div
+      className={`flex flex-wrap items-center justify-between gap-y-2 ${className}`}
+    >
       <div className="text-muted-foreground mr-2 text-sm">
         Showing {startItem} to {endItem} of {totalItems}
       </div>
