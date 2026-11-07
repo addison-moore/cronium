@@ -39,7 +39,8 @@ export function TableSkeleton({
 
   return (
     <div className="w-full">
-      <div className="border-border rounded-md border">
+      {/* The header's bars can't shrink, and at phone width they'd widen the page */}
+      <div className="border-border overflow-hidden rounded-md border">
         {showHeader && (
           <div className="border-border bg-muted/50 border-b">
             <div className="flex items-center p-4">
@@ -114,7 +115,7 @@ export function EventsTableSkeleton() {
         />
 
         {/* Pagination skeleton */}
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">
               Items per page:
