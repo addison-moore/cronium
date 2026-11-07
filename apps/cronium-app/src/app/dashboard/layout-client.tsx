@@ -149,7 +149,6 @@ export default function DashboardLayoutClient({
 
   return (
     <div className="bg-background text-foreground min-h-screen">
-      <SchedulerStatusBanner />
       {/* Mobile Navigation Toggle */}
       <div className="bg-secondary-bg border-border fixed top-0 right-0 left-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm md:hidden">
         <Link href="/dashboard">
@@ -411,6 +410,8 @@ export default function DashboardLayoutClient({
       <div
         className={`${isSidebarOpen ? "md:pl-64" : "md:pl-16"} bg-background min-h-screen pt-16 transition-all duration-300 md:pt-0`}
       >
+        {/* In this column, clear of the fixed header and sidebar, so it can't cover them */}
+        <SchedulerStatusBanner />
         <main className="text-foreground p-4">{children}</main>
       </div>
     </div>

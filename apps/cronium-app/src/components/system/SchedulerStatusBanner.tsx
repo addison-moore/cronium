@@ -50,7 +50,7 @@ export function SchedulerStatusBanner() {
   return (
     <div
       role="alert"
-      className="relative z-40 flex items-center justify-center gap-2 bg-red-600 px-4 py-2 text-sm font-medium text-white"
+      className="flex items-center justify-center gap-2 bg-red-600 px-4 py-2 text-sm font-medium text-white"
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <span>
