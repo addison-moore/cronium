@@ -43,7 +43,6 @@ jest.mock("fs", () => {
 jest.mock("@/server/db", () => ({ db: {} }));
 jest.mock("../../env.mjs", () => ({ env: {} }));
 
-import crypto from "crypto";
 import fs from "fs";
 import mysql from "mysql2";
 import net from "net";
@@ -56,6 +55,7 @@ import { buildSmtpTransport } from "../email";
 import { SSHService } from "../ssh";
 import type { SSHConnectionScope } from "../ssh/pool-key";
 import { NEVER, startNameServer } from "./helpers/fake-name-server";
+import { whileEveryThreadIsHeld } from "./helpers/hold-thread-pool";
 import type { FakeNameServer } from "./helpers/fake-name-server";
 import { TEST_TLS_CERT, TEST_TLS_KEY } from "./helpers/test-tls-identity";
 import { findDocuments } from "@/tools/plugins/mongodb/client";
@@ -555,28 +555,6 @@ async function until(what: string, condition: () => boolean, within = 10_000) {
   }
 }
 
-const pbkdf2 = (iterations: number) =>
-  new Promise<void>((resolve, reject) => {
-    crypto.pbkdf2("x", "y", iterations, 32, "sha512", (error) =>
-      error ? reject(error) : resolve(),
-    );
-  });
-
-/** Runs `work` with every thread in the pool busy. It returns what got done before one came free. */
-async function whileEveryThreadIsBusy(
-  work: (done: (what: string) => void) => Promise<unknown>,
-) {
-  const order: string[] = [];
-  const threads = Number(process.env.UV_THREADPOOL_SIZE ?? 4);
-  const busy = Array.from({ length: threads }, () => pbkdf2(3_000_000));
-  // Can't start until a thread is free, so it marks the first moment one is.
-  const queuedBehindThem = pbkdf2(1).then(() => order.push("a thread"));
-  const worked = work((what) => order.push(what));
-  await Promise.all([...busy, queuedBehindThem]);
-  await worked;
-  return order.slice(0, order.indexOf("a thread"));
-}
-
 describe.each(CLIENTS)("$client", ({ start, attempt, speaksTheProtocol }) => {
   it("connects by a name the name server knows", async () => {
     const server = await start();
@@ -676,7 +654,7 @@ describe("with every thread in libuv's pool busy", () => {
       nameServer.zone.set(`${client.toLowerCase()}.test`, { A: [LOOPBACK] }),
     );
 
-    const reached = await whileEveryThreadIsBusy((done) => {
+    const reached = await whileEveryThreadIsHeld((done) => {
       const attempts = CLIENTS.map(({ client, attempt }, index) =>
         attempt(`${client.toLowerCase()}.test`, started[index]!.port),
       );
@@ -686,7 +664,7 @@ describe("with every thread in libuv's pool busy", () => {
         });
       }, 5);
       return Promise.all(attempts).finally(() => clearInterval(watch));
-    });
+    }, CLIENTS.length);
 
     expect([...new Set(reached)].sort()).toEqual(
       CLIENTS.map(({ client }) => client).sort(),
@@ -698,12 +676,12 @@ describe("with every thread in libuv's pool busy", () => {
     // then hang on purpose. So asking c-ares first, as nodemailer does, isn't enough.
     nameServer.zone.set("empty.test", {});
 
-    const finished = await whileEveryThreadIsBusy(async (done) => {
+    const finished = await whileEveryThreadIsHeld(async (done) => {
       await expect(smtpTransport("empty.test", 25).verify()).rejects.toThrow(
         "getaddrinfo ENOTFOUND empty.test",
       );
       done("the test");
-    });
+    }, 1);
 
     expect(finished).toEqual(["the test"]);
   });

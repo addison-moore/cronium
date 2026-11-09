@@ -38,7 +38,6 @@ jest.mock("fs", () => {
   };
 });
 
-import crypto from "crypto";
 import type { LookupAddress } from "dns";
 import { lookupWithSearch, resolveHostWithSearch } from "../resolve-host";
 import {
@@ -46,6 +45,7 @@ import {
   startNameServer,
   type FakeNameServer,
 } from "./helpers/fake-name-server";
+import { whileEveryThreadIsHeld } from "./helpers/hold-thread-pool";
 
 // jest-circus only reads a global testTimeout, and the default of 5 seconds is less than a
 // name server that never answers takes to give up on.
@@ -409,28 +409,16 @@ describe("resolveHostWithSearch", () => {
   });
 
   describe("and libuv's thread pool", () => {
-    const pbkdf2 = (iterations: number) =>
-      new Promise<void>((resolve, reject) => {
-        crypto.pbkdf2("x", "y", iterations, 32, "sha512", (error) =>
-          error ? reject(error) : resolve(),
-        );
-      });
-
     it("searches while every thread is busy", async () => {
       mockResolvConf = KUBERNETES;
       nameServer.zone.set("db.cluster.local", { A: [IP] });
-      const order: string[] = [];
 
-      const threads = Number(process.env.UV_THREADPOOL_SIZE ?? 4);
-      const busy = Array.from({ length: threads }, () => pbkdf2(2_000_000));
-      // Can't start until a thread is free, so it marks the first moment one is.
-      const queuedBehindThem = pbkdf2(1).then(() => order.push("pool work"));
+      const finished = await whileEveryThreadIsHeld(async (done) => {
+        await expect(resolveHostWithSearch("db")).resolves.toEqual([v4(IP)]);
+        done("the lookup");
+      }, 1);
 
-      await resolveHostWithSearch("db");
-      order.push("lookup");
-
-      await Promise.all([...busy, queuedBehindThem]);
-      expect(order).toEqual(["lookup", "pool work"]);
+      expect(finished).toEqual(["the lookup"]);
     });
 
     it("answers for one host however many others never get an answer", async () => {
