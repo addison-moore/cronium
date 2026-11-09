@@ -62,6 +62,7 @@ Cronium uses a selective caching strategy focused on performance optimization fo
 
 - **Connection**: Configured via `VALKEY_URL` or `REDIS_URL` environment variable
 - **Failover**: System operates normally if cache is unavailable (fail-open)
+- **Time limit**: A command Valkey hasn't answered in 2 seconds fails, and the connection it was sent on is closed (`VALKEY_ANSWER_LIMITS` in `src/lib/valkey-answer-limit.ts`). A paused or cut-off Valkey keeps the connection open and never answers, so without this every signed-in request waited on it. The cache counts as unavailable until a new connection is ready: the first requests wait 2 seconds and the rest don't wait. The atomic limiter for sign-in, MFA and MCP client registration uses the same limit and refuses instead (fail-closed)
 - **Monitoring**: Cache statistics available via `cacheService.getStats()`
 
 ### Cache Prefixes
