@@ -73,6 +73,18 @@ export function isQueryFailure(error: unknown): boolean {
 }
 
 /**
+ * Whether Postgres answered that a statement failed. Outside a transaction that means
+ * none of it stayed, which no other failure of a write can say: with no answer, it may
+ * have committed and only the reply been lost. A FATAL is Postgres's own word too, but
+ * it's about the connection rather than the statement, so it doesn't count here. A
+ * server whose `lc_messages` isn't English words its severities differently, and this
+ * answers false there.
+ */
+export function refusedByPostgres(error: unknown): boolean {
+  return driverError(error).severity === "ERROR";
+}
+
+/**
  * An error's message, for a place that sends it back to whoever called. Most of them
  * are written for that person, such as a refusal or what an SMTP server said, so they
  * stay. A failed query's is the SQL and every bound value, so that becomes a fixed line,
