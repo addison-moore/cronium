@@ -231,6 +231,20 @@ describe("Enable TLS, on a server that doesn't offer STARTTLS", () => {
     expect((tested as Error).message).toBe(REFUSED);
   });
 
+  it("stops the event form's Check Login of a credential without the box", async () => {
+    server = await mailServer({ startTls: "unoffered" });
+
+    const checked = await send
+      .execute(credentialsFor(server.port, {}), params, {
+        ...context,
+        isTest: true,
+      })
+      .catch((e: Error) => e);
+
+    expect(server.verbs()).toEqual(["EHLO", "STARTTLS"]);
+    expect((checked as Error).message).toBe(REFUSED);
+  });
+
   // The scheduler runs an action inside a retry executor that puts the message in its
   // own, then picks a run's first line by the text. The server's 502 used to make that
   // "Service unavailable".
