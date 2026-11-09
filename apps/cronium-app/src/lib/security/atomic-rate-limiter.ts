@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { VALKEY_ANSWER_LIMITS } from "@/lib/valkey-answer-limit";
 import { describeFailure } from "@/lib/pg-errors";
 
 /**
@@ -48,6 +49,9 @@ function newClient(url: string): RedisClient {
     lazyConnect: true,
     enableReadyCheck: true,
     maxRetriesPerRequest: 1,
+    // A Valkey that stops answering then means a refusal within VALKEY_ANSWER_MS, as
+    // this fails closed, rather than every sign-in and MFA check waiting until it answers.
+    ...VALKEY_ANSWER_LIMITS,
   });
   client.on("error", (error) => {
     console.error(
