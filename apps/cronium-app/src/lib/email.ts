@@ -28,6 +28,8 @@ interface SmtpCredentials {
   fromName: string;
   // Explicit TLS-on-connect override; defaults to port === 465
   secure?: boolean;
+  // Sign in and send only over TLS: an Email credential's Enable TLS
+  requireTls?: boolean;
   // Accept self-signed certificates (private SMTP servers)
   allowSelfSigned?: boolean;
 }
@@ -37,6 +39,51 @@ export interface EmailSendResult {
   messageId: string;
   accepted: string[];
   rejected: string[];
+}
+
+/**
+ * A server that answered STARTTLS with a refusal when the settings require TLS: one
+ * without TLS does, and so can someone between here and the server. nodemailer says
+ * "Error upgrading connection with STARTTLS: 502 ...", which doesn't say what to change,
+ * and a run's error categorizer read the SMTP 502 as an HTTP one.
+ */
+export class StartTlsRefusedError extends Error {
+  constructor(host: string, response: string, cause: unknown) {
+    super(
+      `${host} didn't switch to TLS when asked (STARTTLS), so Cronium didn't sign in or send anything. ` +
+        "To use this server without encryption, untick Enable TLS on this credential. " +
+        `The server answered: ${response}`,
+      { cause },
+    );
+    this.name = "StartTlsRefusedError";
+  }
+}
+
+/**
+ * Explains nodemailer's error for a refused STARTTLS, and passes anything else on as it
+ * was. Only when TLS was required: a server can also list STARTTLS and then refuse it,
+ * and with Enable TLS unticked the box isn't why that failed. A failed TLS handshake,
+ * such as a certificate the send won't take, has no answer from the server and keeps
+ * nodemailer's own message. A session has a host by the time it fails, but a caller's
+ * settings may not say so to the compiler.
+ */
+export function explainRefusedStartTls(
+  error: unknown,
+  smtp: { host?: string | undefined; requireTls?: boolean | undefined },
+): unknown {
+  if (!smtp.requireTls || typeof error !== "object" || error === null) {
+    return error;
+  }
+  const { code, command, response } = error as Record<string, unknown>;
+  return code === "ETLS" &&
+    command === "STARTTLS" &&
+    typeof response === "string"
+    ? new StartTlsRefusedError(
+        smtp.host ?? "The mail server",
+        response.trim(),
+        error,
+      )
+    : error;
 }
 
 // Get SMTP settings from database. Throws UnreadableSettingError if the saved
@@ -81,12 +128,18 @@ export function buildSmtpTransport(opts: {
   user: string;
   password: string;
   secure?: boolean | undefined;
+  // Without this, nodemailer uses STARTTLS only when the server lists it, so a server
+  // without TLS, or someone who removes it from the list, gets the login and the message
+  // in plaintext. With it, STARTTLS is asked for regardless, and a refusal or a failed
+  // upgrade stops the session before AUTH. A `secure` connection is TLS already.
+  requireTls?: boolean | undefined;
   allowSelfSigned?: boolean | undefined;
 }) {
   return nodemailer.createTransport({
     host: opts.host,
     port: opts.port,
     secure: opts.secure ?? opts.port === 465, // true for 465, false otherwise
+    ...(opts.requireTls ? { requireTLS: true } : {}),
     auth: { user: opts.user, pass: opts.password },
     // Bound every phase so a scheduled execution can't hang: connect and
     // greeting were bounded, but a stall after the greeting (mid-send) could
@@ -133,17 +186,25 @@ export async function sendEmailDetailed(
     user: smtp.user,
     password: smtp.password,
     secure: customSmtp?.secure,
+    requireTls: customSmtp?.requireTls,
     allowSelfSigned: customSmtp?.allowSelfSigned,
   });
 
   // Send mail
-  const info = await transporter.sendMail({
-    from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
-    to: message.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  const info = await transporter
+    .sendMail({
+      from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    })
+    .catch((error: unknown) => {
+      throw explainRefusedStartTls(error, {
+        host: smtp.host,
+        requireTls: customSmtp?.requireTls,
+      });
+    });
 
   console.log("Email sent:", info.messageId);
   return {

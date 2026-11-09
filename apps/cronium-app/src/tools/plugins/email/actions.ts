@@ -133,6 +133,8 @@ export const emailActions: ToolAction[] = [
           fromEmail: emailCreds.fromEmail,
           fromName: emailCreds.fromName ?? "Cronium",
           secure: emailCreds.enableSSL,
+          // The schema reads a missing box as ticked.
+          requireTls: emailCreds.enableTLS,
         },
       );
 
