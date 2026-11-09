@@ -255,6 +255,9 @@ const NO_WHOLE_ANSWER = {
   },
   rest_not_in_time: partOfAnAnswer(200, held),
 };
+// Looked up in a Map, so that a token can only pick one of these, and never anything an object
+// inherits.
+const NO_WHOLE_ANSWER_BY_TOKEN = new Map(Object.entries(NO_WHOLE_ANSWER));
 
 /**
  * Causes that mean nothing was sent, as fetch really reported them, on Node 18, 22 and 24 on macOS
@@ -399,8 +402,9 @@ before(async () => {
       }
       const auth = req.headers.authorization ?? "";
       const token = auth.replace("Bearer ", "");
-      if (NO_WHOLE_ANSWER[token]) {
-        NO_WHOLE_ANSWER[token](res);
+      const noWholeAnswer = NO_WHOLE_ANSWER_BY_TOKEN.get(token);
+      if (typeof noWholeAnswer === "function") {
+        noWholeAnswer(res);
         return;
       }
       const canned =
