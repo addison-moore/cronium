@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useLayoutEffect, useMemo } from "react";
+import React, {
+  useId,
+  useState,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { Input } from "@cronium/ui";
@@ -9,6 +15,7 @@ import { Badge } from "@cronium/ui";
 import { Alert, AlertDescription } from "@cronium/ui";
 import { Separator } from "@cronium/ui";
 import { Spinner } from "@cronium/ui";
+import { ConfirmationDialog } from "@cronium/ui";
 import {
   Select,
   SelectContent,
@@ -17,6 +24,7 @@ import {
   SelectValue,
 } from "@cronium/ui";
 import { trpc } from "@/lib/trpc";
+import { trpcErrorMessage } from "@/trpc/shared";
 import {
   Search,
   Zap,
@@ -27,6 +35,7 @@ import {
   Users,
   FileText,
   AlertCircle,
+  Play,
   TestTube,
   Info,
   X,
@@ -34,6 +43,7 @@ import {
 import { useToast } from "@cronium/ui";
 import { type Tool } from "@/shared/schema";
 import {
+  type ActionTestRun,
   type ToolAction,
   type ToolPlugin,
   ToolPluginRegistry,
@@ -108,6 +118,53 @@ const getActionTypeColor = (action: ToolAction): string => {
   );
 };
 
+// What the button does comes from what the action declares, because `isTest` only stops
+// an action that reads it. Most really run: a Slack message posts, a delete deletes.
+const runButtonLabel = (action: ToolAction): string =>
+  action.testRun.kind === "simulated" ? "Simulate" : `${action.name} Now`;
+
+// A run that changes nothing needs no question: a simulation contacts nothing, and a read
+// can't write.
+const asksBeforeRunning = ({ kind }: ActionTestRun): boolean =>
+  kind === "sends" || kind === "spends" || kind === "writes";
+
+const RUN_SUCCEEDED_TITLE: Record<ActionTestRun["kind"], string> = {
+  simulated: "Simulated",
+  reads: "Done",
+  sends: "Sent",
+  spends: "Done",
+  writes: "Done",
+};
+
+const runFailedTitle = (action: ToolAction): string =>
+  action.testRun.kind === "simulated"
+    ? "Simulation failed"
+    : `${action.name} failed`;
+
+const firstTemplateValue = (value: unknown): string | undefined => {
+  if (typeof value === "string") return /\{\{[^{}]+\}\}/.exec(value)?.[0];
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = firstTemplateValue(nested);
+      if (found) return found;
+    }
+  }
+  return undefined;
+};
+
+// A scheduled run fills these in, and this one doesn't, so a real run from the form sends
+// them with the braces. A simulation sends nothing, so there's nothing to say.
+const templateValueNote = (
+  action: ToolAction,
+  parameters: Record<string, unknown>,
+): string | undefined => {
+  if (action.testRun.kind === "simulated") return undefined;
+  const value = firstTemplateValue(parameters);
+  return value
+    ? `Template values such as ${value} aren't filled in here: they go as written.`
+    : undefined;
+};
+
 // What a stored config's tool and action are called. A row can name ones no plugin has
 // now, or leave the tool out: only the form writes whole ones, and the API takes any JSON.
 const storedConfigNames = (
@@ -143,7 +200,8 @@ export default function ToolActionSection({
   const [selectedPlugin, setSelectedPlugin] = useState<ToolPlugin | null>(null);
   const [selectedAction, setSelectedAction] = useState<ToolAction | null>(null);
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
-  const [isTestingAction, setIsTestingAction] = useState(false);
+  const [askingToRun, setAskingToRun] = useState(false);
+  const runExplanationId = useId();
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     null,
   );
@@ -373,38 +431,68 @@ export default function ToolActionSection({
     }
   };
 
-  // Test action
-  const testActionMutation = trpc.tools.executeAction.useMutation({
-    onSuccess: (result) => {
+  // The answer is about the action that was pressed, and another can be chosen meanwhile.
+  const pressedAction = useRef<ToolAction | null>(null);
+
+  const runActionMutation = trpc.tools.executeAction.useMutation({
+    onSuccess: (answer) => {
+      const action = pressedAction.current;
+      if (!action) return;
+      if (!answer.success) {
+        toast({
+          title: runFailedTitle(action),
+          description: answer.error,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: "Test Successful",
-        description: "Action executed successfully in test mode",
+        title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
+        description: action.testRun.succeeded(answer.result),
       });
-      console.log("Test result:", result);
+      console.log("Tool action result:", answer.result);
     },
     onError: (error) => {
+      const action = pressedAction.current;
+      if (!action) return;
+      const message = trpcErrorMessage(error, "The server gave no reason.");
+      // The server only says no before running anything. With no answer, or a broken one,
+      // nobody here can tell, and a proxy can give up on a run that goes on without it.
+      const refused = (error.data?.httpStatus ?? 500) < 500;
       toast({
-        title: "Test Failed",
-        description: error.message,
+        title: runFailedTitle(action),
+        description:
+          refused || !asksBeforeRunning(action.testRun)
+            ? message
+            : `${message} It may still have run.`,
         variant: "destructive",
       });
     },
-    onSettled: () => {
-      setIsTestingAction(false);
-    },
   });
 
-  const handleTestAction = () => {
+  const runAction = () => {
     if (!selectedTool || !selectedAction) return;
 
-    setIsTestingAction(true);
-    testActionMutation.mutate({
+    pressedAction.current = selectedAction;
+    runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
       parameters,
       isTest: true,
     });
   };
+
+  const handleRunPressed = () => {
+    if (selectedAction && asksBeforeRunning(selectedAction.testRun)) {
+      setAskingToRun(true);
+    } else {
+      runAction();
+    }
+  };
+
+  const runNote = selectedAction
+    ? templateValueNote(selectedAction, parameters)
+    : undefined;
 
   // Clear selection
   const handleClearSelection = () => {
@@ -910,25 +998,63 @@ export default function ToolActionSection({
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label>Configure Parameters</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleTestAction}
-                      disabled={isTestingAction}
-                      className="flex items-center gap-2"
-                    >
-                      <TestTube
-                        className={cn(
-                          "h-4 w-4",
-                          isTestingAction && "motion-safe:animate-spin",
+                  <div className="space-y-2">
+                    {/* The button names the action, which can be too long to fit beside this. */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                      <Label>Configure Parameters</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRunPressed}
+                        disabled={runActionMutation.isPending}
+                        aria-describedby={runExplanationId}
+                        className="ml-auto flex items-center gap-2"
+                      >
+                        {runActionMutation.isPending ? (
+                          <Spinner size="sm" />
+                        ) : selectedAction.testRun.kind === "simulated" ? (
+                          <TestTube className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
                         )}
-                      />
-                      Test Action
-                    </Button>
+                        {runButtonLabel(selectedAction)}
+                      </Button>
+                    </div>
+                    <div
+                      id={runExplanationId}
+                      className={cn(
+                        "text-right text-sm",
+                        asksBeforeRunning(selectedAction.testRun)
+                          ? "text-warning-text"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <p>{selectedAction.testRun.explains}</p>
+                      {runNote && <p>{runNote}</p>}
+                    </div>
                   </div>
+
+                  {/* Portaled out of the form, so its buttons can't submit it. */}
+                  <ConfirmationDialog
+                    open={askingToRun}
+                    onOpenChange={setAskingToRun}
+                    title={`${selectedAction.name} now?`}
+                    description={[
+                      selectedAction.testRun.explains,
+                      `It uses the credential ${selectedTool.name}.`,
+                      runNote,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    confirmText={selectedAction.name}
+                    confirmVariant={
+                      selectedAction.testRun.kind === "writes"
+                        ? "destructive"
+                        : "default"
+                    }
+                    onConfirm={runAction}
+                  />
 
                   <ActionParameterForm
                     action={selectedAction}
