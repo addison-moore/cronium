@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -20,9 +20,9 @@ import WorkflowForm, {
 } from "@/components/workflows/WorkflowForm";
 import type { Node, Edge } from "@xyflow/react";
 import { trpc } from "@/lib/trpc";
+import type { RouterOutputs } from "@/trpc/shared";
 import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
 import {
-  type CanvasGraph,
   isSameGraph,
   toCanvasGraph,
 } from "@/components/workflows/lib/stored-graph";
@@ -34,7 +34,9 @@ const copy = {
   saveWorkflow: "Save Workflow",
 } as const;
 
-// type WorkflowData = RouterOutputs["workflows"]["getById"]; // Removed unused type
+type StoredWorkflow = NonNullable<
+  RouterOutputs["workflows"]["getById"]["data"]
+>;
 
 // Define a more explicit type for the form that handles exact optional properties
 interface WorkflowFormData {
@@ -70,31 +72,33 @@ const workflowFormSchema = z.object({
   overrideServerIds: z.array(z.number()),
 }) satisfies z.ZodType<WorkflowFormData>;
 
+/**
+ * The form's values for what's stored. The form compares this by value with what it
+ * last had, and a difference resets the fields nobody has edited, so the same workflow
+ * must always give the same values.
+ */
+function toFormData(workflow: StoredWorkflow): WorkflowFormData {
+  return {
+    name: workflow.name,
+    description: workflow.description ?? "",
+    tags: (workflow.tags ?? []) as string[],
+    triggerType: workflow.triggerType,
+    runLocation: workflow.runLocation,
+    status: workflow.status,
+    scheduleNumber: workflow.scheduleNumber,
+    scheduleUnit: workflow.scheduleUnit,
+    customSchedule: workflow.customSchedule,
+    useCronScheduling: !!workflow.customSchedule,
+    shared: workflow.shared ?? false,
+    overrideEventServers: workflow.overrideEventServers ?? false,
+    overrideServerIds: (workflow.overrideServerIds ?? []) as number[],
+  };
+}
+
 export default function EditWorkflowPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const workflowId = params?.id ? parseInt(params.id) : NaN;
-
-  const [isLoading, setIsLoading] = useState(false);
-
-  const form = useForm<WorkflowFormData>({
-    resolver: zodResolver(workflowFormSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      tags: [],
-      triggerType: WorkflowTriggerType.MANUAL,
-      runLocation: RunLocation.LOCAL,
-      status: EventStatus.DRAFT,
-      scheduleNumber: null,
-      scheduleUnit: null,
-      customSchedule: null,
-      useCronScheduling: false,
-      shared: false,
-      overrideEventServers: false,
-      overrideServerIds: [],
-    },
-  });
 
   // Use tRPC query to fetch workflow data
   const {
@@ -140,13 +144,82 @@ export default function EditWorkflowPage() {
     }
   }, [workflowError, router, toast]);
 
-  // The graph the form starts from. The form copies it once, as it mounts, so it has to
-  // be here by then, and a refetch mustn't change it under the form: a save compares
-  // the canvas against it, and only sends the graph if the canvas changed it.
-  const startingGraph = useRef<CanvasGraph | null>(null);
-  if (startingGraph.current === null && workflowData?.data) {
-    startingGraph.current = toCanvasGraph(workflowData.data);
+  if (loadingWorkflow) {
+    return <DetailPageSkeleton withSidebar={false} />;
   }
+
+  const workflow = workflowData?.data;
+  if (!workflow) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Workflow not found</p>
+          <Button
+            onClick={() => router.push(`/dashboard/workflows/${workflowId}`)}
+            className="mt-4"
+          >
+            {copy.backToWorkflows}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-background min-h-screen">
+      <PageShell>
+        <div className="mb-6 flex items-center">
+          <Button variant="ghost" size="sm" asChild className="mr-4">
+            <Link href="/dashboard/workflows">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              {copy.backToWorkflows}
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold">{copy.editWorkflow}</h1>
+            <p className="text-muted-foreground mt-1">
+              Update your workflow configuration and design
+            </p>
+          </div>
+        </div>
+
+        {/* One form per workflow: what's typed belongs to the workflow it was typed for. */}
+        <EditWorkflowForm key={workflow.id} workflow={workflow} />
+      </PageShell>
+    </div>
+  );
+}
+
+/**
+ * The form, made only once the workflow is here, so it starts from what's stored: a
+ * field showing the form's own starting value, such as Draft for the status, while the
+ * form holds the workflow's, misleads whoever saves.
+ */
+function EditWorkflowForm({ workflow }: { workflow: StoredWorkflow }) {
+  const router = useRouter();
+  const workflowId = workflow.id;
+  const [isLoading, setIsLoading] = useState(false);
+
+  // What's stored, compared by value. Every read of the workflow is a new object, a
+  // refocus's included, because superjson's Dates defeat React Query's structural
+  // sharing. When a stored value really has changed, a field nobody has edited takes
+  // it and an edited one keeps what was typed, so a save neither loses what was typed
+  // nor writes back the old value of something changed elsewhere.
+  const storedValues = useMemo(() => toFormData(workflow), [workflow]);
+  const form = useForm<WorkflowFormData>({
+    resolver: zodResolver(workflowFormSchema),
+    values: storedValues,
+    resetOptions: {
+      keepDirtyValues: true,
+      keepErrors: true,
+      keepIsSubmitted: true,
+    },
+  });
+
+  // The graph the form starts from. The form copies it once, as it mounts, and a later
+  // read mustn't change it under the form: a save compares the canvas against it, and
+  // only sends the graph if the canvas changed it.
+  const [startingGraph] = useState(() => toCanvasGraph(workflow));
 
   // Use tRPC mutation to update workflow
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
@@ -245,11 +318,8 @@ export default function EditWorkflowPage() {
       }));
 
       // A graph that's sent replaces every node and connection with new ones, which a
-      // running workflow can't follow, so it goes only when the canvas changed it. A
-      // form that never had the workflow's graph never sends one.
-      const graphChanged =
-        startingGraph.current !== null &&
-        !isSameGraph(startingGraph.current, { nodes, edges });
+      // running workflow can't follow, so it goes only when the canvas changed it.
+      const graphChanged = !isSameGraph(startingGraph, { nodes, edges });
 
       await updateWorkflowMutation.mutateAsync({
         id: workflowId,
@@ -266,104 +336,38 @@ export default function EditWorkflowPage() {
     }
   };
 
-  // Update form when workflow data is loaded
-  useEffect(() => {
-    if (workflowData && !loadingWorkflow) {
-      const workflowDetails = workflowData.data;
-      if (!workflowDetails) return;
-
-      const formData: WorkflowFormData = {
-        name: workflowDetails.name,
-        description: workflowDetails.description ?? "",
-        tags: (workflowDetails.tags ?? []) as string[],
-        triggerType: workflowDetails.triggerType,
-        runLocation: workflowDetails.runLocation,
-        status: workflowDetails.status,
-        scheduleNumber: workflowDetails.scheduleNumber,
-        scheduleUnit: workflowDetails.scheduleUnit,
-        customSchedule: workflowDetails.customSchedule,
-        useCronScheduling: !!workflowDetails.customSchedule,
-        shared: workflowDetails.shared ?? false,
-        overrideEventServers: workflowDetails.overrideEventServers ?? false,
-        overrideServerIds: (workflowDetails.overrideServerIds ??
-          []) as number[],
-      };
-      form.reset(formData);
-    }
-  }, [workflowData, loadingWorkflow, form]);
-
-  if (loadingWorkflow) {
-    return <DetailPageSkeleton withSidebar={false} />;
-  }
-
-  const graph = startingGraph.current;
-  if (!workflowData || !graph) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Workflow not found</p>
-          <Button
-            onClick={() => router.push(`/dashboard/workflows/${workflowId}`)}
-            className="mt-4"
-          >
-            {copy.backToWorkflows}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-background min-h-screen">
-      <PageShell>
-        <div className="mb-6 flex items-center">
-          <Button variant="ghost" size="sm" asChild className="mr-4">
-            <Link href="/dashboard/workflows">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              {copy.backToWorkflows}
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-semibold">{copy.editWorkflow}</h1>
-            <p className="text-muted-foreground mt-1">
-              Update your workflow configuration and design
-            </p>
-          </div>
-        </div>
-
-        <WorkflowForm
-          form={form as never}
-          onSubmit={async (
-            values: WorkflowFormValues,
-            nodes: Node[],
-            edges: Edge[],
-          ) => {
-            // Convert WorkflowFormValues back to WorkflowFormData format for our handler
-            const formData: WorkflowFormData = {
-              name: values.name,
-              description: values.description ?? "",
-              tags: values.tags ?? [],
-              triggerType: values.triggerType,
-              runLocation: values.runLocation,
-              status: values.status,
-              scheduleNumber: values.scheduleNumber ?? null,
-              scheduleUnit: values.scheduleUnit ?? null,
-              customSchedule: values.customSchedule ?? null,
-              useCronScheduling: values.useCronScheduling,
-              shared: values.shared,
-              overrideEventServers: values.overrideEventServers,
-              overrideServerIds: values.overrideServerIds,
-            };
-            return onSubmit(formData, nodes, edges);
-          }}
-          isLoading={isLoading}
-          submitButtonText={copy.saveWorkflow}
-          showActionsAtTop={true}
-          initialNodes={graph.nodes}
-          initialEdges={graph.edges}
-          workflowId={workflowId}
-        />
-      </PageShell>
-    </div>
+    <WorkflowForm
+      form={form as never}
+      onSubmit={async (
+        values: WorkflowFormValues,
+        nodes: Node[],
+        edges: Edge[],
+      ) => {
+        // Convert WorkflowFormValues back to WorkflowFormData format for our handler
+        const formData: WorkflowFormData = {
+          name: values.name,
+          description: values.description ?? "",
+          tags: values.tags ?? [],
+          triggerType: values.triggerType,
+          runLocation: values.runLocation,
+          status: values.status,
+          scheduleNumber: values.scheduleNumber ?? null,
+          scheduleUnit: values.scheduleUnit ?? null,
+          customSchedule: values.customSchedule ?? null,
+          useCronScheduling: values.useCronScheduling,
+          shared: values.shared,
+          overrideEventServers: values.overrideEventServers,
+          overrideServerIds: values.overrideServerIds,
+        };
+        return onSubmit(formData, nodes, edges);
+      }}
+      isLoading={isLoading}
+      submitButtonText={copy.saveWorkflow}
+      showActionsAtTop={true}
+      initialNodes={startingGraph.nodes}
+      initialEdges={startingGraph.edges}
+      workflowId={workflowId}
+    />
   );
 }
