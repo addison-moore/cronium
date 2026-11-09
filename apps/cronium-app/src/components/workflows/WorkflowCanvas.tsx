@@ -750,6 +750,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={undo}
@@ -771,6 +772,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={undoAllChanges}
@@ -797,6 +799,7 @@ export default function WorkflowCanvas({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              type="button"
                               onClick={onSave}
                               disabled={isSaving || !hasUnsavedChanges}
                               size="sm"
@@ -831,6 +834,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={deleteSelected}
@@ -874,6 +878,7 @@ export default function WorkflowCanvas({
                       <h3 className="font-medium">{copy.availableEvents}</h3>
                     )}
                     <Button
+                      type="button"
                       variant="ghost"
                       size="icon"
                       className="hover:bg-accent/50 h-6 w-6 transition-colors"
@@ -905,6 +910,7 @@ export default function WorkflowCanvas({
                         />
                         {searchQuery && (
                           <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             className="hover:bg-accent/50 absolute top-1/2 right-1 h-5 w-5 -translate-y-1/2 transform p-0"
