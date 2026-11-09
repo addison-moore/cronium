@@ -166,6 +166,18 @@ const toolSpecificPatterns: Record<string, typeof errorPatterns> = {
   ],
   email: [
     {
+      // lib/email.ts's StartTlsRefusedError. A run sees its message inside the retry
+      // wrapper's, so this goes by the text, and comes first because the server's
+      // answer is often a 502, which the general rules take for an HTTP one.
+      pattern: /didn't switch to TLS when asked \(STARTTLS\)/,
+      category: "configuration",
+      severity: "high",
+      retryable: false,
+      userMessage: "The mail server didn't switch to TLS",
+      suggestedAction:
+        "To send without encryption, untick Enable TLS on the Email credential",
+    },
+    {
       pattern: /invalid.*recipient|invalid.*email/i,
       category: "validation",
       severity: "low",
