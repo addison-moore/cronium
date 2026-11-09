@@ -252,6 +252,8 @@ Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its s
 
 **A request can't contain a NUL character or half of a surrogate pair,** because Postgres can't store either, and one that does gets a 400. NUL is `\u0000` in JSON, `%00` in a form, or a zero byte in plain text. Half of a pair is an escape such as `\ud83d` in JSON without the other half, as a string cut through the middle of an emoji can have. That goes for the event's name, and for keys as well as values. The `error` says which it found, and nothing is stored or sent.
 
+**A request's JSON can nest up to 256 levels deep,** and a deeper one gets a 400. Each array or object is a level, the outermost one included, so `{"items":[{"id":1}]}` is 3 levels deep. Some of what Cronium does with an event stops working at about 900 levels, so the limit keeps well clear of that. The `error` says how deep the request goes, and nothing is stored or sent.
+
 **A 503 means nothing happened. Send the same event again after the `Retry-After`, under the same `X-Webhook-Delivery-Id`.** Its `error` says why. Either Cronium's delivery queue is full, as described in [When the queue is full](#when-the-queue-is-full), and a sender's other requests can be refused for the same reason until the receivers behind this endpoint catch up, so keep events you've been told to send again rather than dropping them. Or Cronium can't check delivery ids, as described below.
 
 **Keep a request's `X-Webhook-Delivery-Id` when you send it again.** Each id is accepted once, and a request refused with nothing done doesn't use it up:
