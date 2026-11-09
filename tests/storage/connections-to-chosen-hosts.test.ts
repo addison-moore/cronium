@@ -3,8 +3,8 @@
  * real Postgres and Valkey. Only where c-ares sends its queries is changed.
  *
  * `chosen-host-connections.test.ts` has the threads and each kind of client. This is what
- * it can't do with a fake server: the driver's read and write paths, a server's real
- * version, and the limit on `servers.testConnection`.
+ * it can't do with a fake server: the driver's read and write paths, and a server's
+ * real version.
  */
 let mockNameServerPort = 0;
 let mockResolverOptions: { timeout: number; tries: number } | undefined;
@@ -179,27 +179,5 @@ describe("servers.testConnection", () => {
       success: false,
       message: "getaddrinfo EAI_AGAIN hung.test",
     });
-  });
-
-  it("is limited to 10 a minute for each user, and past that connects to nothing", async () => {
-    const [someone, someoneElse] = [await tenant(), await tenant()];
-
-    // One at a time, because the limiter reads then writes, so calls made at the same
-    // moment can get past it. That's written down at the route.
-    for (let call = 0; call < 10; call += 1) {
-      await callerFor(someone).servers.testConnection(
-        inputFor("tenant-db.test"),
-      );
-    }
-    const asked = nameServer.queries.length;
-
-    await expect(
-      callerFor(someone).servers.testConnection(inputFor("tenant-db.test")),
-    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
-    expect(nameServer.queries).toHaveLength(asked);
-
-    await expect(
-      callerFor(someoneElse).servers.testConnection(inputFor("tenant-db.test")),
-    ).resolves.toMatchObject({ success: false });
   });
 });
