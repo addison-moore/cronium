@@ -100,10 +100,10 @@ try() {
   : > /tmp/runtime-requests
   stdout=$( (eval "$strict_mode"; eval "$1") 2>/tmp/try-stderr )
   status=$?
-  stored=$(cd /tmp/runtime-vars && for key in *; do jq -n --arg key "$key" --rawfile value "$key" '{($key): $value}'; done | jq -cs add)
-  jq -cn --arg call "$1" --argjson status "$status" --arg stdout "$stdout" --argjson stored "$stored" \
+  (cd /tmp/runtime-vars && for key in *; do jq -n --arg key "$key" --rawfile value "$key" '{($key): $value}'; done) | jq -cs add > /tmp/try-stored
+  jq -cn --arg call "$1" --argjson status "$status" --arg stdout "$stdout" --slurpfile stored /tmp/try-stored \
     --rawfile stderr /tmp/try-stderr --rawfile requests /tmp/runtime-requests \
-    '{call: $call, status: $status, stdout: $stdout, stored: $stored,
+    '{call: $call, status: $status, stdout: $stdout, stored: $stored[0],
       stderr: ($stderr | split("\n") | map(select(. != ""))),
       requests: ($requests | split("\n") | map(select(. != "")))}'
 }
@@ -139,10 +139,12 @@ func runHelperCalls(t *testing.T, e *Executor, strictMode, script string) []help
 	assert.Empty(t, run.stderr)
 	assert.Equal(t, 0, run.exitCode)
 	assert.Empty(t, run.requests, "a request reached the other stand-in")
+	// A long line arrives in pieces of maxLogLineBytes, so this goes by where each report ends.
+	decoder := json.NewDecoder(strings.NewReader(strings.ReplaceAll(strings.Join(run.stdout, ""), run.executionID, "EXEC")))
 	calls := make([]helperCall, 0, len(run.stdout))
-	for _, line := range run.stdout {
+	for decoder.More() {
 		var call helperCall
-		require.NoError(t, json.Unmarshal([]byte(strings.ReplaceAll(line, run.executionID, "EXEC")), &call), "line: %s", line)
+		require.NoError(t, decoder.Decode(&call))
 		if len(call.Stderr) == 0 {
 			call.Stderr = nil
 		}
@@ -648,4 +650,96 @@ try 'cronium_increment_variable COUNT'
 			Stored: storedAtFirst(),
 		},
 	}, calls)
+}
+
+// TestValuesFromStdinInTheSandbox covers cronium_output and cronium_set_variable with no
+// value argument, which take the value from stdin, as on a remote server. cronium_output used
+// to send an empty string with status 0, so piped output was lost, and under `set -u` it ended
+// the script. A job's stdin is at its end once the bootstrap has read the script, so a call
+// with nothing piped to it sends an empty value. If it waited instead, the job would time out.
+func TestValuesFromStdinInTheSandbox(t *testing.T) {
+	e := childBashSandbox(t)
+
+	unreadable := []string{"Error: Could not read the value, so nothing was sent"}
+	want := []helperCall{
+		{Call: "echo x | cronium_output", Requests: []string{`POST output {"data":"x\n"}`}, Stored: storedAtFirst()},
+		{Call: "printf x | cronium_output", Requests: []string{`POST output {"data":"x"}`}, Stored: storedAtFirst()},
+		{Call: `printf "x\n\n" | cronium_output`, Requests: []string{`POST output {"data":"x\n\n"}`}, Stored: storedAtFirst()},
+		{Call: `echo "{\"a\": 1}" | cronium_output`, Requests: []string{`POST output {"data":{"a":1}}`}, Stored: storedAtFirst()},
+		{Call: "echo 42 | cronium_output", Requests: []string{`POST output {"data":42}`}, Stored: storedAtFirst()},
+		{Call: "echo 1 2 | cronium_output", Requests: []string{`POST output {"data":"1 2\n"}`}, Stored: storedAtFirst()},
+		{Call: `printf "a\0b" | cronium_output`, Requests: []string{`POST output {"data":"a\u0000b"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output </dev/null", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output <&-", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "exec <&-; cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "bash -c cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "bash -u -c cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "echo x | bash -c cronium_output", Requests: []string{`POST output {"data":"x\n"}`}, Stored: storedAtFirst()},
+		{Call: "echo x | cronium_output y", Requests: []string{`POST output {"data":"y"}`}, Stored: storedAtFirst()},
+		{Call: `echo x | cronium_output ""`, Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output </", Status: 1, Stderr: unreadable, Stored: storedAtFirst()},
+
+		{Call: "echo x | cronium_set_variable NEW", Requests: []string{`PUT variables/NEW {"value":"x\n"}`}, Stored: storedAtFirst("NEW", "x\n")},
+		{Call: "echo 7 | cronium_set_variable COUNT", Requests: []string{`PUT variables/COUNT {"value":7}`}, Stored: storedAtFirst("COUNT", "7")},
+		{Call: "cronium_set_variable LOG", Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: "cronium_set_variable LOG <&-", Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: `bash -u -c "cronium_set_variable LOG"`, Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: `echo x | bash -c "cronium_set_variable NEW"`, Requests: []string{`PUT variables/NEW {"value":"x\n"}`}, Stored: storedAtFirst("NEW", "x\n")},
+		{Call: "echo x | cronium_set_variable NEW y", Requests: []string{`PUT variables/NEW {"value":"y"}`}, Stored: storedAtFirst("NEW", "y")},
+		{Call: "cronium_set_variable LOG </", Status: 1, Stderr: unreadable, Stored: storedAtFirst()},
+		{
+			Call:     "echo null | cronium_set_variable LOG",
+			Status:   1,
+			Stderr:   []string{"Error: API request failed - HTTP 400 - variable value must not be null"},
+			Requests: []string{`PUT variables/LOG {"value":null}`},
+			Stored:   storedAtFirst(),
+		},
+	}
+
+	for _, strict := range strictModes {
+		t.Run(strict.name, func(t *testing.T) {
+			assert.Equal(t, want, runHelperCalls(t, e, strict.mode, tryLines(want)))
+		})
+	}
+
+	t.Run("as a job's own script, with nothing piped", func(t *testing.T) {
+		run := runWithFakeRuntime(t, e, `cronium_output; echo "output rc=$?"
+cronium_set_variable KEY; echo "variable rc=$?"
+`)
+
+		assert.Empty(t, run.stderr)
+		assert.Equal(t, 0, run.exitCode)
+		assert.Equal(t, []string{"output rc=0", "variable rc=0"}, run.stdout)
+		require.Len(t, run.requests, 2)
+		assert.Contains(t, run.requests[0], "POST /executions/"+run.executionID+"/output HTTP/1.1")
+		assert.Contains(t, run.requests[0], `{"data":""}`)
+		assert.Contains(t, run.requests[1], "PUT /executions/"+run.executionID+"/variables/KEY HTTP/1.1")
+		assert.Contains(t, run.requests[1], `{"value":""}`)
+	})
+
+	// Linux refuses any one argument over 128 KB, and these all used to pass the value as one.
+	t.Run("past what one argument can hold", func(t *testing.T) {
+		calls := runHelperCalls(t, e, ":", `large() { head -c 200000 /dev/zero | tr "\0" x; }
+try 'large | cronium_output'
+try 'cronium_output "$(large)"'
+try 'large | cronium_set_variable NEW'
+try 'cronium_set_variable NEW "$(large)"'
+`)
+
+		value := strings.Repeat("x", 200000)
+		require.Len(t, calls, 4)
+		for _, call := range calls {
+			assert.Equal(t, 0, call.Status, call.Call)
+			assert.Empty(t, call.Stderr, call.Call)
+			require.Len(t, call.Requests, 1, call.Call)
+		}
+		// Not assert.Equal, which would print all of it if they differed.
+		assert.True(t, calls[0].Requests[0] == `POST output {"data":"`+value+`"}`, calls[0].Call)
+		assert.True(t, calls[1].Requests[0] == `POST output {"data":"`+value+`"}`, calls[1].Call)
+		assert.True(t, calls[2].Requests[0] == `PUT variables/NEW {"value":"`+value+`"}`, calls[2].Call)
+		assert.True(t, calls[3].Requests[0] == `PUT variables/NEW {"value":"`+value+`"}`, calls[3].Call)
+		assert.True(t, calls[2].Stored["NEW"] == value, calls[2].Call)
+		assert.True(t, calls[3].Stored["NEW"] == value, calls[3].Call)
+	})
 }

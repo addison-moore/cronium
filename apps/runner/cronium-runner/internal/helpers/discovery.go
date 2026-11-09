@@ -39,7 +39,11 @@ cronium_get_variable() {
 }
 
 cronium_set_variable() {
-    printf '%s' "$2" | "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    if [ "$#" -gt 1 ]; then
+        printf '%s' "$2" | "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    else
+        "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    fi
 }
 
 cronium_set_condition() {

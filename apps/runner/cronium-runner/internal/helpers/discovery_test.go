@@ -241,6 +241,8 @@ cronium_output '{"via":"arg"}'
 cronium.output 'two words'
 echo '{"via":"stdin"}' | cronium_output
 cronium_set_variable K '{"a":1}'
+echo x | cronium_set_variable K2 ''
+echo '{"via":"stdin"}' | cronium_set_variable K3
 cronium_set_condition yes
 cronium.setCondition no
 cronium_event
@@ -254,7 +256,8 @@ cronium_send_email a@x.io Subject Body --html </dev/null`
 	for _, want := range []string{
 		`{"fake":"input"}`, "getVariable:mykey", "getVariable:--raw otherkey",
 		`output:{"via":"arg"}`, "output:two words", `output:{"via":"stdin"}`,
-		`setVariable:K:{"a":1}`, "setCondition:yes", "setCondition:no",
+		`setVariable:K:{"a":1}`, "setVariable:K2:\n", `setVariable:K3:{"via":"stdin"}`,
+		"setCondition:yes", "setCondition:no",
 		"event:\n", "event:--field event.name",
 		`toolAction:execute sql run_query:{"q":1}`,
 		"toolAction:email a@x.io Subject Body --html:",
