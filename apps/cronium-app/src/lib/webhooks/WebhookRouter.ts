@@ -16,6 +16,13 @@ import { failureWithStack, refusedByPostgres } from "@/lib/pg-errors";
  */
 const QUEUE_FULL_RETRY_AFTER_SECONDS = 60;
 
+/**
+ * How long a sender is told to wait when delivery ids can't be checked. It's about how
+ * long Valkey takes to come back: a restart takes seconds, and the client tries to
+ * reconnect at least every 2.
+ */
+const DELIVERY_IDS_UNAVAILABLE_RETRY_AFTER_SECONDS = 30;
+
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
   constructor() {
@@ -123,6 +130,22 @@ export class WebhookRouter {
           duration: Date.now() - startTime,
         });
 
+        // Not a 401: nothing is wrong with the request, and a sender told it's replaying
+        // would stop rather than send it again.
+        if (verificationResult.unavailable) {
+          return NextResponse.json(
+            { error: verificationResult.error },
+            {
+              status: 503,
+              headers: {
+                "Retry-After": String(
+                  DELIVERY_IDS_UNAVAILABLE_RETRY_AFTER_SECONDS,
+                ),
+              },
+            },
+          );
+        }
+
         return NextResponse.json(
           { error: verificationResult.error },
           { status: 401 },
@@ -132,10 +155,9 @@ export class WebhookRouter {
       // The id is consumed now, and however this request ends before it has had an
       // effect, the id has to come back. Sending it again wouldn't be a replay, and it
       // would look like one to a sender keeping its id across attempts.
-      const deliveryId = headers["x-webhook-delivery-id"];
-      if (deliveryId) {
-        freeDeliveryId = () =>
-          this.webhookSecurity.releaseDeliveryId(webhook.id, deliveryId);
+      const { claim } = verificationResult;
+      if (claim) {
+        freeDeliveryId = () => this.webhookSecurity.releaseDeliveryId(claim);
       }
 
       // Check rate limit

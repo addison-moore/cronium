@@ -53,16 +53,17 @@ jest.mock("@/lib/webhooks/webhook-replay-store", () => {
     consumeWebhookDeliveryOnce: jest.fn(
       async (webhookId: number, deliveryId: string) => {
         const key = `${webhookId}:${deliveryId}`;
-        if (seen.has(key)) return false;
+        if (seen.has(key)) return { outcome: "used" };
         seen.add(key);
-        return true;
+        return {
+          outcome: "fresh",
+          claim: { key, token: key, expiresAt: Infinity },
+        };
       },
     ),
-    releaseWebhookDelivery: jest.fn(
-      async (webhookId: number, deliveryId: string) => {
-        seen.delete(`${webhookId}:${deliveryId}`);
-      },
-    ),
+    releaseWebhookDelivery: jest.fn(async ({ key }: { key: string }) => {
+      seen.delete(key);
+    }),
   };
 });
 
@@ -82,6 +83,7 @@ const rateLimitMock = jest.requireMock("@/lib/rate-limit-service") as {
 };
 const replayMock = jest.requireMock("@/lib/webhooks/webhook-replay-store") as {
   __seen: Set<string>;
+  consumeWebhookDeliveryOnce: jest.Mock;
 };
 
 const SECRET = "shared-hmac-secret";
@@ -345,6 +347,36 @@ describe("POST /api/webhooks/[key] — signature verification (real HMAC)", () =
       /replay|duplicate/i,
     );
     expect(managerMock.__manager.prepareEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /api/webhooks/[key] — delivery ids that can't be checked", () => {
+  beforeEach(() => {
+    managerMock.__manager.getWebhookByKey.mockResolvedValue(webhookRow());
+  });
+
+  it("answers 503 with Retry-After, not a replay's 401, and stores nothing", async () => {
+    replayMock.consumeWebhookDeliveryOnce.mockResolvedValueOnce({
+      outcome: "unavailable",
+    });
+    const body = '{"event":"while.away"}';
+    const headers = signedHeaders(body, {
+      "x-webhook-delivery-id": "d-unchecked",
+    });
+
+    const res = await post("whk_valid", body, headers);
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    expect(((await res.json()) as { error: string }).error).toMatch(
+      /can't be checked right now/,
+    );
+    expect(eventInserts()).toEqual([]);
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
+    expect(logInserts()).toHaveLength(1);
+    expect(logInserts()[0]!.values).toMatchObject({ success: false });
+
+    expect((await post("whk_valid", body, headers)).status).toBe(200);
   });
 });
 

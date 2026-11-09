@@ -248,7 +248,7 @@ Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its s
 
 **A request's body can be up to 1 MB (1,048,576 bytes),** and a longer one gets a 413. The delivery can be longer than the request, because of the fields added and the escaping described under [Which events are sent](#which-events-are-sent): plain text made only of `"` comes out 6 times as long, and nothing a request can contain grows more than that. That still fits in a delivery, so what the endpoint accepts can go out. The exception is a webhook with stored `transformations` that copy fields. If that would take an event past 8 MB, the request gets a 413, and nothing is stored or sent.
 
-**A 503 means Cronium's delivery queue is full, and nothing happened.** See [When the queue is full](#when-the-queue-is-full). Send the same event again after the `Retry-After`, under the same `X-Webhook-Delivery-Id`. A sender's other requests can be refused for the same reason until the receivers behind this endpoint catch up, so keep events you've been told to send again rather than dropping them.
+**A 503 means nothing happened. Send the same event again after the `Retry-After`, under the same `X-Webhook-Delivery-Id`.** Its `error` says why. Either Cronium's delivery queue is full, as described in [When the queue is full](#when-the-queue-is-full), and a sender's other requests can be refused for the same reason until the receivers behind this endpoint catch up, so keep events you've been told to send again rather than dropping them. Or Cronium can't check delivery ids, as described below.
 
 **Keep a request's `X-Webhook-Delivery-Id` when you send it again.** Each id is accepted once, and a request refused with nothing done doesn't use it up:
 
@@ -261,7 +261,9 @@ Each webhook also has an inbound endpoint, `POST /api/webhooks/<key>`, and its s
 
 A `429` has an `X-RateLimit-Reset` header that says when to come back. Sign the request again if you changed it or more than 5 minutes have passed, since the signature covers the body and the time.
 
-Cronium keeps these ids in Valkey. While it can't reach Valkey it answers that same `401` to everything, so getting one for an id you've never used means that, and is worth retrying. If Valkey goes away just as a request is refused, that id stays used and the request needs a new one.
+**Cronium keeps these ids in Valkey, and accepts nothing it can't check there.** While it can't reach Valkey, or Valkey refuses to store the id, as a full one does, every correctly signed request gets a `503` with `Retry-After: 30` and an `error` starting `Delivery ids can't be checked right now`. That includes a request under an id that was already used, which gets its `401` again once Cronium can check. The `503` doesn't use the id, so send the event again under the same one.
+
+If Valkey goes away partway through a request, Cronium can be left holding the request's id with no way to let go of it. The answer is the one the request would have had anyway: the `503`, or whatever it was refused with. The process that answered lets go of the id when the next request under it arrives there, so the same id works once Valkey is back. Only that process knows, so if it restarts first, or the next request goes to another replica, the id stays used until 11 minutes after the first request. Until then a request under it gets `401 Duplicate or replayed delivery`, though nothing was stored.
 
 **After a `500`, or no answer at all, send it again under the same id.** If Cronium knows nothing was stored, it's accepted. Otherwise you get `401 Duplicate or replayed delivery`, and nothing the first attempt did is repeated. That `401` doesn't say the event went out: a failure partway can leave it stored with no deliveries sent, and a lost connection can leave nothing stored at all. So check the webhook's delivery history before sending it under a new id, which sends it again if its deliveries did go out.
 
