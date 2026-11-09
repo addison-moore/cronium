@@ -180,8 +180,7 @@ comm -13 <(sort <<<"$names") <(compgen -v | sort)
 }
 
 // TestHelpersAddNoVariablesInTheSandbox holds the helpers to the same promise. They run in
-// the script's own shell, so a variable that isn't local stays behind in it. BASH_REMATCH
-// is the shell's own, set by the =~ in cronium_increment_variable.
+// the script's own shell, so a variable that isn't local stays behind in it.
 func TestHelpersAddNoVariablesInTheSandbox(t *testing.T) {
 	e := childBashSandbox(t)
 
@@ -205,7 +204,7 @@ names=$(compgen -v)
   cronium_append_variable KEY value
   cronium_info
 } > /dev/null 2>&1
-comm -13 <(sort <<<"$names") <(compgen -v | grep -v '^BASH_REMATCH$' | sort)
+comm -13 <(sort <<<"$names") <(compgen -v | sort)
 echo finished
 `)
 

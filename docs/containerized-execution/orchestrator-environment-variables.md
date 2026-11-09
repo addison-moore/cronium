@@ -64,7 +64,10 @@ passes it along from `.env`.
 - `CRONIUM_CONTAINER_DOCKER_VERSION` - Docker API version
 - `CRONIUM_CONTAINER_DOCKER_TLS_VERIFY` - Enable TLS verification
 - `CRONIUM_CONTAINER_DOCKER_CERT_PATH` - TLS certificate path
-- `CRONIUM_CONTAINER_IMAGES_<TYPE>` - Container images by type
+- `CRONIUM_CONTAINER_IMAGES` - Container images by script type, such as
+  `bash:registry.example.com/my-bash:1.2,python:my-python:1.2,nodejs:my-node:1.2`.
+  A language left out uses its default. See "The images a job runs in" in
+  [DEPLOYMENT.md](../DEPLOYMENT.md#the-images-a-job-runs-in)
 - `CRONIUM_CONTAINER_RESOURCES_DEFAULTS_CPU` - Default CPU allocation
 - `CRONIUM_CONTAINER_RESOURCES_DEFAULTS_MEMORY` - Default memory
 - `CRONIUM_CONTAINER_RESOURCES_DEFAULTS_DISK` - Default disk space
@@ -84,7 +87,8 @@ passes it along from `.env`.
 - `CRONIUM_CONTAINER_NETWORK_MODE` - Network mode
 - `CRONIUM_CONTAINER_NETWORK_ENABLE_ICC` - Inter-container communication
 - `CRONIUM_CONTAINER_NETWORK_DNS` - DNS servers
-- `CRONIUM_CONTAINER_RUNTIME_IMAGE` - Runtime API image
+- `CRONIUM_CONTAINER_RUNTIME_IMAGE` - Runtime API sidecar image. With no value, see
+  "The images a job runs in" in [DEPLOYMENT.md](../DEPLOYMENT.md#the-images-a-job-runs-in)
 - `CRONIUM_CONTAINER_RUNTIME_BACKEND_URL` - Backend URL for runtime
 - `CRONIUM_CONTAINER_RUNTIME_VALKEY_URL` - Valkey/Redis URL
 - `CRONIUM_CONTAINER_RUNTIME_JWT_SECRET` - JWT secret for runtime

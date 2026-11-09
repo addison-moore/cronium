@@ -9,6 +9,10 @@ import {
   isSupportedScopeRequest,
 } from "@/lib/mcp-oauth/metadata";
 import { getAuthorizedPrincipal } from "@/server/security/authorization";
+import {
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+} from "@/server/security/credential-check";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +47,7 @@ function htmlError(message: string, status = 400): Response {
 // deny-all token into an `mcp` one.
 async function resolveOwner(
   req: Request,
-): Promise<{ sub: string; sv: number } | null> {
+): Promise<{ sub: string; sv: number } | "check-failed" | null> {
   try {
     const session = await getCachedServerSession();
     if (session?.user?.id) {
@@ -60,7 +64,9 @@ async function resolveOwner(
         return { sub: principal.id, sv: principal.sessionVersion };
       }
     }
-  } catch {
+  } catch (error) {
+    // Nothing is known about them, and signing in needs the same database.
+    if (error instanceof CredentialCheckFailedError) return "check-failed";
     // Not a live principal: fall through and make them sign in again.
   }
   return null;
@@ -129,6 +135,9 @@ export async function GET(req: Request): Promise<Response> {
 
   // Authenticate the resource owner.
   const owner = await resolveOwner(req);
+  if (owner === "check-failed") {
+    return htmlError(CREDENTIAL_CHECK_FAILED_MESSAGE, 503);
+  }
   if (!owner) {
     const signin = `${base}/api/auth/signin?callbackUrl=${encodeURIComponent(req.url)}`;
     return Response.redirect(signin, 302);

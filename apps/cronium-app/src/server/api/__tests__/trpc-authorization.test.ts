@@ -193,6 +193,7 @@ describe("Live principal revocation (HI-04)", () => {
   });
 
   it("fails closed when account state cannot be established", async () => {
+    jest.spyOn(console, "error").mockImplementationOnce(() => undefined);
     dbState.error = new Error("database unreachable");
     const caller = callerWith(sessionFor({}));
     await expect(caller.events.create()).rejects.toMatchObject({

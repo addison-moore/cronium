@@ -143,7 +143,8 @@ export class WebhookSecurity {
    * The signature covers `timestamp.deliveryId.rawBody`, the timestamp is
    * required and must be finite and within the tolerance window, and the
    * delivery ID is atomically consumed so a captured request cannot be
-   * replayed. `rawBody` is the exact received bytes (not a re-serialization),
+   * replayed, unless `releaseDeliveryId` gives the ID back because that request
+   * was refused. `rawBody` is the exact received bytes (not a re-serialization),
    * so senders and this verifier agree byte-for-byte.
    *
    * A delivery from `WebhookManager` doesn't pass this, on purpose: a webhook has
@@ -231,6 +232,11 @@ export class WebhookSecurity {
    * Let a delivery id that `verifyWebhook` consumed be used again, for a request that
    * was then refused with nothing done. Sending it again isn't a replay, and it would
    * look like one to anyone who keeps the id across attempts.
+   *
+   * A captured copy of that request gets through the same way until its timestamp is
+   * too old. The id still goes to one request only, because `verifyWebhook` consumes it
+   * atomically and whichever comes second gets the 401. A copy refused for what it holds
+   * can keep coming back, and each time counts against the webhook's rate limit.
    */
   async releaseDeliveryId(
     webhookId: number,
