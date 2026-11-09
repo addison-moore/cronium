@@ -183,13 +183,17 @@ const json = (body: string): SentEvent => ({
 const tenant = () =>
   seedUser({ role: UserRole.USER, status: UserStatus.ACTIVE });
 
+/** Webhooks this test made, whose rate-limit windows it has to clear. */
+const webhooksMade: number[] = [];
+
 async function webhookAt(
   owner: string,
   url: string,
   {
     events = [`webhook.${EVENT}`],
-    // Webhook ids start again after each reset, and the rate limit's window doesn't,
-    // so a limit a test isn't about shouldn't be one it can reach.
+    // Webhook ids start again after each reset, and a window another file left for
+    // the same id can still be open, so a limit a test isn't about shouldn't be one
+    // it can reach.
     rateLimit = { requests: 1_000_000, window: 60_000 },
   }: {
     events?: string[];
@@ -202,6 +206,7 @@ async function webhookAt(
     active: true,
     retryConfig: { maxRetries: 1, retryDelay: 100, backoffMultiplier: 1 },
   });
+  webhooksMade.push(webhook.id);
   await db
     .update(webhooks)
     .set({ rateLimit })
@@ -416,6 +421,14 @@ afterEach(async () => {
   // a reset, so it would land on that test's webhook.
   await queueFinished();
   await Promise.all(openReceivers.splice(0).map((close) => close()));
+  // The next test's webhooks, and the next file's, get these ids again, and would
+  // carry on in these windows. This file sends nearly 100 requests to webhook 1 within
+  // a minute, and a suite run straight after it with the default limit of 100 got 429s.
+  await Promise.all(
+    webhooksMade
+      .splice(0)
+      .map((id) => RateLimitService.reset(`webhook:${id}`, "webhook")),
+  );
 });
 
 afterAll(async () => {
