@@ -63,7 +63,10 @@ const statusCodes: Array<[number, string]> = [
     413,
     "Run input over 1 MB, or saving an event with a request over 10 MB. A reverse proxy in front of Cronium can answer 413 first, with a body of its own that may not be JSON",
   ],
-  [429, "Too many run requests; see Retry-After"],
+  [
+    429,
+    "Too many run requests, or too many connection checks to servers and tools; see Retry-After",
+  ],
   [500, "Server error"],
 ];
 
@@ -368,6 +371,14 @@ export default function APIDocsPage() {
               Credentials are write-only. Responses never contain an SSH key or
               password, only <code>hasPrivateKey</code> and{" "}
               <code>hasPassword</code>.
+            </p>
+            <p className="mb-6">
+              Adding a server, or giving one a new key, connects to it first.
+              Each account can have 8 such connections under way at once,
+              counting its server and tool checks in the app, with up to 64 more
+              waiting their turn for up to 15 seconds, and can start 60 a
+              minute. Past that the response is a 429 that says which limit was
+              reached, with a <code>Retry-After</code> header for the minute.
             </p>
             {serverEndpoints.map((endpoint) => (
               <EndpointCard
