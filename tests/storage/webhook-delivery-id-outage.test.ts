@@ -13,6 +13,9 @@
  * as a stopped server does. Valkey keeps what it holds, as it would through a network
  * fault, or a restart from the append-only file the shipped Compose file turns on.
  * Where it loses or refuses something, that's done to the real Valkey directly.
+ *
+ * The proxy can also pause Valkey, as `docker pause` or a partition does: connections
+ * stay open, and what's sent waits until Valkey runs it, once it's resumed.
  */
 import { createHmac, randomUUID } from "node:crypto";
 import http from "node:http";
@@ -26,6 +29,7 @@ import { cacheService } from "@/lib/cache/cache-service";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { WebhookQueue } from "@/lib/webhooks/WebhookQueue";
 import { WebhookSecurity } from "@/lib/webhooks/WebhookSecurity";
+import { ANSWER_TIMEOUT_MS } from "@/lib/webhooks/webhook-replay-store";
 import { db } from "@/server/db";
 import {
   UserRole,
@@ -91,6 +95,28 @@ async function until(
   }
 }
 
+/** Requests a test stopped waiting for, which have to finish before the next test. */
+const unfinished: Array<Promise<unknown>> = [];
+
+/** What the request is answered with, or a failure if that takes longer than `ms`. */
+async function answeredWithin<T>(ms: number, request: Promise<T>) {
+  unfinished.push(request.catch(() => undefined));
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`No answer within ${ms} ms`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** What Valkey does with the next command that names a delivery id. */
 type AfterItRuns =
   /** The connection drops before the answer arrives, and Valkey stays. */
@@ -98,24 +124,32 @@ type AfterItRuns =
   /** Valkey goes away before answering. */
   | "goes-away-before-answering"
   /** Valkey answers, then goes away. */
-  | "answers-and-goes-away";
+  | "answers-and-goes-away"
+  /** Valkey answers, then stops answering anything, with its connections left open. */
+  | "answers-and-pauses";
 
 /**
  * Valkey behind a proxy that can take it away. Going away closes every connection and
  * refuses new ones. Coming back listens on the same port, so a client reconnects to it
- * the way it would to a restarted server.
+ * the way it would to a restarted server. Pausing holds what's sent on every
+ * connection, so Valkey runs none of it until it's resumed.
  */
 async function valkeyThatCanGoAway(valkeyUrl: string) {
   const target = new URL(valkeyUrl);
-  const links = new Set<{ client: net.Socket; valkey: net.Socket }>();
+  const links = new Set<{
+    client: net.Socket;
+    valkey: net.Socket;
+    held: Array<string | Buffer>;
+  }>();
   let watched: { text: string; then: AfterItRuns } | undefined;
   let closing: Promise<void> | undefined;
   let away = false;
+  let paused = false;
   let port = 0;
 
   const proxy = net.createServer((client) => {
     const valkey = net.connect(Number(target.port), target.hostname);
-    const link = { client, valkey };
+    const link = { client, valkey, held: [] as Array<string | Buffer> };
     links.add(link);
     let onAnswer: ((answer: Buffer) => void) | undefined;
     const close = () => {
@@ -134,11 +168,16 @@ async function valkeyThatCanGoAway(valkeyUrl: string) {
         onAnswer = (answer) => {
           if (then === "loses-the-answer") client.destroy();
           else if (then === "goes-away-before-answering") void goAway();
+          else if (then === "answers-and-pauses") {
+            client.write(answer);
+            paused = true;
+          }
           // Closed once the answer is sent, so the client reads it first.
           else client.end(answer, () => void goAway());
         };
       }
-      valkey.write(command);
+      if (paused) link.held.push(command);
+      else valkey.write(command);
     });
     valkey.on("data", (answer) => {
       const handle = onAnswer;
@@ -161,6 +200,8 @@ async function valkeyThatCanGoAway(valkeyUrl: string) {
   function goAway(): Promise<void> {
     if (!away) {
       away = true;
+      // What a paused Valkey was holding goes with it.
+      paused = false;
       closing = new Promise<void>((resolve) => proxy.close(() => resolve()));
       for (const { client, valkey } of links) {
         client.destroy();
@@ -183,12 +224,31 @@ async function valkeyThatCanGoAway(valkeyUrl: string) {
     url: `redis://127.0.0.1:${port}`,
     goAway,
     comeBack,
+    pause: () => {
+      paused = true;
+    },
+    /** Valkey runs everything it was sent while paused, in order, and answers. */
+    resume: () => {
+      paused = false;
+      for (const { valkey, held } of links) {
+        for (const command of held.splice(0)) valkey.write(command);
+      }
+    },
+    /** How many times `text` appears in what's waiting for Valkey to resume. */
+    held: (text: string) =>
+      [...links]
+        .flatMap(({ held }) => held)
+        .join("")
+        .split(text).length - 1,
     /** Valkey runs the next command naming `text`, and then does `then`. */
     whenItRuns: (text: string, then: AfterItRuns) => {
       watched = { text, then };
     },
     get away() {
       return away;
+    },
+    get paused() {
+      return paused;
     },
   };
 }
@@ -399,11 +459,13 @@ beforeEach(async () => {
 afterEach(async () => {
   jest.restoreAllMocks();
   await direct.config("SET", "maxmemory", "0");
+  if (valkey.paused) valkey.resume();
   if (valkey.away) {
     // A test that failed partway. The next one starts with Valkey back.
     await valkey.comeBack();
     await sleep(2_500);
   }
+  await Promise.all(unfinished.splice(0));
   // Nothing from this test may write a row during the next one: ids start again after
   // a reset, so it would land on that test's webhook.
   await queueFinished();
@@ -625,6 +687,103 @@ describe("a Valkey that won't store the id", () => {
 
     await direct.config("SET", "maxmemory", "0");
     expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(200);
+    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
+    await expectEventsSent(1, webhook, receiver);
+  });
+});
+
+describe("a Valkey that stops answering with its connections open", () => {
+  /**
+   * How soon a sender hears back, as docs/WEBHOOKS.md says: the time a request waits for
+   * Valkey, and room for the rest of the request.
+   */
+  const A_FEW_SECONDS = 5_000;
+
+  /** The check's client is connected, so the next thing Valkey is sent is a check. */
+  async function connected(webhook: Webhook) {
+    expect((await sendUntilAnswered(webhook, randomUUID())).status).toBe(200);
+  }
+
+  it("says so with a 503 within seconds, and takes the same id once Valkey answers again", async () => {
+    const receiver = await startReceiver();
+    const webhook = await webhookAt(receiver.url);
+    const deliveryId = randomUUID();
+    await connected(webhook);
+
+    valkey.pause();
+    expectUnavailable(
+      await answeredWithin(A_FEW_SECONDS, send(webhook, AN_EVENT, deliveryId)),
+    );
+    expect(logged()).toContain(
+      `Valkey didn't answer within ${ANSWER_TIMEOUT_MS} ms`,
+    );
+    // The check was sent, and Valkey hasn't run it.
+    expect(valkey.held(deliveryId)).toBe(1);
+    expect(await direct.keys(`*:${deliveryId}`)).toEqual([]);
+    expect(await storedEvents()).toEqual(ROWS_OF_AN_EVENT);
+
+    // Valkey runs it once it's resumed, taking the id for a request that was told
+    // nothing was taken.
+    valkey.resume();
+    await until(
+      "Valkey to run the check",
+      async () => (await direct.keys(`*:${deliveryId}`)).length === 1,
+    );
+    expect((await sendUntilAnswered(webhook, deliveryId)).status).toBe(200);
+    expect(await send(webhook, AN_EVENT, deliveryId)).toMatchObject({
+      status: 401,
+      answer: { error: REPLAYED },
+    });
+    await expectEventsSent(2, webhook, receiver);
+  });
+
+  it("answers the requests after the first at once, and sends Valkey nothing more until it answers", async () => {
+    const receiver = await startReceiver();
+    const webhook = await webhookAt(receiver.url);
+    const first = randomUUID();
+    const later = Array.from({ length: 5 }, () => randomUUID());
+    await connected(webhook);
+
+    valkey.pause();
+    expectUnavailable(
+      await answeredWithin(A_FEW_SECONDS, send(webhook, AN_EVENT, first)),
+    );
+    for (const deliveryId of later) {
+      const sentAt = performance.now();
+      expectUnavailable(await send(webhook, AN_EVENT, deliveryId));
+      expect(performance.now() - sentAt).toBeLessThan(1_000);
+    }
+    // Only the first request's check went to Valkey.
+    expect(valkey.held("cronium:webhook:delivery:")).toBe(1);
+    expect(await storedEvents()).toEqual(ROWS_OF_AN_EVENT);
+
+    valkey.resume();
+    for (const deliveryId of [first, ...later]) {
+      expect((await sendUntilAnswered(webhook, deliveryId)).status).toBe(200);
+    }
+    await expectEventsSent(2 + later.length, webhook, receiver);
+  });
+
+  it("still answers a refusal when Valkey stops before the id is let go of, and the id works once it answers", async () => {
+    const receiver = await startReceiver();
+    const webhook = await webhookAt(receiver.url);
+    const deliveryId = randomUUID();
+
+    valkey.whenItRuns(deliveryId, "answers-and-pauses");
+    expect(
+      await answeredWithin(A_FEW_SECONDS, send(webhook, BROKEN, deliveryId)),
+    ).toMatchObject({ status: 400, answer: { error: "Invalid request body" } });
+    expect(valkey.paused).toBe(true);
+    // Letting go of the id was sent, and Valkey hasn't run it.
+    expect(valkey.held(deliveryId)).toBe(1);
+    expect(await direct.keys(`*:${deliveryId}`)).toHaveLength(1);
+
+    // The corrected request, while Valkey still isn't answering.
+    expectUnavailable(await send(webhook, AN_EVENT, deliveryId));
+    expect(await storedEvents()).toEqual([]);
+
+    valkey.resume();
+    expect((await sendUntilAnswered(webhook, deliveryId)).status).toBe(200);
     expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
     await expectEventsSent(1, webhook, receiver);
   });
