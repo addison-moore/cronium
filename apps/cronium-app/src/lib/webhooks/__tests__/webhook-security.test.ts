@@ -13,9 +13,12 @@ jest.mock("@/lib/webhooks/webhook-replay-store", () => {
     consumeWebhookDeliveryOnce: jest.fn(
       async (webhookId: number, deliveryId: string) => {
         const key = `${webhookId}:${deliveryId}`;
-        if (seen.has(key)) return false;
+        if (seen.has(key)) return { outcome: "used" };
         seen.add(key);
-        return true;
+        return {
+          outcome: "fresh",
+          claim: { key, token: key, expiresAt: Infinity },
+        };
       },
     ),
   };
@@ -29,6 +32,7 @@ const SECRET = "shhh";
 
 const replay = jest.requireMock("@/lib/webhooks/webhook-replay-store") as {
   __seen: Set<string>;
+  consumeWebhookDeliveryOnce: jest.Mock;
 };
 
 beforeEach(() => replay.__seen.clear());
@@ -153,6 +157,19 @@ describe("WebhookSecurity.verifyWebhook (HI-12)", () => {
     const second = await sec.verifyWebhook(req, { secret: SECRET });
     expect(second.isValid).toBe(false);
     expect(second.error).toMatch(/replay/i);
+    expect(second.unavailable).toBeUndefined();
+  });
+
+  it("says the id can't be checked, rather than replayed, when the store can't be asked", async () => {
+    replay.consumeWebhookDeliveryOnce.mockResolvedValueOnce({
+      outcome: "unavailable",
+    });
+    const res = await sec.verifyWebhook(request({ deliveryId: "unchecked" }), {
+      secret: SECRET,
+    });
+    expect(res).toMatchObject({ isValid: false, unavailable: true });
+    expect(res.error).not.toMatch(/replay|duplicate/i);
+    expect(res.claim).toBeUndefined();
   });
 
   it("rejects a tampered body (signature covers the raw bytes)", async () => {

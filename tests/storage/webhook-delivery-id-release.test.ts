@@ -651,25 +651,27 @@ describe("freeing an id", () => {
     await expectOneEventSent(webhook, receiver);
   });
 
-  it("leaves the answer as it was when Valkey won't do it, and the id used", async () => {
+  // tests/storage/webhook-delivery-id-outage.test.ts has Valkey really going away here.
+  it("leaves the answer as it was when Valkey won't do it, and the next request under the id frees it", async () => {
     const receiver = await startReceiver();
     const webhook = await webhookAt(await tenant(), receiver.url);
     const deliveryId = randomUUID();
+    // The id's check goes through, and giving the id back fails.
+    const evaluate = Redis.prototype.eval;
     jest
-      .spyOn(Redis.prototype, "del")
+      .spyOn(Redis.prototype, "eval")
+      .mockImplementationOnce(function (
+        this: Redis,
+        ...args: Parameters<typeof evaluate>
+      ) {
+        return evaluate.apply(this, args);
+      })
       .mockRejectedValueOnce(new Error("Connection is closed."));
 
     expect((await send(webhook, BROKEN, deliveryId)).status).toBe(400);
-    expect(logged()).toMatch(/couldn't release/);
+    expect(logged()).toMatch(/released when it's next used/);
 
-    expect(await send(webhook, AN_EVENT, deliveryId)).toMatchObject({
-      status: 401,
-      answer: { error: REPLAYED },
-    });
-    expect(await storedEvents()).toEqual([]);
-
-    // A new id is what sends it then.
-    expect((await send(webhook)).status).toBe(200);
+    await expectTakenOnce(webhook, deliveryId);
     await expectOneEventSent(webhook, receiver);
   });
 });
