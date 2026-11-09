@@ -569,6 +569,7 @@ describe("a disabled webhook's waiting deliveries", () => {
     );
     if (prepared.refused) throw new Error("It had room");
     await setEnabled(webhook, false);
+    await prepared.store(db);
     await prepared.send();
 
     await until(
