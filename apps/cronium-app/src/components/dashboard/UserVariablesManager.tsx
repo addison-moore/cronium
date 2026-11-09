@@ -231,7 +231,7 @@ export function UserVariablesManager() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between max-sm:flex-wrap max-sm:gap-2">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Variable className="h-5 w-5" />

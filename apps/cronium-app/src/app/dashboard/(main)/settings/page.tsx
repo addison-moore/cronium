@@ -355,7 +355,7 @@ export default function SettingsPage() {
               <SettingsCard
                 title=""
                 footer={
-                  <div className="flex w-full justify-between">
+                  <div className="flex w-full flex-wrap justify-between gap-2">
                     <Button
                       type="button"
                       variant="outline"
