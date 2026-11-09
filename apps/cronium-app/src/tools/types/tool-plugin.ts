@@ -19,11 +19,99 @@ export interface ActionParameter {
 
 // Features configuration for actions
 export interface ActionFeatures {
-  testMode?: boolean;
   realTime?: boolean;
   batchSupport?: boolean;
   webhookSupport?: boolean;
 }
+
+/**
+ * What the event form shows of a run that worked, under its button. The form draws as
+ * much as fits and says what it left out, since a read can return up to
+ * MAX_UNIFIED_IO_OUTPUT_BYTES.
+ */
+export type ShownResult =
+  | {
+      /** Rows, under these columns. A value is drawn as text, an object as JSON. */
+      type: "rows";
+      columns: string[];
+      rows: Record<string, unknown>[];
+    }
+  | {
+      /** Documents, each drawn as JSON. */
+      type: "documents";
+      documents: unknown[];
+    }
+  | {
+      /** Text such as a model's answer, drawn as it was written. */
+      type: "text";
+      /** JSON goes in a fixed-width font. */
+      format: "prose" | "json";
+      text: string;
+      /** Said under the text, such as which model answered. */
+      about?: string;
+      /** Said under the text as a warning, such as that it may be cut short. */
+      warning?: string;
+    };
+
+interface ActionTestRunWords {
+  /**
+   * Said beside the button, and again when asking first. With a check, the lines beside
+   * the buttons come from it, and this is only said when asking.
+   */
+  explains: string;
+  /** What the toast says after a run that worked, from what the action returned. */
+  succeeded: (result: unknown) => string;
+  /**
+   * What the action does instead when `isTest` is set, for one whose real run does
+   * something: it reaches the same service with the same credential and parameters, and
+   * stops before anything changes or goes out. The form offers it beside the real run,
+   * and the server only asks for one from an action that declares it.
+   */
+  check?: ActionCheck;
+}
+
+/** A check of an action, offered beside its real run. Build it with `checkFirst`. */
+export interface ActionCheck {
+  /** Its button, which says what it checks, such as `Count Matches`. */
+  label: string;
+  /** Said beside the buttons, first, starting with `label`. */
+  explains: string;
+  /** What the real run does, finishing "<its button> ...", said after `explains`. */
+  runDoes: string;
+  /** What the toast says after a check that worked: what it showed, then what it didn't. */
+  succeeded: (result: unknown) => string;
+}
+
+/**
+ * What the button on the event form does with an action. The form sends `isTest`, but
+ * only an action whose code reads it stops short of the real thing, so each one has to
+ * say which it is. The form goes by this to decide what the button says, whether to ask
+ * first, what the toast says, and what it shows of the result.
+ * `src/tools/__tests__/test-run.test.ts` checks it against what each action really does.
+ * Build one with the helpers in `@/tools/utils/test-run`.
+ *
+ * - `simulated`: stops at `isTest`, before contacting anything.
+ * - `reads`: really runs, and can't change anything.
+ * - `sends`: really delivers something to someone.
+ * - `spends`: really calls a service that may charge for it.
+ * - `writes`: really changes data, for good.
+ *
+ * A read or a prompt comes back with something to look at, so it says in `shows` how.
+ * A simulation's result is made up, such as Google Sheets' "Product A", so it never
+ * shows. A send or a write comes back with little more than the count the toast gives.
+ */
+export type ActionTestRun = ActionTestRunWords &
+  (
+    | {
+        kind: "reads" | "spends";
+        /** What the form shows of what the action returned. */
+        shows: (result: unknown) => ShownResult;
+      }
+    | {
+        kind: "simulated" | "sends" | "writes";
+        shows?: never;
+      }
+  );
 
 // Tool Action Interface
 export interface ToolAction {
@@ -64,6 +152,7 @@ export interface ToolAction {
   ) => Promise<any>;
 
   // Testing support
+  testRun: ActionTestRun;
   testData?: () => Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validate?: (params: any) => { isValid: boolean; errors?: string[] };

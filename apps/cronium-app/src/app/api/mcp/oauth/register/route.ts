@@ -1,3 +1,5 @@
+import { CacheUnavailableError } from "@/lib/cache/cache-unavailable";
+import { failureWithStack } from "@/lib/pg-errors";
 import { isValidRedirectUri } from "@/lib/mcp-oauth/metadata";
 import { randomId } from "@/lib/mcp-oauth/tokens";
 import { registerClient, type OAuthClient } from "@/lib/mcp-oauth/store";
@@ -101,7 +103,21 @@ export async function POST(req: Request): Promise<Response> {
     response_types: ["code"],
     created_at: Math.floor(Date.now() / 1000),
   };
-  await registerClient(client);
+  try {
+    await registerClient(client);
+  } catch (error) {
+    if (!(error instanceof CacheUnavailableError)) throw error;
+    console.error(
+      "Error storing an MCP OAuth client:",
+      failureWithStack(error),
+    );
+    // A client_id that wasn't stored would only fail later, at the authorize page.
+    return oauthError(
+      "temporarily_unavailable",
+      "Cronium couldn't save this registration, usually because it can't reach its database. Try again shortly.",
+      503,
+    );
+  }
 
   return jsonResponse(
     {

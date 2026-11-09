@@ -18,16 +18,24 @@ The tools are defined once, in
 | **Remote** `/api/mcp` (in-process Next route, Streamable HTTP / stateless JSON)  | `apps/cronium-app/src/app/api/mcp/` | OAuth 2.1, or bearer API token | claude.ai web app, ChatGPT (Business+), any remote MCP client |
 | **Local stdio bridge** `@cronium/mcp-server` (npm, `npx -y @cronium/mcp-server`) | `apps/cronium-mcp/`                 | bearer API token (env)         | Claude Desktop / Claude Code and other stdio-only clients     |
 
-The bridge is ~300 dependency-free lines: it forwards each stdin JSON-RPC
+The bridge is ~400 dependency-free lines: it forwards each stdin JSON-RPC
 message to `POST <CRONIUM_BASE_URL>/api/mcp` with the token and writes the
 response back, probing the endpoint at startup so a bad URL/token fails at
 connect time. There is deliberately no second tool implementation.
 
 It tells Cronium's answers by the body. Anything that isn't JSON-RPC, at any
-status but a 401, reads `Got HTTP 502, not Cronium's answer` under the request's
-id, with possible causes and without the body, which only goes to its log. It
-doesn't follow redirects. Something in front of Cronium that answers in JSON-RPC
-can't be told apart, and is passed on as Cronium's.
+status, reads `Got HTTP 502, not Cronium's answer` under the request's id, with
+possible causes and without the body, which only goes to its log. The exception
+is the route's own 401, `{"error":"unauthorized: ..."}`, which says to check the
+token and stops the bridge at startup, so a rewording has to keep that start. It
+doesn't follow redirects. Something in front of Cronium that answers in JSON-RPC,
+or with that 401, can't be told apart, and is passed on as Cronium's.
+
+When no whole answer comes, it only reads `Could not reach Cronium` if nothing can
+have gone out: a refused connection, a failed lookup, a refused certificate. A
+connection that closes, an answer cut off part way and its own 120-second limit read
+differently, and a tool call says it may still have gone through, as it does for
+an answer that isn't Cronium's.
 
 ## The tools
 
@@ -68,6 +76,15 @@ registration — rate-limited and bounded, RFC 8414/9728 discovery served at
 `/.well-known/*` via `next.config.mjs` rewrites). Distinct from `/api/oauth/*`,
 which is **outbound** tool OAuth (Cronium as a client to Google/Slack).
 
+A 401 means the token was looked at and isn't good, and a client should act on it:
+the stdio bridge quits at startup on one. When Cronium can't look, usually because
+Postgres is down, `/api/mcp` answers a 503 with a JSON-RPC error instead, with no
+`www-authenticate`, and nothing says the token is bad. The bridge stays up, passes
+that on under each request's id, and works again once the database is back. REST
+routes answer the same 503 with `{"error": ...}`, and a token on tRPC gets
+`SERVICE_UNAVAILABLE`. A public tRPC procedure doesn't read the session, so it still
+answers. If the route's handler throws, it answers a 500 with a JSON-RPC error.
+
 ## Least privilege (token scopes)
 
 Scopes are **mandatory** (security plan Phase 1.5): every API/OAuth bearer
@@ -107,7 +124,15 @@ by the `/api/mcp` route; only the value `"mcp"` is honored.
 
 - `src/app/api/mcp/route.ts`, `.../tools.ts` — remote JSON-RPC endpoint + the
   single tool-surface definition.
-- `src/app/api/mcp/oauth/*`, `src/lib/mcp-oauth/*` — OAuth 2.1 server.
+- `src/app/api/mcp/oauth/*`, `src/lib/mcp-oauth/*` — OAuth 2.1 server. The token
+  endpoint reads a grant's owner before it takes the code or refresh token, so when
+  Postgres is down it answers a 503 with `temporarily_unavailable` and nothing is used
+  up. GETDEL alone decides who gets a token, so requests that pass the read together
+  still let one through. Clients, codes and refresh tokens live in Valkey, read and
+  written with `cacheService`'s strict methods, so a Valkey that can't be asked is the
+  same 503 rather than a missing key. The new refresh token is stored before the old
+  one is taken, so a write Valkey refuses, at `maxmemory` under `noeviction`, leaves
+  the client the token it has.
 - `src/server/api/routers/mcp.ts` — `getCapabilities` + `validatePlan`.
 - `src/server/token-scopes.ts` — scope catalog + enforcement helper.
 - `src/server/api/trpc.ts` — token auth, `tokenScopes`, `requestSource`, `enforceTokenScopes`.

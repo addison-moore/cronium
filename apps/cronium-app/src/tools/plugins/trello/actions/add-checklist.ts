@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for add-checklist action parameters
@@ -39,6 +40,7 @@ export const addChecklistAction: ToolAction = {
   actionType: "update",
   actionTypeColor: "yellow",
   developmentMode: "visual",
+  testRun: simulatedRun("Trello"),
   inputSchema: addChecklistSchema,
   parameters: safeZodToParameters(addChecklistSchema),
   outputSchema: z.object({

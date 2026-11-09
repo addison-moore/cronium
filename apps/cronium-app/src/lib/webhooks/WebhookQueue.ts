@@ -1,3 +1,4 @@
+import { describeFailure } from "@/lib/pg-errors";
 import type { SerializedPayload } from "./delivery-body";
 
 /**
@@ -96,8 +97,8 @@ export type QueueReservation =
       cancel: () => void;
     };
 
-/** How often the server log says the queue is refusing events. */
-const FULL_WARNING_INTERVAL_MS = 60_000;
+/** How often the server log repeats something the queue keeps running into. */
+const WARNING_INTERVAL_MS = 60_000;
 
 /**
  * In-process delivery queue with retry and backoff.
@@ -112,6 +113,13 @@ const FULL_WARNING_INTERVAL_MS = 60_000;
  * while whoever sent the new one is still waiting for an answer and can send it again.
  * So a delivery keeps its room from its first attempt to its last, and a retry never
  * has to ask for it again.
+ *
+ * The exception is a webhook that's been disabled or deleted, which is how an owner
+ * clears a backlog nobody wants. What's waiting for it is dropped and its room comes back:
+ * see `stillWanted` and `dropUnwanted`. Both go by the webhook's row, so it makes no
+ * difference where the change was made. Each replica has its own queue, deleting a user
+ * deletes their webhooks without any of this code running, and Next can build a module
+ * once per layer, so nothing that changes a webhook can count on reaching this instance.
  */
 export class WebhookQueue {
   private queue = new Map<string, QueueItem>();
@@ -122,10 +130,13 @@ export class WebhookQueue {
   private heldBytesByWebhook = new Map<number, number>();
   private heldBytesByOwner = new Map<string, number>();
   private lastFullWarningAt = -Infinity;
+  private lastUnreadWarningAt = -Infinity;
+  private droppingUnwanted = false;
 
   constructor() {
     const timer = setInterval(() => {
       this.startBacklog();
+      void this.dropUnwanted();
     }, 1000);
     // Must not keep a process (a test run, a one-off script) alive on its own.
     timer.unref();
@@ -235,7 +246,7 @@ export class WebhookQueue {
   /** For whoever runs the server, who sees none of the answers. Not one per request. */
   private warnFull(reason: QueueFullReason): void {
     const now = Date.now();
-    if (now - this.lastFullWarningAt < FULL_WARNING_INTERVAL_MS) return;
+    if (now - this.lastFullWarningAt < WARNING_INTERVAL_MS) return;
     this.lastFullWarningAt = now;
     console.warn(
       `[Webhook] Refusing events: the delivery queue is at its "${reason}" limit, holding ${this.heldBytes} bytes in all. This is logged at most once a minute.`,
@@ -315,7 +326,7 @@ export class WebhookQueue {
 
     let retrying = false;
     try {
-      await this.processItem(item);
+      if (await this.stillWanted(item)) await this.processItem(item);
     } catch {
       // processDelivery has already recorded the failed attempt, if it could.
       retrying = this.scheduleRetry(item);
@@ -335,12 +346,123 @@ export class WebhookQueue {
   }
 
   /**
+   * Whether an attempt should go ahead. If not, its delivery has been dropped.
+   *
+   * Disabled means nothing goes to the webhook's URL, so this reads the row right before
+   * every attempt, however the attempt came to start. A new event can start another
+   * webhook's waiting delivery, so `dropUnwanted` couldn't promise this by itself, because
+   * it only looks once a second. The read takes 0.4 ms, against 1.1 ms for the rest of an
+   * attempt to a receiver on the same machine, which is the cheapest an attempt gets.
+   *
+   * A read that fails says yes. It says nothing about the webhook, and an accepted event
+   * shouldn't be lost to it: the attempt goes out, as it would have anyway.
+   */
+  private async stillWanted(item: QueueItem): Promise<boolean> {
+    let enabled: Map<number, boolean>;
+    try {
+      const manager = await webhookManager();
+      enabled = await manager.webhooksEnabled([item.webhookId]);
+    } catch (error) {
+      this.warnUnread(error);
+      return true;
+    }
+    if (enabled.get(item.webhookId) === true) return true;
+
+    await this.recordDropped(item.webhookId, enabled.has(item.webhookId), [
+      item.webhookEventId,
+    ]);
+    return false;
+  }
+
+  /**
+   * Drop everything waiting for a webhook that's been disabled or deleted, which is what
+   * gives its room back. `stillWanted` can't do that, because it only runs when an attempt
+   * comes up. With the webhook's slots held, that can be 30 seconds away, and longer if
+   * others are using the tenant's slots. A retry's backoff can outlast the process.
+   *
+   * This costs one query a second while anything is waiting, however many deliveries that
+   * is, and nothing when nothing is. It took 0.7 ms with 15,000 waiting. A running attempt
+   * isn't in the queue, so it finishes, and if it fails this finds its retry waiting.
+   */
+  private async dropUnwanted(): Promise<void> {
+    if (this.droppingUnwanted || this.queue.size === 0) return;
+    this.droppingUnwanted = true;
+    try {
+      const asked = new Set<number>();
+      for (const item of this.queue.values()) asked.add(item.webhookId);
+
+      const manager = await webhookManager();
+      const enabled = await manager.webhooksEnabled([...asked]);
+
+      const droppedEvents = new Map<number, number[]>();
+      for (const item of this.queue.values()) {
+        // Anything that arrived during the read isn't in its answer. The next look has it.
+        if (!asked.has(item.webhookId)) continue;
+        if (enabled.get(item.webhookId) === true) continue;
+
+        this.queue.delete(item.id);
+        // The room doesn't wait for the rows, which may not go in.
+        this.release(
+          item.webhookId,
+          item.ownerUserId,
+          item.ownBytes,
+          item.heldEvent,
+        );
+        const events = droppedEvents.get(item.webhookId);
+        if (events) events.push(item.webhookEventId);
+        else droppedEvents.set(item.webhookId, [item.webhookEventId]);
+      }
+
+      for (const [webhookId, webhookEventIds] of droppedEvents) {
+        await this.recordDropped(
+          webhookId,
+          enabled.has(webhookId),
+          webhookEventIds,
+        );
+      }
+    } catch (error) {
+      // Nothing was dropped, and the next look tries again.
+      this.warnUnread(error);
+    } finally {
+      this.droppingUnwanted = false;
+    }
+  }
+
+  /**
+   * Say what became of deliveries that were dropped. A disabled webhook's history gets a
+   * row for each, which is what `retryDelivery` works from. A deleted webhook's history
+   * has gone with it, so the server log is the only record of those.
+   */
+  private async recordDropped(
+    webhookId: number,
+    stillExists: boolean,
+    webhookEventIds: number[],
+  ): Promise<void> {
+    console.warn(
+      `[Webhook] Webhook ${webhookId} was ${stillExists ? "disabled" : "deleted"}, so deliveries waiting for it were dropped: ${webhookEventIds.length}.`,
+    );
+    if (stillExists) {
+      const manager = await webhookManager();
+      await manager.recordDroppedDeliveries(webhookId, webhookEventIds);
+    }
+  }
+
+  /** For whoever runs the server. Not one per attempt, because attempts carry on. */
+  private warnUnread(error: unknown): void {
+    const now = Date.now();
+    if (now - this.lastUnreadWarningAt < WARNING_INTERVAL_MS) return;
+    this.lastUnreadWarningAt = now;
+    console.error(
+      `[Webhook] Couldn't read whether webhooks are still enabled, so their deliveries are going ahead as if they are: ${describeFailure(error)}. This is logged at most once a minute.`,
+    );
+  }
+
+  /**
    * Process a queue item
    */
   private async processItem(item: QueueItem): Promise<void> {
-    // Import WebhookManager dynamically to avoid circular dependency
-    const { WebhookManager } = await import("./WebhookManager");
-    const result = await WebhookManager.getInstance().processDelivery(
+    const manager = await webhookManager();
+    const result = await manager.processDelivery(
       item.webhookId,
       item.webhookEventId,
       item.url,
@@ -373,6 +495,12 @@ export class WebhookQueue {
     this.queue.set(item.id, item);
     return true;
   }
+}
+
+/** Imported when it's needed, to avoid a circular dependency. */
+async function webhookManager() {
+  const { WebhookManager } = await import("./WebhookManager");
+  return WebhookManager.getInstance();
 }
 
 /** What a delivery to this target holds besides the body it shares with the others. */

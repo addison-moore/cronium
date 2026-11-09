@@ -231,7 +231,7 @@ func TestBashJobRunsWithoutCurlOrJqInTheSandbox(t *testing.T) {
 // an image someone configured for bash jobs. It has bash, but no cronium.sh.
 func TestBashJobRunsInAnImageWithoutTheSDKInTheSandbox(t *testing.T) {
 	e := childBashSandbox(t)
-	e.config.Images = map[string]string{"bash": e.getImageForScript(types.ScriptTypePython)}
+	e.config.Images = map[string]string{"bash": e.getImageForScript(context.Background(), types.ScriptTypePython)}
 
 	result := runBashJob(t, e, "echo ran\n"+`cronium_output x; echo "rc=$?"`+"\n")
 

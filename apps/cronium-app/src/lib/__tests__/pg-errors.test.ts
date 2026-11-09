@@ -10,6 +10,7 @@ import {
   messageForCaller,
   messageForJobLog,
   pgErrorCode,
+  refusedByPostgres,
   stackFrames,
 } from "@/lib/pg-errors";
 
@@ -26,6 +27,35 @@ const postgresError = (message: string, code = "23505") =>
 
 const failedQuery = (cause: unknown, params: unknown[] = [SECRET]) =>
   new DrizzleQueryError("insert into t values ($1)", params, cause as Error);
+
+describe("refusedByPostgres", () => {
+  it("is true for an ERROR, inside Drizzle's wrapper or not", () => {
+    const error = postgresError("value too long", "22001");
+
+    expect(refusedByPostgres(error)).toBe(true);
+    expect(refusedByPostgres(failedQuery(error))).toBe(true);
+  });
+
+  it.each([
+    [
+      "a FATAL, which ends the connection",
+      failedQuery(
+        Object.assign(new Error("terminating connection"), {
+          code: "57P01",
+          severity: "FATAL",
+        }),
+      ),
+    ],
+    [
+      "a connection lost with no answer",
+      failedQuery(new Error("Connection terminated unexpectedly")),
+    ],
+    ["an error from outside the query", new Error("no row came back")],
+    ["something that isn't an error", null],
+  ])("is false for %s", (_what, error) => {
+    expect(refusedByPostgres(error)).toBe(false);
+  });
+});
 
 describe("pgErrorCode", () => {
   it("reads the SQLSTATE from the driver's error inside Drizzle's wrapper", () => {

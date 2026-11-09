@@ -130,6 +130,40 @@ export type AtomicRateLimitResult =
   AtomicRateLimitAllowed | AtomicRateLimitRefusal;
 
 /**
+ * Atomically consume one unit against `bucket` for `identifier`, as
+ * consumeAtomicRateLimit does, but throw when Valkey can't answer, for a caller
+ * that decides for itself what an outage means. So it never answers
+ * `reason: "unavailable"`.
+ */
+export async function consumeAtomicRateLimitOrThrow(
+  identifier: string,
+  bucket: string,
+  config: AtomicRateLimitConfig,
+): Promise<AtomicRateLimitAllowed | AtomicRateLimitExceeded> {
+  const { maxRequests, windowMs } = config;
+  const key = `${KEY_PREFIX}${bucket}:${identifier}`;
+  const client = await commandClient();
+  const [countRaw, ttlRaw] = (await client.eval(
+    INCR_SCRIPT,
+    1,
+    key,
+    String(windowMs),
+  )) as [number, number];
+
+  const count = Number(countRaw);
+  const ttl = Number(ttlRaw);
+  const resetAt = new Date(Date.now() + (ttl > 0 ? ttl : windowMs));
+  if (count > maxRequests) {
+    return { allowed: false, reason: "limited", remaining: 0, resetAt };
+  }
+  return {
+    allowed: true,
+    remaining: Math.max(0, maxRequests - count),
+    resetAt,
+  };
+}
+
+/**
  * Atomically consume one unit against `bucket` for `identifier`. Denies when
  * the limit is exceeded, and denies (fail closed) when Valkey is unreachable.
  * A caller tells the two apart by `reason`: only `"limited"` means too many
@@ -143,28 +177,8 @@ export async function consumeAtomicRateLimit(
   bucket: string,
   config: AtomicRateLimitConfig,
 ): Promise<AtomicRateLimitResult> {
-  const { maxRequests, windowMs } = config;
-  const key = `${KEY_PREFIX}${bucket}:${identifier}`;
   try {
-    const client = await commandClient();
-    const [countRaw, ttlRaw] = (await client.eval(
-      INCR_SCRIPT,
-      1,
-      key,
-      String(windowMs),
-    )) as [number, number];
-
-    const count = Number(countRaw);
-    const ttl = Number(ttlRaw);
-    const resetAt = new Date(Date.now() + (ttl > 0 ? ttl : windowMs));
-    if (count > maxRequests) {
-      return { allowed: false, reason: "limited", remaining: 0, resetAt };
-    }
-    return {
-      allowed: true,
-      remaining: Math.max(0, maxRequests - count),
-      resetAt,
-    };
+    return await consumeAtomicRateLimitOrThrow(identifier, bucket, config);
   } catch (error) {
     // Fail CLOSED: a missing limiter must not open the auth endpoint.
     console.error(

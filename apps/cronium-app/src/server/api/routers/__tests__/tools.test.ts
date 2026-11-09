@@ -1132,6 +1132,7 @@ describe("executeAction", () => {
       name: "Send Message",
       inputSchema: z.object({ channel: z.string() }),
       execute: jest.fn().mockResolvedValue({ delivered: true }),
+      testRun: { kind: "sends", explains: "", succeeded: () => "" },
       ...overrides,
     };
   }
@@ -1165,7 +1166,7 @@ describe("executeAction", () => {
       success: true,
       result: { delivered: true },
       actionId: "slack-send-message",
-      isTest: false,
+      simulated: false,
     });
   });
 
@@ -1242,20 +1243,223 @@ describe("executeAction", () => {
     expect(action.execute).not.toHaveBeenCalled();
   });
 
-  it("wraps provider execution failures as INTERNAL_SERVER_ERROR", async () => {
+  it("says why when the action throws, where a 500 lost the reason (regression)", async () => {
     dbState.toolRows = [toolRow()];
     const action = slackAction({
       execute: jest.fn().mockRejectedValue(new Error("slack down")),
     });
     mockGetServerAction.mockReturnValue(action);
 
-    await expect(
-      userCaller().tools.executeAction({
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "slack down",
+      actionId: "slack-send-message",
+    });
+    expect(result).not.toHaveProperty("result");
+  });
+
+  // Every action but Email catches its own errors and answers like this, so every
+  // failure used to come back as `success: true` and a toast saying "Test Successful".
+  it.each([
+    ["success", { success: false, error: "no such host" }],
+    ["ok", { ok: false, error: "no such host" }],
+  ])(
+    "says it failed when the action answers %s: false (regression)",
+    async (_field, answer) => {
+      dbState.toolRows = [toolRow()];
+      mockGetServerAction.mockReturnValue(
+        slackAction({
+          actionType: "messaging",
+          execute: jest.fn().mockResolvedValue(answer),
+        }),
+      );
+
+      const result = await userCaller().tools.executeAction({
         toolId: 5,
         actionId: "slack-send-message",
         parameters: { channel: "#general" },
+        isTest: true,
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        error: "no such host",
+        actionId: "slack-send-message",
+      });
+      expect(result).not.toHaveProperty("result");
+      expect(dbState.insertCalls).toHaveLength(1);
+      expect(dbState.insertCalls[0]).toMatchObject({
+        status: "FAILURE",
+        result: null,
+        errorMessage: "no such host",
+      });
+    },
+  );
+
+  it("names the action when one fails without saying why", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(
+      slackAction({ execute: jest.fn().mockResolvedValue({ success: false }) }),
+    );
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "Send Message reported failure",
+    });
+  });
+
+  it.each([
+    [
+      "answers with",
+      jest.fn().mockResolvedValue({
+        success: false,
+        error: `bad https://hooks.slack.com/services/T0/B0/${PLAINTEXT_SECRET}xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`,
       }),
-    ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+    ],
+    [
+      "throws",
+      jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            `bad https://hooks.slack.com/services/T0/B0/${PLAINTEXT_SECRET}xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`,
+          ),
+        ),
+    ],
+  ])(
+    "keeps a secret out of the reason when the action %s one",
+    async (_how, execute) => {
+      dbState.toolRows = [toolRow()];
+      mockGetServerAction.mockReturnValue(slackAction({ execute }));
+
+      const result = await userCaller().tools.executeAction({
+        toolId: 5,
+        actionId: "slack-send-message",
+        parameters: { channel: "#general" },
+      });
+
+      expect(result).toMatchObject({ success: false });
+      expect(JSON.stringify(result)).not.toContain(PLAINTEXT_SECRET);
+      expect(JSON.stringify(dbState.insertCalls)).not.toContain(
+        PLAINTEXT_SECRET,
+      );
+    },
+  );
+
+  it("gives a failed query's fixed line when one reaches here, not its SQL and values", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(
+      slackAction({
+        execute: jest
+          .fn()
+          .mockRejectedValue(
+            new Error(
+              `Failed query: select * from settings where key = $1\nparams: ${PLAINTEXT_SECRET}`,
+            ),
+          ),
+      }),
+    );
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "A database query failed",
+    });
+    expect(JSON.stringify(dbState.insertCalls)).not.toContain(PLAINTEXT_SECRET);
+  });
+
+  const SIMULATES = {
+    kind: "simulated",
+    explains: "",
+    succeeded: () => "",
+  };
+
+  it("records a simulated run as one, not as a success (regression)", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(slackAction({ testRun: SIMULATES }));
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+      isTest: true,
+    });
+
+    expect(result).toMatchObject({ success: true, simulated: true });
+    expect(dbState.insertCalls[0]).toMatchObject({ status: "SIMULATED" });
+  });
+
+  it("calls that action's run real when isTest isn't set", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(slackAction({ testRun: SIMULATES }));
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+    });
+
+    expect(result).toMatchObject({ success: true, simulated: false });
+    expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("doesn't call a run simulated because isTest was set, when the action ignores it (regression)", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(slackAction());
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+      isTest: true,
+    });
+
+    expect(result).toMatchObject({ success: true, simulated: false });
+    expect(result).not.toHaveProperty("isTest");
+    expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+  });
+
+  it("records a simulated run that failed as a failure", async () => {
+    dbState.toolRows = [toolRow()];
+    mockGetServerAction.mockReturnValue(
+      slackAction({
+        testRun: SIMULATES,
+        execute: jest.fn().mockResolvedValue({
+          success: false,
+          error: "OAuth authentication required.",
+        }),
+      }),
+    );
+
+    const result = await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general" },
+      isTest: true,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: "OAuth authentication required.",
+    });
+    expect(dbState.insertCalls[0]).toMatchObject({ status: "FAILURE" });
   });
 
   it("writes a redacted SUCCESS audit row to tool_action_logs with a null eventId (regression: manual runs skipped auditing)", async () => {
@@ -1297,13 +1501,11 @@ describe("executeAction", () => {
     });
     mockGetServerAction.mockReturnValue(action);
 
-    await expect(
-      userCaller().tools.executeAction({
-        toolId: 5,
-        actionId: "slack-send-message",
-        parameters: { channel: "#general", token: PLAINTEXT_SECRET },
-      }),
-    ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+    await userCaller().tools.executeAction({
+      toolId: 5,
+      actionId: "slack-send-message",
+      parameters: { channel: "#general", token: PLAINTEXT_SECRET },
+    });
 
     expect(dbState.insertCalls).toHaveLength(1);
     const logged = dbState.insertCalls[0]!;
@@ -1321,6 +1523,155 @@ describe("executeAction", () => {
       token: "[REDACTED]",
     });
     expect(JSON.stringify(logged)).not.toContain(PLAINTEXT_SECRET);
+  });
+
+  /**
+   * The form asks for a check, a simulation or the real run, and a check or a simulation
+   * reaches the action as `isTest`. Only an action that declares one stops there, so the
+   * server has to refuse the rest rather than run them for real under a button that said
+   * nothing would change.
+   */
+  describe("what a press asks for", () => {
+    const CHECKS = {
+      kind: "writes",
+      explains: "",
+      succeeded: () => "",
+      check: {
+        label: "Count Matches",
+        explains: "",
+        runDoes: "",
+        succeeded: () => "",
+      },
+    };
+    const press = (extra: Record<string, unknown>) =>
+      userCaller().tools.executeAction({
+        toolId: 5,
+        actionId: "slack-send-message",
+        parameters: { channel: "#general" },
+        ...extra,
+      });
+
+    it("runs a check with isTest, says so, and records it as one", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "check" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: true }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        result: { delivered: true },
+        checked: true,
+        simulated: false,
+      });
+      expect(dbState.insertCalls).toHaveLength(1);
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "CHECKED" });
+    });
+
+    it("runs the real thing when that's asked for, on an action with a check", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "run" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: false }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        checked: false,
+        simulated: false,
+      });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+    });
+
+    it("records a check that failed as a failure", async () => {
+      dbState.toolRows = [toolRow()];
+      mockGetServerAction.mockReturnValue(
+        slackAction({
+          testRun: CHECKS,
+          execute: jest
+            .fn()
+            .mockResolvedValue({ success: false, error: "not authorized" }),
+        }),
+      );
+
+      const result = await press({ mode: "check" });
+
+      expect(result).toMatchObject({ success: false, error: "not authorized" });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "FAILURE" });
+    });
+
+    it.each<[string, Record<string, unknown>, string]>([
+      [
+        "a check of an action that has none",
+        { mode: "check" },
+        "Send Message can't be checked, so nothing was run.",
+      ],
+      [
+        "a simulation of an action that would really run",
+        { mode: "simulate" },
+        "Send Message can't be simulated, so nothing was run.",
+      ],
+    ])(
+      "refuses %s, before running or counting anything",
+      async (_, extra, message) => {
+        dbState.toolRows = [toolRow()];
+        const action = slackAction();
+        mockGetServerAction.mockReturnValue(action);
+
+        await expect(press(extra)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message,
+        });
+        expect(action.execute).not.toHaveBeenCalled();
+        expect(mockCheckRateLimit).not.toHaveBeenCalled();
+        expect(dbState.insertCalls).toHaveLength(0);
+      },
+    );
+
+    it("simulates when that's asked for, on an action that simulates", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: SIMULATES });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "simulate" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: true }),
+      );
+      expect(result).toMatchObject({ simulated: true, checked: false });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SIMULATED" });
+    });
+
+    // A page loaded before checks existed sends `isTest` for every press, and its button
+    // said the real thing would happen. A server that read that as a check would delete
+    // nothing and say "Deleted undefined documents".
+    it("keeps what a page from before checks meant by isTest: the real run", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ isTest: true });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: false }),
+      );
+      expect(result).toMatchObject({ checked: false, simulated: false });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+    });
   });
 
   it("writes no audit row when the run is refused before execution (rate limit)", async () => {

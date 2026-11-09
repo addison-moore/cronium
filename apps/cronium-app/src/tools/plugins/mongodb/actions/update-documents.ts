@@ -1,17 +1,29 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { checkFirst, counted, writeRun } from "@/tools/utils/test-run";
 import {
   mongoCredentialsSchema,
   updateDocumentsSchema,
   DEFAULT_MONGO_TIMEOUT_MS,
 } from "../schemas";
-import { updateDocuments } from "../client";
+import { countMatchingDocuments, updateDocuments } from "../client";
 import {
+  type MatchCount,
   assertNonEmptyFilterForMany,
   coerceJsonObject,
+  matchesFound,
   normalizeBooleanFields,
 } from "../mongo-helpers";
+
+/** What the real run would do with what a check found, when that isn't "all of them". */
+const wouldDo = ({ matchedCount, many, upsert }: MatchCount): string => {
+  if (matchedCount === 0 && upsert) return ", so Upsert would add one";
+  if (!many && matchedCount > 1) {
+    return ", but without Many only the first would be updated";
+  }
+  return "";
+};
 
 export const updateDocumentsAction: ToolAction = {
   id: "update-documents",
@@ -23,6 +35,23 @@ export const updateDocumentsAction: ToolAction = {
   actionType: "update",
   actionTypeColor: "orange",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: {
+      matchedCount: number;
+      modifiedCount: number;
+      upsertedCount: number;
+    }) =>
+      `Matched ${counted(result.matchedCount, "document")}, changed ${result.modifiedCount}` +
+      (result.upsertedCount ? `, added ${result.upsertedCount}.` : "."),
+    checkFirst(
+      "Count Matches",
+      "says how many documents the filter matches, and changes nothing. It doesn't try the update",
+      (found: MatchCount) =>
+        matchesFound(found.matchedCount) +
+        wouldDo(found) +
+        ". Nothing was changed, so this doesn't show that the update would be accepted.",
+    ),
+  ),
   inputSchema: updateDocumentsSchema,
   parameters: safeZodToParameters(updateDocumentsSchema),
   outputSchema: z.object({
@@ -70,6 +99,23 @@ export const updateDocumentsAction: ToolAction = {
       }
       const many = parsed.many ?? false;
       if (many) assertNonEmptyFilterForMany(filter, "Update Documents");
+      const upsert = parsed.upsert ?? false;
+      const timeoutMs = context.timeoutMs ?? DEFAULT_MONGO_TIMEOUT_MS;
+
+      // The form's Count Matches: the same filter on the same collection, counted. The
+      // update itself goes nowhere, so the server never says whether it's valid.
+      if (context.isTest) {
+        const matchedCount = await countMatchingDocuments(
+          creds,
+          { collection: parsed.collection, filter },
+          { timeoutMs },
+        );
+        logger.info(
+          `MongoDB check: ${matchedCount} document(s) in ${parsed.collection} match the filter, and none were changed`,
+        );
+        const found: MatchCount = { matchedCount, many, upsert };
+        return found;
+      }
 
       const result = await updateDocuments(
         creds,
@@ -78,9 +124,9 @@ export const updateDocumentsAction: ToolAction = {
           filter,
           update,
           many,
-          upsert: parsed.upsert ?? false,
+          upsert,
         },
-        { timeoutMs: context.timeoutMs ?? DEFAULT_MONGO_TIMEOUT_MS },
+        { timeoutMs },
       );
 
       logger.info(

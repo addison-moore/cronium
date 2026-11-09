@@ -53,6 +53,7 @@ in isolated Docker containers with real-time log streaming and comprehensive mon
 		if err != nil {
 			return fmt.Errorf("failed to load configuration: %w", err)
 		}
+		cfg.Container.ImageTag = config.PublishedImageTag(Version)
 
 		// Configure logger with loaded config
 		logger.Configure(log, cfg.Logging)

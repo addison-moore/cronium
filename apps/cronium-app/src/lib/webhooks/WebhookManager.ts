@@ -4,7 +4,7 @@ import { z } from "zod";
 import axios from "axios";
 import { db } from "@/server/db";
 import { webhooks, webhookEvents, webhookDeliveries } from "@/shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { storage } from "@/server/storage";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { WebhookQueue, type QueueFullReason } from "./WebhookQueue";
@@ -34,6 +34,7 @@ import {
   webhookCustomHeadersSchema,
 } from "./custom-headers";
 import {
+  DROPPED_WHILE_DISABLED_MESSAGE,
   NOT_QUEUED_MESSAGE,
   WebhookPreconditionError,
   WebhookQueueFullError,
@@ -83,15 +84,23 @@ export interface WebhookDeliveryResult {
   duration: number;
 }
 
+/** Where a row is written: `db`, or a transaction its caller commits. */
+type RowWriter = Pick<typeof db, "insert">;
+
 /**
- * An event with room claimed for its deliveries. `send` or `cancel` has to follow, or
- * the room stays claimed. When it's refused, nothing is claimed or stored.
+ * An event with room claimed for its deliveries. `store` and then `send` have to follow,
+ * or `cancel`, or the room stays claimed. When it's refused, nothing is claimed or stored.
  */
 export type PreparedEvent =
   | { refused: QueueFullReason }
   | {
       refused?: undefined;
-      /** Store the event and queue its deliveries. */
+      /**
+       * Store the row the deliveries go out on. Given a transaction, the row goes in with
+       * whatever else the caller writes there, or not at all. Nothing is queued yet.
+       */
+      store: (writer: RowWriter) => Promise<void>;
+      /** Queue the deliveries, once what `store` wrote is committed. */
       send: () => Promise<void>;
       /** Give the room back, for an event that isn't going out after all. */
       cancel: () => void;
@@ -257,16 +266,25 @@ export class WebhookManager {
       metadata,
     );
     if (prepared.refused) throw new WebhookQueueFullError(prepared.refused);
+    try {
+      await prepared.store(db);
+    } catch (error) {
+      prepared.cancel();
+      throw error;
+    }
     await prepared.send();
   }
 
   /**
-   * `triggerEvent` in two steps, for a caller with something to do in between. The
-   * first claims room in the queue, or says there's none while there's still someone
-   * to tell and nothing has been stored. So the inbound endpoint can refuse an event
-   * without writing it to Postgres first, however often its sender tries again.
+   * `triggerEvent` in steps, for a caller with something to do in between. The first
+   * claims room in the queue, or says there's none while there's still someone to tell
+   * and nothing has been stored. So the inbound endpoint can refuse an event without
+   * writing it to Postgres first, however often its sender tries again. Storing the row
+   * apart from queueing lets that endpoint write it in the same transaction as its own,
+   * and queue nothing until both are committed.
    *
-   * With no subscribers there's nothing to hold, so this is never refused.
+   * With no subscribers there's nothing to hold or deliver, so this is never refused,
+   * and nothing is stored but what the caller stores itself.
    */
   async prepareEvent(
     event: string,
@@ -285,7 +303,11 @@ export class WebhookManager {
     );
 
     if (subscribedWebhooks.length === 0) {
-      return { send: async () => undefined, cancel: () => undefined };
+      return {
+        store: async () => undefined,
+        send: async () => undefined,
+        cancel: () => undefined,
+      };
     }
 
     const { decryptWebhookSecret, decryptWebhookHeaders } =
@@ -321,31 +343,40 @@ export class WebhookManager {
     );
     if (reservation.refused) return { refused: reservation.refused };
 
+    let stored: { id: number; payload: SerializedPayload } | undefined;
     return {
       cancel: reservation.cancel,
-      send: async () => {
-        let webhookEvent: typeof webhookEvents.$inferSelect;
-        let payload: SerializedPayload;
-        try {
-          webhookEvent = await this.recordEvent(
-            event,
-            data,
-            ownerUserId,
-            metadata,
-          );
-          payload = serializePayload(
+      // The caller gives the room back if this fails, as it has to if its own writes
+      // fail after this worked, so this doesn't as well.
+      store: async (writer) => {
+        const webhookEvent = await this.recordEvent(
+          event,
+          data,
+          ownerUserId,
+          metadata,
+          writer,
+        );
+        // Before the caller commits, so nothing can fail between that and queueing.
+        stored = {
+          id: webhookEvent.id,
+          payload: serializePayload(
             deliveryPayload(webhookEvent, data, metadata),
-          );
-        } catch (error) {
-          reservation.cancel();
-          throw error;
+          ),
+        };
+      },
+      send: async () => {
+        if (!stored) {
+          throw new Error("An event's row has to be stored before it's sent");
         }
+        const { id } = stored;
+        reservation.enqueue(id, stored.payload);
 
-        reservation.enqueue(webhookEvent.id, payload);
-
+        // Outside the caller's transaction, after it, because `recordAttempt` carries on
+        // when its row won't go in. In a transaction that failure would have rolled back
+        // everything before it, and the COMMIT would have said nothing about it.
         await Promise.all(
           reservation.full.map(({ webhookId }) =>
-            this.recordNotQueued(webhookId, webhookEvent.id),
+            this.recordNotQueued(webhookId, id),
           ),
         );
       },
@@ -374,6 +405,52 @@ export class WebhookManager {
       },
       { id: deliveryId, webhookId, success: false, duration: 0 },
     );
+  }
+
+  /**
+   * Whether each of these webhooks is enabled, for the queue. A deleted one isn't in the
+   * answer. One statement with one parameter, because nothing limits how many webhooks
+   * have something waiting, and a statement can have at most 65,535.
+   */
+  async webhooksEnabled(webhookIds: number[]): Promise<Map<number, boolean>> {
+    const rows = await db
+      .select({ id: webhooks.id, active: webhooks.active })
+      .from(webhooks)
+      .where(sql`${webhooks.id} = ANY(${sql.param(webhookIds)}::int[])`);
+    return new Map(rows.map(({ id, active }) => [id, active]));
+  }
+
+  /**
+   * Record deliveries the queue dropped because their webhook was disabled, each in the
+   * form a failed attempt takes. `retryDelivery` works from these rows, so this is how
+   * its owner can still send them.
+   *
+   * One statement, because a backlog can be 15,000 deliveries, far past the 65,535
+   * parameters a statement can have if each row had its own. Selecting from the events
+   * also means one that's been removed since is left out, rather than failing the rest.
+   * The time goes in as a string in UTC, as Drizzle writes it elsewhere: `now()` would
+   * be in the session's time zone. The statement failing can't change anything, because
+   * these deliveries are over, so the server log says what fell out of the history.
+   */
+  async recordDroppedDeliveries(
+    webhookId: number,
+    webhookEventIds: number[],
+  ): Promise<void> {
+    try {
+      await db.execute(sql`
+        INSERT INTO webhook_deliveries
+          (webhook_id, webhook_event_id, delivery_id, status, error, headers, duration, attempted_at)
+        SELECT
+          ${webhookId}::int, id, gen_random_uuid()::text, 'failed',
+          ${DROPPED_WHILE_DISABLED_MESSAGE}::text, '{}'::jsonb, 0,
+          ${new Date().toISOString()}::timestamp
+        FROM webhook_events
+        WHERE id = ANY(${sql.param(webhookEventIds)}::int[])`);
+    } catch (error) {
+      console.error(
+        `[Webhook] ${webhookEventIds.length} deliveries dropped from webhook ${webhookId} weren't recorded: ${describeFailure(error)}`,
+      );
+    }
   }
 
   /**
@@ -449,11 +526,12 @@ export class WebhookManager {
     data: Record<string, unknown>,
     ownerUserId: string,
     metadata?: Record<string, unknown>,
+    writer: RowWriter = db,
   ) {
     const sourceWebhookId =
       typeof metadata?.webhookId === "number" ? metadata.webhookId : null;
 
-    const result = await db
+    const result = await writer
       .insert(webhookEvents)
       .values({
         event,

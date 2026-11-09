@@ -9,6 +9,11 @@ import {
 } from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
 import { failureWithStack } from "@/lib/pg-errors";
+import {
+  ConnectionCheckLimitError,
+  connectionCheckLimitResponse,
+  withConnectionCheckLimit,
+} from "@/lib/security/connection-check-limit";
 
 export async function GET(
   req: NextRequest,
@@ -116,16 +121,19 @@ export async function PUT(
       try {
         const address = parsedBody.data.address ?? existingServer.address;
         const port = parsedBody.data.port ?? existingServer.port;
-        const connectionResult = await sshService.testConnection(
-          address,
-          parsedBody.data.sshKey,
-          parsedBody.data.username ?? existingServer.username,
-          port,
-          undefined,
-          // The pinned key applies while the target is the same host.
-          address === existingServer.address && port === existingServer.port
-            ? existingServer.id
-            : undefined,
+        const sshKey = parsedBody.data.sshKey;
+        const connectionResult = await withConnectionCheckLimit(userId, () =>
+          sshService.testConnection(
+            address,
+            sshKey,
+            parsedBody.data.username ?? existingServer.username,
+            port,
+            undefined,
+            // The pinned key applies while the target is the same host.
+            address === existingServer.address && port === existingServer.port
+              ? existingServer.id
+              : undefined,
+          ),
         );
 
         if (!connectionResult.success) {
@@ -139,6 +147,9 @@ export async function PUT(
           );
         }
       } catch (error) {
+        if (error instanceof ConnectionCheckLimitError) {
+          return connectionCheckLimitResponse(error);
+        }
         console.error("SSH connection test error:", failureWithStack(error));
 
         // Provide a detailed error message

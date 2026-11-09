@@ -1,5 +1,6 @@
 import type { Session } from "next-auth";
 import { getBearerToken } from "@/lib/api-auth";
+import { checkingCredentials } from "@/server/security/credential-check";
 import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 import { supportedScopes } from "./metadata";
@@ -8,7 +9,8 @@ import { verifyAccessToken } from "./tokens";
 /**
  * Resource-server side: turn a valid OAuth access token (Bearer) into a Session
  * for the token's user, so /api/mcp accepts OAuth-issued tokens alongside raw
- * API tokens. Returns null when there is no valid access token.
+ * API tokens. Returns null when there is no valid access token, and throws
+ * CredentialCheckFailedError when its owner can't be read.
  */
 export async function sessionFromOAuthToken(
   headers: Headers,
@@ -19,7 +21,10 @@ export async function sessionFromOAuthToken(
   const payload = verifyAccessToken(token);
   if (!payload) return null;
 
-  const user = await storage.getUser(payload.sub);
+  const user = await checkingCredentials(
+    "Error reading an OAuth token's owner",
+    () => storage.getUser(payload.sub),
+  );
   // Bearer principals must be live: a disabled owner's OAuth tokens stop
   // working immediately, not at token expiry. The version check extends that to
   // everything else that bumps sessionVersion (password reset, role change,

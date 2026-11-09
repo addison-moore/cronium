@@ -151,9 +151,15 @@ export function ToolActionTemplateForm({
 
   return (
     <Tabs defaultValue="form" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="form">Template Details</TabsTrigger>
-        <TabsTrigger value="preview" disabled={!currentAction}>
+      <TabsList className="grid w-full grid-cols-2 items-stretch sm:items-center">
+        <TabsTrigger value="form" className="whitespace-normal">
+          Template Details
+        </TabsTrigger>
+        <TabsTrigger
+          value="preview"
+          disabled={!currentAction}
+          className="whitespace-normal"
+        >
           Preview
         </TabsTrigger>
       </TabsList>
@@ -192,7 +198,7 @@ export function ToolActionTemplateForm({
             <div className="flex items-center gap-2">
               <Label className="text-muted-foreground text-sm">Tool:</Label>
               <div className="flex items-center gap-2">
-                {plugin && <plugin.icon className="h-4 w-4" />}
+                {plugin && <plugin.icon className="h-4 w-4 shrink-0" />}
                 <span className="font-medium">{plugin?.name ?? toolType}</span>
               </div>
             </div>
@@ -208,7 +214,7 @@ export function ToolActionTemplateForm({
         {/* Parameters Form */}
         {currentAction && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Action Parameters</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -266,7 +272,7 @@ export function ToolActionTemplateForm({
         )}
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-2 pt-4">
+        <div className="flex flex-wrap justify-end gap-2 pt-4">
           <Button variant="outline" onClick={onCancel} disabled={isLoading}>
             <X className="mr-2 h-4 w-4" />
             Cancel

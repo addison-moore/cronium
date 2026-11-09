@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { checkFirst, sendRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for Discord message action parameters - Enhanced to support embeds
@@ -39,6 +40,19 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "blue",
   developmentMode: "visual",
+  testRun: sendRun(
+    "posts to Discord",
+    () => "Discord accepted the message.",
+    checkFirst(
+      "Check Webhook",
+      "asks Discord whether the webhook exists, and posts nothing",
+      ({ webhookName }: { webhookName: string | null }) =>
+        (webhookName
+          ? `The webhook ${webhookName} exists.`
+          : "The webhook exists.") +
+        " Nothing was posted, so this doesn't show that Discord would accept the message.",
+    ),
+  ),
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
   outputSchema: z.object({
@@ -173,6 +187,34 @@ export const sendMessageAction: ToolAction = {
       }
       if (typedParams.avatar_url) {
         payload.avatar_url = typedParams.avatar_url;
+      }
+
+      // The form's Check Webhook, once the message is built as it would be: Discord
+      // answers a GET on a webhook with the webhook, and posts nothing. The answer
+      // carries the webhook's token, so only its name goes back.
+      if (context.isTest) {
+        onProgress?.({ step: "Looking up the webhook...", percentage: 60 });
+        const response = await toolFetch.discord(webhookUrl, {
+          method: "GET",
+        });
+        const webhook = (await response.json()) as {
+          name?: unknown;
+          message?: unknown;
+        };
+        if (!response.ok) {
+          throw new Error(
+            typeof webhook.message === "string"
+              ? webhook.message
+              : `Discord API error: ${response.status}`,
+          );
+        }
+        return {
+          success: true,
+          webhookName:
+            typeof webhook.name === "string" && webhook.name
+              ? webhook.name
+              : null,
+        };
       }
 
       // Update progress

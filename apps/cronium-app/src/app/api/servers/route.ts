@@ -9,6 +9,11 @@ import {
 } from "@/lib/api-auth";
 import { toServerApiDto } from "@/server/security/api-dto";
 import { failureWithStack } from "@/lib/pg-errors";
+import {
+  ConnectionCheckLimitError,
+  connectionCheckLimitResponse,
+  withConnectionCheckLimit,
+} from "@/lib/security/connection-check-limit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -68,11 +73,13 @@ export async function POST(req: NextRequest) {
         `Testing SSH connection to ${parsedBody.data.address}:${parsedBody.data.port} as ${parsedBody.data.username}`,
       );
 
-      const connectionResult = await sshService.testConnection(
-        parsedBody.data.address,
-        parsedBody.data.sshKey,
-        parsedBody.data.username,
-        parsedBody.data.port,
+      const connectionResult = await withConnectionCheckLimit(userId, () =>
+        sshService.testConnection(
+          parsedBody.data.address,
+          parsedBody.data.sshKey,
+          parsedBody.data.username,
+          parsedBody.data.port,
+        ),
       );
 
       console.log("SSH test result:", connectionResult);
@@ -88,6 +95,9 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (error) {
+      if (error instanceof ConnectionCheckLimitError) {
+        return connectionCheckLimitResponse(error);
+      }
       console.error("SSH connection test error:", failureWithStack(error));
 
       // Provide a detailed error message

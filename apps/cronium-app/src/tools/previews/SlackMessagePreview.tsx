@@ -7,7 +7,19 @@ import { MessageSquare, Hash, AtSign } from "lucide-react";
 import { format } from "date-fns";
 import { formatSlackMessage } from "./format-slack-message";
 
+// Only whole https addresses. The page's CSP blocks an image over http, half-typed ones
+// would be requests to this site, and outside production `next/image` throws on `https://`
+// while rendering, which takes the whole page down.
+const isHttpsUrl = (address: string): boolean => {
+  try {
+    return new URL(address).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 interface SlackMessagePreviewProps {
+  title?: string;
   channel?: string;
   message?: string;
   username?: string;
@@ -18,7 +30,8 @@ interface SlackMessagePreviewProps {
 }
 
 export function SlackMessagePreview({
-  channel = "#general",
+  title = "Slack Message Preview",
+  channel,
   message = "",
   username = "Cronium Bot",
   iconEmoji = ":robot_face:",
@@ -27,14 +40,17 @@ export function SlackMessagePreview({
   attachments,
 }: SlackMessagePreviewProps) {
   const renderIcon = () => {
-    if (iconUrl) {
+    // An address someone typed, so not one for Next's optimizer: it only takes the hosts
+    // in next.config.mjs, answers 400 for the rest, and `next dev` throws while rendering.
+    if (iconUrl && isHttpsUrl(iconUrl)) {
       return (
         <Image
           src={iconUrl}
           alt={username ?? "User avatar"}
           width={40}
           height={40}
-          className="rounded-md"
+          unoptimized
+          className="h-10 w-10 rounded-md object-cover"
         />
       );
     }
@@ -55,6 +71,15 @@ export function SlackMessagePreview({
   };
 
   const renderChannel = () => {
+    // A webhook posts to its own channel unless the message names another.
+    if (!channel) {
+      return (
+        <div className="text-muted-foreground text-sm">
+          The webhook&apos;s channel
+        </div>
+      );
+    }
+
     const isDirectMessage = channel.startsWith("@");
     const Icon = isDirectMessage ? AtSign : Hash;
 
@@ -69,7 +94,7 @@ export function SlackMessagePreview({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Slack Message Preview</CardTitle>
+        <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="border-border rounded-lg border bg-slate-900 p-4 text-slate-100">

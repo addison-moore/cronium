@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for search-content action parameters
@@ -43,6 +44,7 @@ export const searchContentAction: ToolAction = {
   actionType: "search",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: simulatedRun("Notion"),
   inputSchema: searchContentSchema,
   parameters: safeZodToParameters(searchContentSchema),
   outputSchema: z.object({

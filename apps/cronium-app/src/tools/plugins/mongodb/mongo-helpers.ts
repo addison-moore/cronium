@@ -129,6 +129,21 @@ export function assertNonEmptyFilterForMany(
   }
 }
 
+/** What a check of an update or a delete found, as the action answers it. */
+export interface MatchCount {
+  matchedCount: number;
+  many: boolean;
+  upsert?: boolean;
+}
+
+/** "No documents match the filter", "1 document matches the filter", and so on. */
+export function matchesFound(count: number): string {
+  if (count === 0) return "No documents match the filter";
+  return count === 1
+    ? "1 document matches the filter"
+    : `${count} documents match the filter`;
+}
+
 /**
  * The generic action form can persist boolean fields as "true"/"false" strings;
  * normalize those (and blanks) before schema validation.

@@ -111,7 +111,7 @@ func productionSandbox(t *testing.T, ctx context.Context) *Executor {
 // skips the test if the language's image is missing, because it never pulls or builds.
 func runScriptInSandbox(t *testing.T, ctx context.Context, e *Executor, scriptType types.ScriptType, content string, env map[string]string) jobRun {
 	t.Helper()
-	image := e.getImageForScript(scriptType)
+	image := e.getImageForScript(ctx, scriptType)
 	if _, err := e.dockerClient.ImageInspect(ctx, image); err != nil {
 		t.Skipf("%s not present locally (this test does not build it): %v", image, err)
 	}

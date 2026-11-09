@@ -131,6 +131,8 @@ result='{
 # Set output for next workflow node
 cronium_output "$result"
 
+# With no argument it takes stdin instead: ./build_report.sh | cronium_output
+
 # The output will be available as input to the next connected node`,
   },
   variables: {
@@ -182,7 +184,8 @@ fi
 # Set/update variables
 cronium_set_variable "LAST_PROCESSED" "2025-06-17T10:30:00Z"
 
-# Increment counter. With no value it starts from 0. If it can't be read, it isn't changed
+# Increment counter. With no value it starts from 0, and a stored 010 counts as 10.
+# If it can't be read or isn't an integer, it isn't changed
 new_counter=$(cronium_increment_variable "COUNTER") || exit 1
 
 # Variables persist across all script executions for the user
@@ -661,7 +664,8 @@ export default function RuntimeHelpersPage() {
                 <li>
                   • <strong>String storage:</strong> All values stored as
                   strings, so a number or object reads back as text (convert as
-                  needed)
+                  needed). In Bash a number reads back as it was written, so 010
+                  stays 010
                 </li>
                 <li>
                   • <strong>Cross-language:</strong> Variables set in Python can

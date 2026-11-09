@@ -30,7 +30,9 @@ done
 body=
 if [ "$length" -gt 0 ]; then
   IFS= read -r -N "$length" body
-  body=$(jq -c . <<<"$body")
+  # Only to compact what jq spread over lines. A body on one line stays as it was sent, as
+  # jq would write a number in it its own way.
+  case "$body" in *$'\n'*) body=$(jq -c . <<<"$body") ;; esac
 fi
 route=${target#/executions/*/}
 echo "$method $route${body:+ $body}" >> /tmp/runtime-requests
@@ -57,12 +59,18 @@ case "$method $route" in
     fi
     ;;
   'PUT variables/'*)
-    if [ "$(jq -r .value <<<"$body")" = null ]; then
-      reply 400 '{"error":"Bad Request","message":"variable value must not be null"}'
-    else
-      jq -j '.value | if type == "string" then . else tojson end' <<<"$body" > "/tmp/runtime-vars/${route#variables/}"
-      reply 200 '{"success":true}'
-    fi
+    # What the runtime stores: a string's text, or any other value as it was written.
+    value=${body#'{"value":'}
+    value=${value%'}'}
+    case "$value" in
+      null)
+        reply 400 '{"error":"Bad Request","message":"variable value must not be null"}'
+        exit 0
+        ;;
+      '"'*) jq -j . <<<"$value" > "/tmp/runtime-vars/${route#variables/}" ;;
+      *) printf '%s' "$value" > "/tmp/runtime-vars/${route#variables/}" ;;
+    esac
+    reply 200 '{"success":true}'
     ;;
   'GET context') reply 200 '{"success":true,"data":{"name":"Demo","flag":false}}' ;;
   'GET input') reply 200 '{"success":true,"data":{"a":1}}' ;;
@@ -92,10 +100,10 @@ try() {
   : > /tmp/runtime-requests
   stdout=$( (eval "$strict_mode"; eval "$1") 2>/tmp/try-stderr )
   status=$?
-  stored=$(cd /tmp/runtime-vars && for key in *; do jq -n --arg key "$key" --rawfile value "$key" '{($key): $value}'; done | jq -cs add)
-  jq -cn --arg call "$1" --argjson status "$status" --arg stdout "$stdout" --argjson stored "$stored" \
+  (cd /tmp/runtime-vars && for key in *; do jq -n --arg key "$key" --rawfile value "$key" '{($key): $value}'; done) | jq -cs add > /tmp/try-stored
+  jq -cn --arg call "$1" --argjson status "$status" --arg stdout "$stdout" --slurpfile stored /tmp/try-stored \
     --rawfile stderr /tmp/try-stderr --rawfile requests /tmp/runtime-requests \
-    '{call: $call, status: $status, stdout: $stdout, stored: $stored,
+    '{call: $call, status: $status, stdout: $stdout, stored: $stored[0],
       stderr: ($stderr | split("\n") | map(select(. != ""))),
       requests: ($requests | split("\n") | map(select(. != "")))}'
 }
@@ -131,10 +139,12 @@ func runHelperCalls(t *testing.T, e *Executor, strictMode, script string) []help
 	assert.Empty(t, run.stderr)
 	assert.Equal(t, 0, run.exitCode)
 	assert.Empty(t, run.requests, "a request reached the other stand-in")
+	// A long line arrives in pieces of maxLogLineBytes, so this goes by where each report ends.
+	decoder := json.NewDecoder(strings.NewReader(strings.ReplaceAll(strings.Join(run.stdout, ""), run.executionID, "EXEC")))
 	calls := make([]helperCall, 0, len(run.stdout))
-	for _, line := range run.stdout {
+	for decoder.More() {
 		var call helperCall
-		require.NoError(t, json.Unmarshal([]byte(strings.ReplaceAll(line, run.executionID, "EXEC")), &call), "line: %s", line)
+		require.NoError(t, decoder.Decode(&call))
 		if len(call.Stderr) == 0 {
 			call.Stderr = nil
 		}
@@ -471,6 +481,145 @@ answer 'PUT variables_LOG' 403 '{"message":"nope"}'
 	}
 }
 
+// TestNumbersInTheSandbox covers what jq and $((...)) did to a number, in the image's own bash
+// and jq. A stored 010 was octal and became 9, 09 was an error, and an increment was an
+// expression, so abc counted as 0. jq read 010, +5, inf and nan as numbers and wrote them its
+// own way, so a value set as 010 was stored as 10, and 1e3 as 1E+3.
+func TestNumbersInTheSandbox(t *testing.T) {
+	e := childBashSandbox(t)
+
+	set := func(value, sent, stored string) helperCall {
+		return helperCall{
+			Call:     "cronium_set_variable NEW " + value,
+			Requests: []string{`PUT variables/NEW {"value":` + sent + `}`},
+			Stored:   storedAtFirst("NEW", stored),
+		}
+	}
+	// The call stores a number in COUNT first.
+	incremented := func(call, output string) helperCall {
+		return helperCall{
+			Call:     call,
+			Stdout:   output,
+			Requests: []string{"GET variables/COUNT", `PUT variables/COUNT {"value":` + output + `}`},
+			Stored:   storedAtFirst("COUNT", output),
+		}
+	}
+	badIncrement := func(increment, shown string) helperCall {
+		return helperCall{
+			Call:   "cronium_increment_variable COUNT " + increment,
+			Status: 1,
+			Stderr: []string{"Error: Increment '" + shown + "' is not a 64-bit integer, so variable 'COUNT' was not changed"},
+			Stored: storedAtFirst(),
+		}
+	}
+	// A stored value that can't be counted is only read.
+	unchanged := func(value, reason string) helperCall {
+		return helperCall{
+			Call:     "stored " + value + "; cronium_increment_variable COUNT",
+			Status:   1,
+			Stderr:   []string{reason},
+			Requests: []string{"GET variables/COUNT"},
+			Stored:   storedAtFirst("COUNT", value),
+		}
+	}
+	const notAnInteger = "Error: Variable 'COUNT' is not a 64-bit integer, so it was not changed"
+	const badConfig = "Error: Invalid JSON configuration for tool action"
+
+	want := []helperCall{
+		// Not JSON, whatever jq reads them as, so they go as strings.
+		set("010", `"010"`, "010"),
+		set("09", `"09"`, "09"),
+		set("-010", `"-010"`, "-010"),
+		set("+5", `"+5"`, "+5"),
+		set(".5", `".5"`, ".5"),
+		set("5.", `"5."`, "5."),
+		set("nan", `"nan"`, "nan"),
+		set("inf", `"inf"`, "inf"),
+		set("Infinity", `"Infinity"`, "Infinity"),
+		set(`"{\"a\":010}"`, `"{\"a\":010}"`, `{"a":010}`),
+
+		// JSON, so they go as written.
+		set("0", "0", "0"),
+		set("42", "42", "42"),
+		set("1e3", "1e3", "1e3"),
+		set("1E+3", "1E+3", "1E+3"),
+		set("1e-3", "1e-3", "1e-3"),
+		set("1.50", "1.50", "1.50"),
+		set("12345678901234567890", "12345678901234567890", "12345678901234567890"),
+		set(`"{\"a\":1e3}"`, `{"a":1e3}`, `{"a":1e3}`),
+		set(`\"010\"`, `"010"`, "010"),
+
+		{Call: "cronium_output 010", Requests: []string{`POST output {"data":"010"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output nan", Requests: []string{`POST output {"data":"nan"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output 1e3", Requests: []string{`POST output {"data":1e3}`}, Stored: storedAtFirst()},
+		{Call: `cronium_execute_tool_action sql run "{\"n\":010}"`, Status: 1, Stderr: []string{badConfig}, Stored: storedAtFirst()},
+		{Call: `cronium_execute_tool_action sql run "[nan]"`, Status: 1, Stderr: []string{badConfig}, Stored: storedAtFirst()},
+		{
+			Call:     "stored 0; cronium_append_variable COUNT 10",
+			Requests: []string{"GET variables/COUNT", `PUT variables/COUNT {"value":"010"}`},
+			Stored:   storedAtFirst("COUNT", "010"),
+		},
+
+		// A stored number counts in decimal.
+		incremented("stored 010; cronium_increment_variable COUNT", "11"),
+		incremented("stored 09; cronium_increment_variable COUNT", "10"),
+		incremented("stored 00; cronium_increment_variable COUNT", "1"),
+		incremented("stored -010; cronium_increment_variable COUNT", "-9"),
+		incremented("stored -09; cronium_increment_variable COUNT", "-8"),
+		incremented("stored -0; cronium_increment_variable COUNT", "1"),
+
+		// So does an increment.
+		incremented("cronium_increment_variable COUNT 010", "51"),
+		incremented("cronium_increment_variable COUNT 09", "50"),
+		incremented("cronium_increment_variable COUNT -010", "31"),
+		incremented("cronium_increment_variable COUNT +1", "42"),
+		incremented("stored 010; cronium_increment_variable COUNT 010", "20"),
+
+		// An increment that isn't an integer changes nothing, and nothing is even read.
+		badIncrement("abc", "abc"),
+		badIncrement("1.5", "1.5"),
+		badIncrement("0x10", "0x10"),
+		badIncrement("1+1", "1+1"),
+		badIncrement(`""`, ""),
+		badIncrement(`" 5"`, " 5"),
+		badIncrement(`"a[\$(touch /tmp/injected)]"`, "a[$(touch /tmp/injected)]"),
+		{Call: "[ ! -e /tmp/injected ]", Stored: storedAtFirst()},
+
+		// Neither does a stored value that isn't one.
+		unchanged("abc", notAnInteger),
+		unchanged("1.5", notAnInteger),
+		unchanged("1e3", notAnInteger),
+
+		// $((...)) has 64 bits, and past them it wraps without saying so.
+		incremented("stored 9223372036854775806; cronium_increment_variable COUNT", "9223372036854775807"),
+		unchanged("9223372036854775807", "Error: Adding 1 to variable 'COUNT' goes past 64 bits, so it was not changed"),
+		unchanged("9223372036854775808", notAnInteger),
+		unchanged("99999999999999999999", notAnInteger),
+		unchanged("18446744073709551616", notAnInteger),
+
+		// A bash the script starts has all of this too.
+		incremented(`stored 010; bash -c "cronium_increment_variable COUNT"`, "11"),
+		{
+			Call:   `bash -u -c "cronium_increment_variable COUNT abc"`,
+			Status: 1,
+			Stderr: []string{"Error: Increment 'abc' is not a 64-bit integer, so variable 'COUNT' was not changed"},
+			Stored: storedAtFirst(),
+		},
+		{
+			Call:     `bash -c "cronium_set_variable NEW 010"`,
+			Requests: []string{`PUT variables/NEW {"value":"010"}`},
+			Stored:   storedAtFirst("NEW", "010"),
+		},
+	}
+
+	script := "stored() { printf %s \"$1\" > /tmp/runtime-vars/COUNT; }\n" + tryLines(want)
+	for _, strict := range strictModes {
+		t.Run(strict.name, func(t *testing.T) {
+			assert.Equal(t, want, runHelperCalls(t, e, strict.mode, script))
+		})
+	}
+}
+
 // TestRetriesUnderSetEInTheSandbox covers a helper that calls _cronium_request directly,
 // rather than in $(...), which is every one that writes. Under `set -e` a refused
 // connection ended the script at the curl line: status 7, no retry and no message, where a
@@ -501,4 +650,96 @@ try 'cronium_increment_variable COUNT'
 			Stored: storedAtFirst(),
 		},
 	}, calls)
+}
+
+// TestValuesFromStdinInTheSandbox covers cronium_output and cronium_set_variable with no
+// value argument, which take the value from stdin, as on a remote server. cronium_output used
+// to send an empty string with status 0, so piped output was lost, and under `set -u` it ended
+// the script. A job's stdin is at its end once the bootstrap has read the script, so a call
+// with nothing piped to it sends an empty value. If it waited instead, the job would time out.
+func TestValuesFromStdinInTheSandbox(t *testing.T) {
+	e := childBashSandbox(t)
+
+	unreadable := []string{"Error: Could not read the value, so nothing was sent"}
+	want := []helperCall{
+		{Call: "echo x | cronium_output", Requests: []string{`POST output {"data":"x\n"}`}, Stored: storedAtFirst()},
+		{Call: "printf x | cronium_output", Requests: []string{`POST output {"data":"x"}`}, Stored: storedAtFirst()},
+		{Call: `printf "x\n\n" | cronium_output`, Requests: []string{`POST output {"data":"x\n\n"}`}, Stored: storedAtFirst()},
+		{Call: `echo "{\"a\": 1}" | cronium_output`, Requests: []string{`POST output {"data":{"a":1}}`}, Stored: storedAtFirst()},
+		{Call: "echo 42 | cronium_output", Requests: []string{`POST output {"data":42}`}, Stored: storedAtFirst()},
+		{Call: "echo 1 2 | cronium_output", Requests: []string{`POST output {"data":"1 2\n"}`}, Stored: storedAtFirst()},
+		{Call: `printf "a\0b" | cronium_output`, Requests: []string{`POST output {"data":"a\u0000b"}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output </dev/null", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output <&-", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "exec <&-; cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "bash -c cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "bash -u -c cronium_output", Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "echo x | bash -c cronium_output", Requests: []string{`POST output {"data":"x\n"}`}, Stored: storedAtFirst()},
+		{Call: "echo x | cronium_output y", Requests: []string{`POST output {"data":"y"}`}, Stored: storedAtFirst()},
+		{Call: `echo x | cronium_output ""`, Requests: []string{`POST output {"data":""}`}, Stored: storedAtFirst()},
+		{Call: "cronium_output </", Status: 1, Stderr: unreadable, Stored: storedAtFirst()},
+
+		{Call: "echo x | cronium_set_variable NEW", Requests: []string{`PUT variables/NEW {"value":"x\n"}`}, Stored: storedAtFirst("NEW", "x\n")},
+		{Call: "echo 7 | cronium_set_variable COUNT", Requests: []string{`PUT variables/COUNT {"value":7}`}, Stored: storedAtFirst("COUNT", "7")},
+		{Call: "cronium_set_variable LOG", Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: "cronium_set_variable LOG <&-", Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: `bash -u -c "cronium_set_variable LOG"`, Requests: []string{`PUT variables/LOG {"value":""}`}, Stored: storedAtFirst("LOG", "")},
+		{Call: `echo x | bash -c "cronium_set_variable NEW"`, Requests: []string{`PUT variables/NEW {"value":"x\n"}`}, Stored: storedAtFirst("NEW", "x\n")},
+		{Call: "echo x | cronium_set_variable NEW y", Requests: []string{`PUT variables/NEW {"value":"y"}`}, Stored: storedAtFirst("NEW", "y")},
+		{Call: "cronium_set_variable LOG </", Status: 1, Stderr: unreadable, Stored: storedAtFirst()},
+		{
+			Call:     "echo null | cronium_set_variable LOG",
+			Status:   1,
+			Stderr:   []string{"Error: API request failed - HTTP 400 - variable value must not be null"},
+			Requests: []string{`PUT variables/LOG {"value":null}`},
+			Stored:   storedAtFirst(),
+		},
+	}
+
+	for _, strict := range strictModes {
+		t.Run(strict.name, func(t *testing.T) {
+			assert.Equal(t, want, runHelperCalls(t, e, strict.mode, tryLines(want)))
+		})
+	}
+
+	t.Run("as a job's own script, with nothing piped", func(t *testing.T) {
+		run := runWithFakeRuntime(t, e, `cronium_output; echo "output rc=$?"
+cronium_set_variable KEY; echo "variable rc=$?"
+`)
+
+		assert.Empty(t, run.stderr)
+		assert.Equal(t, 0, run.exitCode)
+		assert.Equal(t, []string{"output rc=0", "variable rc=0"}, run.stdout)
+		require.Len(t, run.requests, 2)
+		assert.Contains(t, run.requests[0], "POST /executions/"+run.executionID+"/output HTTP/1.1")
+		assert.Contains(t, run.requests[0], `{"data":""}`)
+		assert.Contains(t, run.requests[1], "PUT /executions/"+run.executionID+"/variables/KEY HTTP/1.1")
+		assert.Contains(t, run.requests[1], `{"value":""}`)
+	})
+
+	// Linux refuses any one argument over 128 KB, and these all used to pass the value as one.
+	t.Run("past what one argument can hold", func(t *testing.T) {
+		calls := runHelperCalls(t, e, ":", `large() { head -c 200000 /dev/zero | tr "\0" x; }
+try 'large | cronium_output'
+try 'cronium_output "$(large)"'
+try 'large | cronium_set_variable NEW'
+try 'cronium_set_variable NEW "$(large)"'
+`)
+
+		value := strings.Repeat("x", 200000)
+		require.Len(t, calls, 4)
+		for _, call := range calls {
+			assert.Equal(t, 0, call.Status, call.Call)
+			assert.Empty(t, call.Stderr, call.Call)
+			require.Len(t, call.Requests, 1, call.Call)
+		}
+		// Not assert.Equal, which would print all of it if they differed.
+		assert.True(t, calls[0].Requests[0] == `POST output {"data":"`+value+`"}`, calls[0].Call)
+		assert.True(t, calls[1].Requests[0] == `POST output {"data":"`+value+`"}`, calls[1].Call)
+		assert.True(t, calls[2].Requests[0] == `PUT variables/NEW {"value":"`+value+`"}`, calls[2].Call)
+		assert.True(t, calls[3].Requests[0] == `PUT variables/NEW {"value":"`+value+`"}`, calls[3].Call)
+		assert.True(t, calls[2].Stored["NEW"] == value, calls[2].Call)
+		assert.True(t, calls[3].Stored["NEW"] == value, calls[3].Call)
+	})
 }

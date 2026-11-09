@@ -31,3 +31,11 @@ export function isFailureResult(r: unknown): boolean {
   const obj = r as { ok?: unknown; success?: unknown };
   return obj.ok === false || obj.success === false;
 }
+
+/** The reason a failed action gave, or one naming the action if it gave none. */
+export function failureReason(r: unknown, actionName: string): string {
+  const reason = (r as { error?: unknown } | null | undefined)?.error;
+  return typeof reason === "string" && reason
+    ? reason
+    : `${actionName} reported failure`;
+}

@@ -271,12 +271,17 @@ function EventFormFields({
   );
   const serverGroups = serverGroupsData?.groups ?? [];
 
-  // Fetch available tools
-  const { data: toolsData, isLoading: isLoadingTools } =
-    trpc.tools.getAll.useQuery(
-      {},
-      { ...QUERY_OPTIONS.dynamic, enabled: active },
-    );
+  // Fetch available tools: as many as the server gives, 1,000, not its default of 20. The
+  // section calls a stored credential gone when it isn't in this list.
+  const {
+    data: toolsData,
+    isLoading: isLoadingTools,
+    isError: isToolsError,
+    refetch: refetchTools,
+  } = trpc.tools.getAll.useQuery(
+    { limit: 1000 },
+    { ...QUERY_OPTIONS.dynamic, enabled: active },
+  );
   const availableTools = (toolsData?.tools ?? []) as unknown as Tool[];
 
   // tRPC mutations
@@ -644,14 +649,36 @@ function EventFormFields({
         <Controller
           name="toolActionConfig"
           control={control}
-          render={({ field }) => (
-            <ToolActionSection
-              value={field.value ?? null}
-              onChange={field.onChange}
-              active={active}
-              availableTools={availableTools}
-              isLoadingTools={isLoadingTools}
-            />
+          render={({ field, fieldState }) => (
+            <div>
+              {/* Takes the focus when a submit fails on this, as the other fields do,
+                  which brings the message into view: the submit button is a screen or
+                  more below. Always there, because the first focus comes before the
+                  message has rendered. */}
+              <div
+                ref={field.ref}
+                tabIndex={-1}
+                role="alert"
+                className="outline-none"
+              >
+                {fieldState.error && (
+                  <p className="text-destructive mb-2 text-sm">
+                    {fieldState.error.message}
+                  </p>
+                )}
+              </div>
+              <ToolActionSection
+                value={field.value ?? null}
+                onChange={field.onChange}
+                active={active}
+                availableTools={availableTools}
+                isLoadingTools={isLoadingTools}
+                // A failed refetch keeps its data and sets the error too, and that
+                // list is still good to show.
+                toolsLoadFailed={isToolsError && !toolsData}
+                onRetryTools={() => void refetchTools()}
+              />
+            </div>
           )}
         />
       )}

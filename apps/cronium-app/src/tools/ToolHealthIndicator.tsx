@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { StatusIcon, getStatusConfig } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { wasRefusedAsTooMany } from "@/trpc/shared";
 import { useToast } from "@cronium/ui";
 import {
   Tooltip,
@@ -50,6 +51,12 @@ export function ToolHealthIndicator({
       }
     },
     onError: (error) => {
+      // Too many checks at once or this minute: the tool wasn't reached.
+      if (wasRefusedAsTooMany(error)) {
+        setStatus("unknown");
+        toast({ title: "Not Checked", description: error.message });
+        return;
+      }
       setStatus("unhealthy");
       setLastChecked(new Date());
       onHealthChange?.(false);
@@ -145,15 +152,26 @@ export function ToolHealthBadge({
   onHealthChange?: (healthy: boolean) => void;
 }) {
   const [status, setStatus] = useState<HealthStatus>("unknown");
+  // Why a check left the status unknown, when it was refused.
+  const [notChecked, setNotChecked] = useState<string | null>(null);
 
   const testConnectionMutation = trpc.tools.testConnection.useMutation({
     onSuccess: (result) => {
       const isHealthy = result.success;
       setStatus(isHealthy ? "healthy" : "unhealthy");
+      setNotChecked(null);
       onHealthChange?.(isHealthy);
     },
-    onError: () => {
+    onError: (error) => {
+      // The page checks every tool it lists at once, so a user with many can reach
+      // the limit on connection checks. Those tools weren't reached: not broken.
+      if (wasRefusedAsTooMany(error)) {
+        setStatus("unknown");
+        setNotChecked(`Not checked: ${error.message}`);
+        return;
+      }
       setStatus("unhealthy");
+      setNotChecked(null);
       onHealthChange?.(false);
     },
   });
@@ -163,14 +181,17 @@ export function ToolHealthBadge({
     testConnectionMutation.mutate({ id: toolId });
   }, [toolId]);
 
+  // A check can wait its turn behind others, so show that it's under way.
+  const checking = testConnectionMutation.isPending;
+  const shown: HealthStatus = checking ? "checking" : status;
   // Icon-only pill matching StatusBadge's canonical styling
-  const config = getStatusConfig(status);
+  const config = getStatusConfig(shown);
   return (
     <span
       className={`inline-flex h-5 items-center rounded-full border px-1.5 ${config.border} ${config.bgColor}`}
-      title={config.label}
+      title={checking ? config.label : (notChecked ?? config.label)}
     >
-      <StatusIcon status={status} className="h-3 w-3" />
+      <StatusIcon status={shown} className="h-3 w-3" />
     </span>
   );
 }

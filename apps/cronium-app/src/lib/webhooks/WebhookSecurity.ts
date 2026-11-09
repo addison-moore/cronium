@@ -1,10 +1,25 @@
 import crypto from "crypto";
 import { RateLimitService } from "../rate-limit-service";
+import type { DeliveryClaim } from "./webhook-replay-store";
 
 export interface SignatureVerificationResult {
   isValid: boolean;
   error?: string;
 }
+
+export interface WebhookVerificationResult extends SignatureVerificationResult {
+  /**
+   * Set when the delivery id couldn't be checked, so nothing could be decided. Neither
+   * the request nor its id is at fault, and the same request can be sent again.
+   */
+  unavailable?: true;
+  /** Set when it's valid: the delivery id this request has taken. */
+  claim?: DeliveryClaim;
+}
+
+/** What a sender is told while delivery ids can't be checked. */
+const DELIVERY_IDS_UNAVAILABLE_MESSAGE =
+  "Delivery ids can't be checked right now, so this event wasn't accepted. Nothing was stored or sent. Send it again later, under the same delivery id.";
 
 export class WebhookSecurity {
   private static readonly SIGNATURE_PREFIX = "sha256=";
@@ -143,8 +158,12 @@ export class WebhookSecurity {
    * The signature covers `timestamp.deliveryId.rawBody`, the timestamp is
    * required and must be finite and within the tolerance window, and the
    * delivery ID is atomically consumed so a captured request cannot be
-   * replayed. `rawBody` is the exact received bytes (not a re-serialization),
+   * replayed, unless `releaseDeliveryId` gives the ID back because that request
+   * was refused. `rawBody` is the exact received bytes (not a re-serialization),
    * so senders and this verifier agree byte-for-byte.
+   *
+   * When Valkey can't be asked about the ID, nothing passes and the result says
+   * `unavailable`: that isn't a replay, and the ID is still unused.
    *
    * A delivery from `WebhookManager` doesn't pass this, on purpose: a webhook has
    * one secret for both directions, so accepting its own deliveries here would let
@@ -161,7 +180,7 @@ export class WebhookSecurity {
       secret: string;
       ipWhitelist?: string[];
     },
-  ): Promise<SignatureVerificationResult> {
+  ): Promise<WebhookVerificationResult> {
     const signature = request.headers["x-webhook-signature"];
     const timestamp = request.headers["x-webhook-timestamp"];
     const deliveryId = request.headers["x-webhook-delivery-id"];
@@ -215,29 +234,37 @@ export class WebhookSecurity {
     // Remembered for the whole span the signature stays acceptable. The tolerance
     // applies both ways, so a request stamped at the far future edge remains valid
     // for two tolerances from now; a shorter memory reopens the replay in between.
-    const fresh = await consumeWebhookDeliveryOnce(
+    const check = await consumeWebhookDeliveryOnce(
       request.webhookId,
       deliveryId,
       Math.ceil((2 * WebhookSecurity.TIMESTAMP_TOLERANCE_MS) / 1000) + 60,
     );
-    if (!fresh) {
-      return { isValid: false, error: "Duplicate or replayed delivery" };
+    if (check.outcome === "fresh") {
+      return { isValid: true, claim: check.claim };
     }
-
-    return { isValid: true };
+    if (check.outcome === "unavailable") {
+      return {
+        isValid: false,
+        error: DELIVERY_IDS_UNAVAILABLE_MESSAGE,
+        unavailable: true,
+      };
+    }
+    return { isValid: false, error: "Duplicate or replayed delivery" };
   }
 
   /**
    * Let a delivery id that `verifyWebhook` consumed be used again, for a request that
    * was then refused with nothing done. Sending it again isn't a replay, and it would
    * look like one to anyone who keeps the id across attempts.
+   *
+   * A captured copy of that request gets through the same way until its timestamp is
+   * too old. The id still goes to one request only, because `verifyWebhook` consumes it
+   * atomically and whichever comes second gets the 401. A copy refused for what it holds
+   * can keep coming back, and each time counts against the webhook's rate limit.
    */
-  async releaseDeliveryId(
-    webhookId: number,
-    deliveryId: string,
-  ): Promise<void> {
+  async releaseDeliveryId(claim: DeliveryClaim): Promise<void> {
     const { releaseWebhookDelivery } = await import("./webhook-replay-store");
-    await releaseWebhookDelivery(webhookId, deliveryId);
+    await releaseWebhookDelivery(claim);
   }
 
   /**
