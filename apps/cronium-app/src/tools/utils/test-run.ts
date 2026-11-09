@@ -2,7 +2,11 @@
  * The words for `ToolAction.testRun`, what the event form's button does with an action.
  * Server-safe and client-safe: an action's module is imported by both.
  */
-import type { ActionTestRun, ShownResult } from "@/tools/types/tool-plugin";
+import type {
+  ActionCheck,
+  ActionTestRun,
+  ShownResult,
+} from "@/tools/types/tool-plugin";
 
 const NO_TEST_MODE = "There's no test mode: this really";
 
@@ -32,13 +36,51 @@ export const readRun = <Counted, Shown>(
   shows: (result) => shows(result as Shown),
 });
 
-/** Really delivers something to someone. `does` finishes "this really ...". */
-export const sendRun = <Result>(
+/**
+ * A check the action does when `isTest` is set, offered beside the real run, which it
+ * stops short of. `label` names its button and `does` finishes "<label> ...". `says` is
+ * the toast: what the check showed, then what it didn't.
+ */
+export interface CheckFirst<Result> {
+  label: string;
+  does: string;
+  says: (result: Result) => string;
+}
+
+export const checkFirst = <Result>(
+  label: string,
   does: string,
   says: (result: Result) => string,
+): CheckFirst<Result> => ({ label, does, says });
+
+/**
+ * What a real run's question says, and the check beside it if there is one. With a
+ * check there is a test mode, so the question only says what's real.
+ */
+const realRun = <Checked>(
+  does: string,
+  check: CheckFirst<Checked> | undefined,
+): { explains: string; check?: ActionCheck } =>
+  check
+    ? {
+        explains: `This really ${does}.`,
+        check: {
+          label: check.label,
+          explains: `${check.label} ${check.does}.`,
+          runDoes: `really ${does}`,
+          succeeded: (result) => check.says(result as Checked),
+        },
+      }
+    : { explains: `${NO_TEST_MODE} ${does}.` };
+
+/** Really delivers something to someone. `does` finishes "this really ...". */
+export const sendRun = <Result, Checked = never>(
+  does: string,
+  says: (result: Result) => string,
+  check?: CheckFirst<Checked>,
 ): ActionTestRun => ({
   kind: "sends",
-  explains: `${NO_TEST_MODE} ${does}.`,
+  ...realRun(does, check),
   succeeded: (result) => says(result as Result),
 });
 
@@ -58,11 +100,12 @@ export const spendRun = <Result>(
 });
 
 /** Really changes data. */
-export const writeRun = <Result>(
+export const writeRun = <Result, Checked = never>(
   says: (result: Result) => string,
+  check?: CheckFirst<Checked>,
 ): ActionTestRun => ({
   kind: "writes",
-  explains: `${NO_TEST_MODE} changes your data, and can't be undone.`,
+  ...realRun("changes your data, and can't be undone", check),
   succeeded: (result) => says(result as Result),
 });
 

@@ -37,6 +37,7 @@ import {
   FileText,
   AlertCircle,
   Play,
+  SearchCheck,
   TestTube,
   Info,
   X,
@@ -126,6 +127,16 @@ const getActionTypeColor = (action: ToolAction): string => {
 const runButtonLabel = (action: ToolAction): string =>
   action.testRun.kind === "simulated" ? "Simulate" : `${action.name} Now`;
 
+/**
+ * What a press asks the server for. A simulation and a check reach the action as
+ * `isTest`, and the server refuses either for an action that doesn't declare it.
+ */
+type RunMode = "simulate" | "check" | "run";
+
+// The main button, beside any check.
+const mainRunMode = (action: ToolAction): RunMode =>
+  action.testRun.kind === "simulated" ? "simulate" : "run";
+
 // A run that changes nothing needs no question: a simulation contacts nothing, and a read
 // can't write.
 const asksBeforeRunning = ({ kind }: ActionTestRun): boolean =>
@@ -139,10 +150,12 @@ const RUN_SUCCEEDED_TITLE: Record<ActionTestRun["kind"], string> = {
   writes: "Done",
 };
 
-const runFailedTitle = (action: ToolAction): string =>
-  action.testRun.kind === "simulated"
-    ? "Simulation failed"
-    : `${action.name} failed`;
+const runFailedTitle = ({ action, mode }: PressedRun): string => {
+  if (mode === "check") {
+    return `${action.testRun.check?.label ?? "Check"} failed`;
+  }
+  return mode === "simulate" ? "Simulation failed" : `${action.name} failed`;
+};
 
 const firstTemplateValue = (value: unknown): string | undefined => {
   if (typeof value === "string") return /\{\{[^{}]+\}\}/.exec(value)?.[0];
@@ -168,10 +181,12 @@ const templateValueNote = (
     : undefined;
 };
 
-// A press of the run button. The answer is about this, and another credential or action
-// can be chosen while it runs.
+// A press of the run button, or of the check beside it. The answer is about this, and
+// another credential or action can be chosen while it runs.
 interface PressedRun {
   action: ToolAction;
+  /** Which was asked for: the check, a simulation or the real run. */
+  mode: RunMode;
   credential: Tool;
   parameters: Record<string, unknown>;
   /** False once another credential or action is chosen, so its result isn't shown. */
@@ -226,6 +241,8 @@ export default function ToolActionSection({
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
   const [askingToRun, setAskingToRun] = useState(false);
   const runExplanationId = useId();
+  const checkExplanationId = useId();
+  const runNoteId = useId();
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     null,
   );
@@ -473,21 +490,26 @@ export default function ToolActionSection({
       const { action } = run;
       if (!answer.success) {
         toast({
-          title: runFailedTitle(action),
+          title: runFailedTitle(run),
           description: answer.error,
           variant: "destructive",
         });
         return;
       }
-      const summary = action.testRun.succeeded(answer.result);
+      // Go by what the server says ran. One that didn't know the check ran it for real.
+      const check = answer.checked ? action.testRun.check : undefined;
+      const summary = check
+        ? check.succeeded(answer.result)
+        : action.testRun.succeeded(answer.result);
       toast({
-        title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
+        title: check ? "Checked" : RUN_SUCCEEDED_TITLE[action.testRun.kind],
         description: summary,
       });
       // Only a read or a prompt has something to show: a simulation's result is made up,
-      // and a send or a write comes back with little more than the count the toast gave.
+      // a check's is all in its toast, and a send or a write comes back with little more
+      // than the count the toast gave.
       const { shows } = action.testRun;
-      if (shows && !answer.simulated && run.stillChosen) {
+      if (shows && !answer.simulated && !answer.checked && run.stillChosen) {
         setLastRun({
           toolId: run.credential.id,
           actionId: action.id,
@@ -500,49 +522,59 @@ export default function ToolActionSection({
       }
     },
     onError: (error) => {
-      const action = pressedRun.current?.action;
-      if (!action) return;
+      const run = pressedRun.current;
+      if (!run) return;
       const message = trpcErrorMessage(error, "The server gave no reason.");
       // The server only says no before running anything. With no answer, or a broken one,
       // nobody here can tell, and a proxy can give up on a run that goes on without it.
+      // A simulation or a check changes nothing either way.
       const refused = (error.data?.httpStatus ?? 500) < 500;
+      const mayHaveRun =
+        !refused && run.mode === "run" && asksBeforeRunning(run.action.testRun);
       toast({
-        title: runFailedTitle(action),
-        description:
-          refused || !asksBeforeRunning(action.testRun)
-            ? message
-            : `${message} It may still have run.`,
+        title: runFailedTitle(run),
+        description: mayHaveRun ? `${message} It may still have run.` : message,
         variant: "destructive",
       });
     },
   });
 
-  const runAction = () => {
+  const runAction = (mode: RunMode) => {
     if (!selectedTool || !selectedAction) return;
 
     pressedRun.current = {
       action: selectedAction,
+      mode,
       credential: selectedTool,
       parameters,
       stillChosen: true,
     };
-    // Whatever this run comes back with, the last one's result isn't it.
-    setLastRun(null);
+    // Whatever this run comes back with, the last one's result isn't it. A check shows
+    // nothing there, so a result it didn't replace, such as a paid answer, stays.
+    if (mode !== "check") setLastRun(null);
     runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
       parameters,
-      isTest: true,
+      mode,
+      // A server from before `mode` goes by this alone.
+      isTest: mode !== "run",
     });
   };
 
   const handleRunPressed = () => {
-    if (selectedAction && asksBeforeRunning(selectedAction.testRun)) {
+    if (!selectedAction) return;
+    if (asksBeforeRunning(selectedAction.testRun)) {
       setAskingToRun(true);
     } else {
-      runAction();
+      runAction(mainRunMode(selectedAction));
     }
   };
+
+  // Which button's run is going, for its spinner.
+  const runningMode = runActionMutation.isPending
+    ? runActionMutation.variables?.mode
+    : undefined;
 
   const runNote = selectedAction
     ? templateValueNote(selectedAction, parameters)
@@ -1068,39 +1100,81 @@ export default function ToolActionSection({
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    {/* The button names the action, which can be too long to fit beside this. */}
+                    {/* The buttons name the action, which can be too long to fit beside this. */}
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                       <Label>Configure Parameters</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRunPressed}
-                        disabled={runActionMutation.isPending}
-                        aria-describedby={runExplanationId}
-                        className="ml-auto flex items-center gap-2"
-                      >
-                        {runActionMutation.isPending ? (
-                          <Spinner size="sm" />
-                        ) : selectedAction.testRun.kind === "simulated" ? (
-                          <TestTube className="h-4 w-4" />
-                        ) : (
-                          <Play className="h-4 w-4" />
+                      <div className="ml-auto flex flex-wrap justify-end gap-2">
+                        {selectedAction.testRun.check && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => runAction("check")}
+                            disabled={runActionMutation.isPending}
+                            aria-describedby={
+                              runNote
+                                ? `${checkExplanationId} ${runNoteId}`
+                                : checkExplanationId
+                            }
+                            className="flex items-center gap-2"
+                          >
+                            {runningMode === "check" ? (
+                              <Spinner size="sm" />
+                            ) : (
+                              <SearchCheck className="h-4 w-4" />
+                            )}
+                            {selectedAction.testRun.check.label}
+                          </Button>
                         )}
-                        {runButtonLabel(selectedAction)}
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRunPressed}
+                          disabled={runActionMutation.isPending}
+                          aria-describedby={
+                            runNote
+                              ? `${runExplanationId} ${runNoteId}`
+                              : runExplanationId
+                          }
+                          className="flex items-center gap-2"
+                        >
+                          {runningMode !== undefined &&
+                          runningMode !== "check" ? (
+                            <Spinner size="sm" />
+                          ) : selectedAction.testRun.kind === "simulated" ? (
+                            <TestTube className="h-4 w-4" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                          {runButtonLabel(selectedAction)}
+                        </Button>
+                      </div>
                     </div>
-                    <div
-                      id={runExplanationId}
-                      className={cn(
-                        "text-right text-sm",
-                        asksBeforeRunning(selectedAction.testRun)
-                          ? "text-warning-text"
-                          : "text-muted-foreground",
+                    <div className="text-right text-sm">
+                      {selectedAction.testRun.check && (
+                        <p
+                          id={checkExplanationId}
+                          className="text-muted-foreground"
+                        >
+                          {selectedAction.testRun.check.explains}
+                        </p>
                       )}
-                    >
-                      <p>{selectedAction.testRun.explains}</p>
-                      {runNote && <p>{runNote}</p>}
+                      <div
+                        className={
+                          asksBeforeRunning(selectedAction.testRun)
+                            ? "text-warning-text"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {/* Beside a check, the line names the button it's about. */}
+                        <p id={runExplanationId}>
+                          {selectedAction.testRun.check
+                            ? `${runButtonLabel(selectedAction)} ${selectedAction.testRun.check.runDoes}.`
+                            : selectedAction.testRun.explains}
+                        </p>
+                        {runNote && <p id={runNoteId}>{runNote}</p>}
+                      </div>
                     </div>
                   </div>
 
@@ -1133,7 +1207,7 @@ export default function ToolActionSection({
                         ? "destructive"
                         : "default"
                     }
-                    onConfirm={runAction}
+                    onConfirm={() => runAction("run")}
                   />
 
                   <ActionParameterForm
