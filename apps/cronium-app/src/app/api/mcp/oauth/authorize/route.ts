@@ -1,6 +1,12 @@
 import { getCachedServerSession } from "@/lib/auth-cache";
 import { getBearerToken, authenticateApiToken } from "@/lib/api-auth";
-import { getClient, putAuthCode } from "@/lib/mcp-oauth/store";
+import { CacheUnavailableError } from "@/lib/cache/cache-unavailable";
+import { failureWithStack } from "@/lib/pg-errors";
+import {
+  getClient,
+  putAuthCode,
+  type OAuthClient,
+} from "@/lib/mcp-oauth/store";
 import { randomId, signTicket, verifyTicket } from "@/lib/mcp-oauth/tokens";
 import {
   getBaseUrl,
@@ -9,6 +15,10 @@ import {
   isSupportedScopeRequest,
 } from "@/lib/mcp-oauth/metadata";
 import { getAuthorizedPrincipal } from "@/server/security/authorization";
+import {
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+} from "@/server/security/credential-check";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +37,12 @@ function escapeHtml(s: string): string {
   );
 }
 
+// Clients and codes live in Valkey, and failing to reach it says nothing about either.
+const CLIENT_CHECK_FAILED_MESSAGE =
+  "Cronium couldn't look up this application, usually because it can't reach its database. Try again shortly.";
+const CODE_NOT_SAVED_MESSAGE =
+  "Cronium couldn't save this authorization, usually because it can't reach its database. Try again shortly.";
+
 function htmlError(message: string, status = 400): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>Authorization error</title>` +
@@ -43,7 +59,7 @@ function htmlError(message: string, status = 400): Response {
 // deny-all token into an `mcp` one.
 async function resolveOwner(
   req: Request,
-): Promise<{ sub: string; sv: number } | null> {
+): Promise<{ sub: string; sv: number } | "check-failed" | null> {
   try {
     const session = await getCachedServerSession();
     if (session?.user?.id) {
@@ -60,7 +76,9 @@ async function resolveOwner(
         return { sub: principal.id, sv: principal.sessionVersion };
       }
     }
-  } catch {
+  } catch (error) {
+    // Nothing is known about them, and signing in needs the same database.
+    if (error instanceof CredentialCheckFailedError) return "check-failed";
     // Not a live principal: fall through and make them sign in again.
   }
   return null;
@@ -95,7 +113,18 @@ export async function GET(req: Request): Promise<Response> {
 
   // Validate client + redirect_uri BEFORE any redirect.
   if (!clientId) return htmlError("Missing client_id.");
-  const client = await getClient(clientId);
+  let client: OAuthClient | null;
+  try {
+    client = await getClient(clientId);
+  } catch (error) {
+    if (!(error instanceof CacheUnavailableError)) throw error;
+    console.error(
+      "Error reading an MCP OAuth client:",
+      failureWithStack(error),
+    );
+    // Not "unknown": that would send whoever set this client up to register it again.
+    return htmlError(CLIENT_CHECK_FAILED_MESSAGE, 503);
+  }
   if (!client) {
     return htmlError(
       "Unknown client_id. Register via /api/mcp/oauth/register.",
@@ -129,6 +158,9 @@ export async function GET(req: Request): Promise<Response> {
 
   // Authenticate the resource owner.
   const owner = await resolveOwner(req);
+  if (owner === "check-failed") {
+    return htmlError(CREDENTIAL_CHECK_FAILED_MESSAGE, 503);
+  }
   if (!owner) {
     const signin = `${base}/api/auth/signin?callbackUrl=${encodeURIComponent(req.url)}`;
     return Response.redirect(signin, 302);
@@ -192,14 +224,28 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const code = randomId(24);
-  await putAuthCode(code, {
-    sub: owner.sub,
-    cid: clientId,
-    redirectUri,
-    codeChallenge,
-    scope,
-    resource: aud,
-    sv: owner.sv,
-  });
+  try {
+    await putAuthCode(code, {
+      sub: owner.sub,
+      cid: clientId,
+      redirectUri,
+      codeChallenge,
+      scope,
+      resource: aud,
+      sv: owner.sv,
+    });
+  } catch (error) {
+    if (!(error instanceof CacheUnavailableError)) throw error;
+    console.error(
+      "Error storing an OAuth authorization code:",
+      failureWithStack(error),
+    );
+    // A code that wasn't stored would only fail at the token endpoint, as invalid_grant.
+    // RFC 6749 4.1.2.1 has this error for an authorization server that can't answer now.
+    return redirectBack(redirectUri, state, {
+      error: "temporarily_unavailable",
+      error_description: CODE_NOT_SAVED_MESSAGE,
+    });
+  }
   return redirectBack(redirectUri, state, { code });
 }

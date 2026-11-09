@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, readRun, rowsShown } from "@/tools/utils/test-run";
 import {
   sqlCredentialsSchema,
   runQuerySchema,
@@ -24,6 +25,10 @@ export const runQueryAction: ToolAction = {
   actionType: "search",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: readRun(
+    (result: { rowCount: number }) => counted(result.rowCount, "row"),
+    rowsShown,
+  ),
   inputSchema: runQuerySchema,
   parameters: safeZodToParameters(runQuerySchema),
   // The query text should hold only :placeholders, with values in Parameters where

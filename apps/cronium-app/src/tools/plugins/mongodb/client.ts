@@ -50,7 +50,11 @@ async function withClient<T>(
   fn: (db: Db, client: MongoClient) => Promise<T>,
 ): Promise<T> {
   const { MongoClient } = await import("mongodb");
+  const { lookupWithSearch } = await import("@/lib/resolve-host");
   const client = new MongoClient(buildMongoUri(credentials), {
+    // The driver would look hosts up with `dns.lookup`: see lib/resolve-host.ts. A
+    // `mongodb+srv` name is a c-ares query already, but the hosts it returns aren't.
+    lookup: lookupWithSearch,
     serverSelectionTimeoutMS: Math.min(timeoutMs, 10_000),
     connectTimeoutMS: Math.min(timeoutMs, 10_000),
     socketTimeoutMS: timeoutMs,
@@ -229,6 +233,24 @@ export async function updateDocuments(
       upsertedCount: res.upsertedCount,
     };
   });
+}
+
+/**
+ * How many documents a filter matches, for a check of an update or a delete. The filter is
+ * revived as theirs is, and nothing is written. `countDocuments` refuses `$where` and
+ * `$near`, which a write takes, so a check with one fails rather than counting.
+ */
+export async function countMatchingDocuments(
+  credentials: MongoCredentials,
+  input: { collection: string; filter: Record<string, unknown> },
+  opts: MongoWriteOptions,
+): Promise<number> {
+  const filter = await reviveExtendedJson(input.filter);
+  return withClient(credentials, opts.timeoutMs, (db) =>
+    db
+      .collection(input.collection)
+      .countDocuments(filter, { maxTimeMS: opts.timeoutMs }),
+  );
 }
 
 export async function deleteDocuments(

@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { cacheService } from "@/lib/cache/cache-service";
+import { failureWithStack } from "@/lib/pg-errors";
 import { users, UserRole, UserStatus } from "@/shared/schema";
+import { AccountCheckFailedError } from "./credential-check";
 
 /**
  * Central deny-by-default authorization for every transport (tRPC, REST,
@@ -132,7 +134,8 @@ export class PrincipalRevokedError extends TRPCError {
  * Throws UNAUTHORIZED when the user no longer exists, is not ACTIVE, the
  * expected session version no longer matches (password/role/status changed
  * since the session or token was issued), or current state cannot be
- * established at all (database unreachable).
+ * established at all (database unreachable). That last one is an
+ * AccountCheckFailedError, which says nothing about the account.
  */
 export async function getAuthorizedPrincipal(
   userId: string,
@@ -145,9 +148,10 @@ export async function getAuthorizedPrincipal(
   let principal: AuthorizedPrincipal | null;
   try {
     principal = await loadPrincipal(userId);
-  } catch {
+  } catch (error) {
     // Sensitive actions must fail closed when current state is unknowable.
-    throw new PrincipalRevokedError("Unable to verify account status");
+    console.error("Error verifying account status:", failureWithStack(error));
+    throw new AccountCheckFailedError();
   }
 
   if (!principal) {

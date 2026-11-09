@@ -57,13 +57,56 @@ type JobsConfig struct {
 
 // ContainerConfig defines Docker container settings
 type ContainerConfig struct {
-	Docker    DockerConfig            `yaml:"docker" envconfig:"DOCKER"`
-	Images    map[string]string       `yaml:"images" envconfig:"IMAGES"`
+	Docker DockerConfig `yaml:"docker" envconfig:"DOCKER"`
+	Images ImageMap     `yaml:"images" envconfig:"IMAGES"`
+	// ImageTag is the tag of the published images a job uses when nothing configures them.
+	// It isn't a setting: main sets it to the tag this build was published under.
+	ImageTag  string                  `yaml:"-" mapstructure:"-" ignored:"true"`
 	Resources ResourceConfig          `yaml:"resources" envconfig:"RESOURCES"`
 	Security  ContainerSecurityConfig `yaml:"security" envconfig:"SECURITY"`
 	Volumes   VolumeConfig            `yaml:"volumes" envconfig:"VOLUMES"`
 	Network   NetworkConfig           `yaml:"network" envconfig:"NETWORK"`
 	Runtime   RuntimeConfig           `yaml:"runtime" envconfig:"RUNTIME"`
+}
+
+// ImageMap holds an image for each script type, under the lowercased type.
+type ImageMap map[string]string
+
+// Decode reads CRONIUM_CONTAINER_IMAGES, which looks like
+// bash:registry.example:5000/runner:1.2,python:... envconfig's own map parsing splits on
+// every colon, so it refuses an image with a tag or a registry port, and that stops the
+// orchestrator from starting.
+func (m *ImageMap) Decode(value string) error {
+	images := ImageMap{}
+	for _, pair := range strings.Split(value, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		scriptType, image, found := strings.Cut(pair, ":")
+		if !found || scriptType == "" || image == "" {
+			return fmt.Errorf("want <script type>:<image>, got %q", pair)
+		}
+		images[strings.ToLower(scriptType)] = image
+	}
+	*m = images
+	return nil
+}
+
+// PublishedImageTag returns the tag a job's images were published under for a build of this
+// version. CI builds the orchestrator with that tag as its version, in
+// .github/workflows/docker-publish.yml, and it's an exact one, because a tag that moves
+// wouldn't reach a host: a job's images aren't in the compose file, so `docker compose pull`
+// doesn't update them, and an image that's already there is never pulled again. A build from
+// outside CI has no tag of its own, and a version like v1.2.3 is published without its v.
+func PublishedImageTag(version string) string {
+	if version == "" || version == "dev" {
+		return "latest"
+	}
+	if len(version) > 1 && version[0] == 'v' && version[1] >= '0' && version[1] <= '9' {
+		return version[1:]
+	}
+	return version
 }
 
 // SSHConfig defines SSH execution settings
@@ -174,7 +217,7 @@ type NetworkConfig struct {
 
 // RuntimeConfig defines runtime API settings
 type RuntimeConfig struct {
-	Image          string `yaml:"image" envconfig:"IMAGE" default:"cronium/runtime-api:latest"`
+	Image          string `yaml:"image" envconfig:"IMAGE"`
 	BackendURL     string `yaml:"backendURL" envconfig:"BACKEND_URL"`
 	ValkeyURL      string `yaml:"valkeyURL" envconfig:"VALKEY_URL" default:"valkey://valkey:6379"`
 	ValkeyPassword string `yaml:"valkeyPassword" envconfig:"VALKEY_PASSWORD"`

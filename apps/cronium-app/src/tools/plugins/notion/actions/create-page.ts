@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for Notion block objects
@@ -116,6 +117,7 @@ export const createPageAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "blue",
   developmentMode: "visual",
+  testRun: simulatedRun("Notion"),
   inputSchema: createPageSchema,
   parameters: safeZodToParameters(createPageSchema),
   outputSchema: z.object({

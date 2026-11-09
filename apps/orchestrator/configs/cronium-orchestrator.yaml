@@ -81,11 +81,13 @@ container:
     # TLS certificate path (if tlsVerify is true)
     certPath: ${DOCKER_CERT_PATH}
 
-  # Container images for different script types
-  images:
-    bash: cronium/runner:bash-alpine
-    python: cronium/runner:python-alpine
-    nodejs: cronium/runner:node-alpine
+  # Container images for different script types. With none set, a job uses a local image
+  # under the name a source checkout builds (cronium/runner:bash-alpine and so on) if there
+  # is one, and otherwise pulls the published image at the tag of the rest of the stack.
+  # images:
+  #   bash: registry.example.com/my-bash-runner:1.2
+  #   python: registry.example.com/my-python-runner:1.2
+  #   nodejs: registry.example.com/my-node-runner:1.2
 
   # Resource limits
   resources:

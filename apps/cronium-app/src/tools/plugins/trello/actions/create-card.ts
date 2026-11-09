@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for create-card action parameters
@@ -59,6 +60,7 @@ export const createCardAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "blue",
   developmentMode: "visual",
+  testRun: simulatedRun("Trello"),
   inputSchema: createCardSchema,
   parameters: safeZodToParameters(createCardSchema),
   outputSchema: z.object({

@@ -298,7 +298,7 @@ export function ModularToolsManager() {
 
   return (
     <div className="space-y-4">
-      <div className="grid min-h-[calc(100vh-200px)] gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid min-h-[calc(100vh-200px)] grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         {/* Integration Details Panel - Bottom on small screens, Left Side on large screens */}
         <div className="order-2 min-h-0 flex-1 lg:order-1">
           {selectedPluginInstance ? (
@@ -308,7 +308,7 @@ export function ModularToolsManager() {
                   <div className="flex items-center gap-3">
                     <selectedPluginInstance.icon
                       size={24}
-                      className="text-primary"
+                      className="text-primary shrink-0"
                     />
                     <div>
                       <CardTitle className="text-xl">
@@ -383,11 +383,11 @@ export function ModularToolsManager() {
                       ) : (
                         // Show credential display
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="text-lg font-medium">
                               {selectedPluginInstance.name} Credentials
                             </h3>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               {selectedPluginInstance.actions &&
                                 selectedPluginInstance.actions.length > 0 && (
                                   <Link href="/dashboard/events/new?type=TOOL_ACTION">
@@ -443,7 +443,7 @@ export function ModularToolsManager() {
                   >
                     <div className="h-full space-y-4 overflow-y-auto p-1">
                       {/* Action Type Filter and New Template Button */}
-                      <div className="flex items-center justify-end gap-4">
+                      <div className="flex flex-wrap items-center justify-end gap-4">
                         <div className="flex items-center gap-2">
                           <Select
                             value={selectedActionType}
@@ -652,15 +652,15 @@ export function ModularToolsManager() {
                             </Badge>
                           </div>
 
-                          <div className="grid gap-3">
+                          <div className="grid grid-cols-1 gap-3">
                             {selectedPluginInstance.actions.map((action) => (
                               <div
                                 key={action.id}
                                 className="border-border hover:bg-muted/50 rounded-lg border p-4 transition-colors"
                               >
-                                <div className="flex items-start justify-between">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
+                                <div className="flex items-start justify-between gap-3 sm:gap-0">
+                                  <div className="min-w-0 flex-1 wrap-anywhere">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <h4 className="font-medium">
                                         {action.name}
                                       </h4>
@@ -805,7 +805,7 @@ export function ModularToolsManager() {
                 {filteredPlugins.length === 0 && toolSearchQuery && (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <Search className="text-muted-foreground mb-2 h-8 w-8" />
-                    <p className="text-muted-foreground text-sm">
+                    <p className="text-muted-foreground text-sm wrap-anywhere">
                       No tools found matching "{toolSearchQuery}"
                     </p>
                   </div>

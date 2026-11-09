@@ -14,10 +14,19 @@ import { createRowAccumulator, rewriteNamedPlaceholders } from "./sql-helpers";
 
 // `mysql2` is imported dynamically inside each method so it stays out of static
 // bundles; it is only reached server-side.
-function baseConfig(credentials: SqlCredentials, timeoutMs: number) {
+async function baseConfig(credentials: SqlCredentials, timeoutMs: number) {
+  const { connectWithSearch } = await import("@/lib/resolve-host");
+  const port = credentials.port ?? defaultPort("mysql");
   return {
+    // mysql2 would look the host up with `dns.lookup`: see lib/resolve-host.ts. It
+    // still needs `host`, for its TLS server name, and leaves these two settings to
+    // whoever makes the socket.
+    stream: () =>
+      connectWithSearch(credentials.host, port)
+        .setNoDelay(true)
+        .setKeepAlive(true),
     host: credentials.host,
-    port: credentials.port ?? defaultPort("mysql"),
+    port,
     database: credentials.database,
     user: credentials.user,
     // Preserve precision: return BIGINT/DECIMAL as strings so nothing is lost
@@ -35,7 +44,7 @@ function baseConfig(credentials: SqlCredentials, timeoutMs: number) {
 
 async function connectPromise(credentials: SqlCredentials, timeoutMs: number) {
   const mysql = await import("mysql2/promise");
-  return mysql.createConnection(baseConfig(credentials, timeoutMs));
+  return mysql.createConnection(await baseConfig(credentials, timeoutMs));
 }
 
 export const mysqlDriver: SqlDriver = {
@@ -79,7 +88,7 @@ export const mysqlDriver: SqlDriver = {
     // as soon as a limit is hit instead of buffering the result.
     const mysql = await import("mysql2");
     const conn = mysql.createConnection(
-      baseConfig(credentials, opts.timeoutMs),
+      await baseConfig(credentials, opts.timeoutMs),
     );
     // A connection 'error' with no listener would be an unhandled EventEmitter
     // error and take down the app process. The real error still surfaces via

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for write-data action parameters
@@ -39,6 +40,7 @@ export const writeDataAction: ToolAction = {
   actionType: "update",
   actionTypeColor: "yellow",
   developmentMode: "visual",
+  testRun: simulatedRun("Google Sheets"),
   inputSchema: writeDataSchema,
   parameters: safeZodToParameters(writeDataSchema),
   outputSchema: z.object({

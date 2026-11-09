@@ -16,6 +16,9 @@ on:
       - apps/cronium-app/scripts/**
       - apps/orchestrator/Dockerfile
       - apps/runtime/cronium-runtime/Dockerfile
+      - apps/runtime/container-images/**
+      - apps/orchestrator/internal/executors/container/images.go
+      - infra/scripts/smoke-run-scripts.mjs
       - .github/workflows/install-smoke.yml
   pull_request:
     paths:
@@ -25,6 +28,9 @@ on:
       - apps/cronium-app/scripts/**
       - apps/orchestrator/Dockerfile
       - apps/runtime/cronium-runtime/Dockerfile
+      - apps/runtime/container-images/**
+      - apps/orchestrator/internal/executors/container/images.go
+      - infra/scripts/smoke-run-scripts.mjs
       - .github/workflows/install-smoke.yml
   workflow_dispatch:
 
@@ -47,6 +53,14 @@ jobs:
             -f apps/orchestrator/Dockerfile .
           docker build -t ghcr.io/addison-moore/cronium-runtime:latest \
             apps/runtime/cronium-runtime
+          # What a job's script runs in. A real install pulls these the first time a job
+          # needs them, by these names.
+          docker build -t ghcr.io/addison-moore/cronium-runner-bash:latest \
+            apps/runtime/container-images/bash
+          docker build -t ghcr.io/addison-moore/cronium-runner-python:latest \
+            apps/runtime/container-images/python
+          docker build -t ghcr.io/addison-moore/cronium-runner-node:latest \
+            apps/runtime/container-images/nodejs
 
       - name: Run installer
         env:
@@ -155,6 +169,22 @@ jobs:
           again=$(docker compose exec -T cronium-worker \
             node apps/cronium-app/dist/rotate-secrets.cjs --encrypt-legacy 2>&1)
           echo "$again" | grep -q 'system_settings: scanned=2 encrypted=0 up-to-date=2'
+
+      # Every service can report healthy with nothing to run a script in. This is the last
+      # step because it adds a user, and the ones above need a fresh instance.
+      - name: Assert a script runs in each language
+        working-directory: ${{ runner.temp }}/cronium-smoke
+        env:
+          SMOKE_USERNAME: smoke
+          SMOKE_PASSWORD: smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker compose exec -T \
+            -e AUTO_SEED_ADMIN=true \
+            -e ADMIN_USERNAME="$SMOKE_USERNAME" \
+            -e ADMIN_EMAIL=smoke@example.test \
+            -e ADMIN_PASSWORD="$SMOKE_PASSWORD" \
+            cronium-app node apps/cronium-app/scripts/bootstrap-seed.cjs
+          node "$GITHUB_WORKSPACE/infra/scripts/smoke-run-scripts.mjs"
 
       - name: Dump state on failure
         if: failure()
