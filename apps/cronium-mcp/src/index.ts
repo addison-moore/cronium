@@ -28,6 +28,8 @@ if (!BASE_URL || !API_TOKEN) {
 
 const ENDPOINT = `${BASE_URL.replace(/\/+$/, "")}/api/mcp`;
 const REQUEST_TIMEOUT_MS = 120_000;
+const PROXY_CAUSES =
+  "Cronium may be restarting, or a reverse proxy in front of it can't reach it.";
 
 type JsonRpcId = string | number | null;
 
@@ -117,25 +119,37 @@ function redirectTarget(res: Response): string {
   }
 }
 
+/** A 3xx or 4xx is a refusal. Anything else can come after Cronium acted on the request. */
+function isRefusal(status: number): boolean {
+  return status >= 300 && status < 500;
+}
+
+/** Says what happened and why it might have, and warns an agent about to repeat a tool call. */
+function failureMessage(
+  what: string,
+  causes: string,
+  mayHaveGoneThrough: boolean,
+): string {
+  return mayHaveGoneThrough
+    ? `${what}, so this call may still have gone through: check before repeating it. ${causes}`
+    : `${what}. ${causes}`;
+}
+
 /**
  * What to say when something other than Cronium answers. All the bridge knows is the status and
  * that the body isn't Cronium's, so it offers causes without choosing one, and it leaves out the
- * body, because an MCP client hands this to an agent. A 3xx or 4xx is a refusal. Anything else can
- * come after Cronium acted on the request: nginx giving up early gave a real 504, and with
- * `error_page` a real 200, with the event saved. So a tool call says so, for an agent about to
- * repeat it.
+ * body, because an MCP client hands this to an agent. nginx giving up early gave a real 504, and
+ * with `error_page` a real 200, with the event saved, so a tool call says it may have gone through
+ * unless it was refused.
  */
 function notCroniumMessage(res: Response, isToolCall: boolean): string {
   const isRedirect = res.status >= 300 && res.status < 400;
-  const isRefusal = res.status >= 300 && res.status < 500;
   const answer = `Got HTTP ${res.status}${isRedirect ? redirectTarget(res) : ""}, not Cronium's answer`;
   const causes =
     res.status >= 500
-      ? "Cronium may be restarting, or a reverse proxy in front of it can't reach it."
+      ? PROXY_CAUSES
       : "It may be from a reverse proxy, firewall or sign-in page, or CRONIUM_BASE_URL may be wrong.";
-  return isToolCall && !isRefusal
-    ? `${answer}, so this call may still have gone through: check before repeating it. ${causes}`
-    : `${answer}. ${causes}`;
+  return failureMessage(answer, causes, isToolCall && !isRefusal(res.status));
 }
 
 /** Human-actionable message for an HTTP answer that can't be passed on as it is. */
@@ -174,9 +188,108 @@ function logFailure(message: string, body: string): void {
   }
 }
 
+/** The reason fetch gives for a failure, on the error's `cause`. */
+type FailureCause = {
+  code?: unknown;
+  syscall?: unknown;
+  message?: unknown;
+  errors?: unknown;
+};
+
+/**
+ * Causes that mean no request went out, other than failing to look up or connect. By code: undici's
+ * limit of 10 seconds to connect, an address that doesn't parse, `https://` to a port that speaks
+ * http, and a refused certificate, which has many codes, most of them saying CERT. By message, since
+ * fetch gives these no code: a scheme it doesn't speak, and the ports it blocks, 6000 among them.
+ */
+const NEVER_SENT_CODE =
+  /^(UND_ERR_CONNECT_TIMEOUT|ERR_INVALID_URL|ERR_SSL_WRONG_VERSION_NUMBER|UNABLE_TO_VERIFY_LEAF_SIGNATURE)$|CERT/;
+const NEVER_SENT_MESSAGE = /^(unknown scheme|bad port)$/;
+
+/**
+ * Whether a request with no answer can't have left this machine. This goes by what Node really
+ * reports, measured on Node 18, 22 and 24 on macOS and Linux. Anything else counts as possibly
+ * sent, unknown causes included, because an agent told it may have gone through checks first, and
+ * one told it couldn't reach Cronium repeats the call.
+ *
+ * `syscall` is what shows a failed connection, not `code`: ETIMEDOUT really comes as `connect` and
+ * as `read`, and the second is a connection already made. Node 20 and later try each address of a
+ * name, and report the attempts in `errors`.
+ */
+function neverSent(err: unknown): boolean {
+  const { name, cause } = (err ?? {}) as {
+    name?: unknown;
+    cause?: FailureCause;
+  };
+  // fetch wouldn't start, as for a token that can't go in a header. A timeout has no cause either.
+  if (!cause) return name === "TypeError";
+  const attempts: FailureCause[] = Array.isArray(cause.errors)
+    ? cause.errors
+    : [cause];
+  return (
+    attempts.every(
+      (a) => a.syscall === "getaddrinfo" || a.syscall === "connect",
+    ) ||
+    NEVER_SENT_CODE.test(String(cause.code)) ||
+    NEVER_SENT_MESSAGE.test(String(cause.message))
+  );
+}
+
+/**
+ * What to say when no whole answer came. `status` is the answer's, if that much of it arrived.
+ * Only a request that can't have left says it couldn't reach Cronium: with nginx closing the
+ * connection after the request reached the app, all 8 calls read that, and 3 of the 8 events were
+ * saved.
+ */
+function noAnswerMessage(
+  err: unknown,
+  status: number | undefined,
+  isToolCall: boolean,
+): string {
+  if (status !== undefined) {
+    return failureMessage(
+      `Got HTTP ${status}, but not the whole answer`,
+      PROXY_CAUSES,
+      isToolCall && !isRefusal(status),
+    );
+  }
+  if (neverSent(err)) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return (
+      `Could not reach Cronium at ${ENDPOINT}: ${reason}. ` +
+      "Check CRONIUM_BASE_URL and that the instance is running."
+    );
+  }
+  if ((err as { name?: unknown } | null)?.name === "TimeoutError") {
+    return failureMessage(
+      `Got no answer from Cronium in ${REQUEST_TIMEOUT_MS / 1000} seconds`,
+      "Cronium may still be working on it, or a reverse proxy in front of it may be holding it up.",
+      isToolCall,
+    );
+  }
+  return failureMessage(
+    "The connection to Cronium closed with no answer",
+    "Cronium may be restarting, a reverse proxy in front of it can't reach it, or CRONIUM_BASE_URL may be wrong.",
+    isToolCall,
+  );
+}
+
+/** Logs a request with no answer, with Node's reason for it, which only the log gets. */
+function logNoAnswer(message: string, err: unknown): void {
+  console.error(`cronium-mcp: ${message}`);
+  const cause = (err as { cause?: FailureCause } | null)?.cause;
+  if (cause) {
+    const reason = [cause.code, cause.message].filter(Boolean).join(": ");
+    console.error(
+      `cronium-mcp: the cause was ${reason.replace(/\s+/g, " ").trim()}`,
+    );
+  }
+}
+
 /** Forward one raw JSON-RPC message (already parsed) and emit the response. */
 async function forward(msg: unknown): Promise<void> {
   const ids = requestIds(msg);
+  let status: number | undefined;
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -191,6 +304,7 @@ async function forward(msg: unknown): Promise<void> {
       redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    status = res.status;
 
     // Notifications-only → 202 with no body; nothing to write back. Cronium doesn't answer a
     // request with one, and a client would wait for an answer that isn't coming.
@@ -213,11 +327,8 @@ async function forward(msg: unknown): Promise<void> {
       emit(payload);
     }
   } catch (err) {
-    const cause = err instanceof Error ? err.message : String(err);
-    const message =
-      `Could not reach Cronium at ${ENDPOINT}: ${cause}. ` +
-      "Check CRONIUM_BASE_URL and that the instance is running.";
-    console.error(`cronium-mcp: ${message}`);
+    const message = noAnswerMessage(err, status, hasToolCall(msg));
+    logNoAnswer(message, err);
     for (const id of ids) emit(rpcError(id, -32001, message));
   }
 }
