@@ -4,6 +4,7 @@ import {
   type SSHConnectionScope,
 } from "@/lib/ssh/pool-key";
 import { createHostVerifier } from "@/lib/ssh/host-verifier";
+import type { Socket } from "net";
 import { Client } from "ssh2"; // Import Client from ssh2
 import type { ClientChannel, ConnectConfig } from "ssh2";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
@@ -49,11 +50,13 @@ function serverIdFromScope(
  * The socket has to exist before ssh2 sees it, and ssh2 throws on a key it can't parse
  * before it listens for anything. So close it then, or its failure would be an `error`
  * event with nobody listening, which ends the process.
+ *
+ * Hands back the socket, for `closeConnection`.
  */
 function connectOverOwnSocket(
   client: Client,
   config: ConnectConfig & { host: string; port: number },
-): void {
+): Socket {
   const sock = connectWithSearch(config.host, config.port);
   try {
     client.connect({ ...config, sock });
@@ -61,6 +64,45 @@ function connectOverOwnSocket(
     sock.destroy();
     throw error;
   }
+  return sock;
+}
+
+/**
+ * Closes `client` and the socket under it, whatever the server does.
+ *
+ * `client.end()` says goodbye and closes our side, then waits for the server to close
+ * its side. A server that never does would keep the socket open for as long as the
+ * process runs, and `client.destroy()` does nothing once `end()` has run, because ssh2
+ * only destroys a socket it can still write to. So the socket itself goes `graceMs`
+ * later if it's still open.
+ */
+function closeConnection(
+  client: Client,
+  socket: Socket,
+  graceMs: number,
+): void {
+  client.end();
+  if (socket.destroyed) return;
+  const closeAnyway = setTimeout(() => socket.destroy(), graceMs).unref();
+  socket.once("close", () => clearTimeout(closeAnyway));
+}
+
+/** The socket under each connection `connect` made, for `disconnect`. */
+const socketOf = new WeakMap<Client, Socket>();
+
+/** `work`, unless `ms` pass first: then a rejection with `timedOut()`. */
+function withinTime<T>(
+  work: Promise<T>,
+  ms: number,
+  timedOut: () => Error,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(timedOut()), ms).unref();
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 interface CommandOutput {
@@ -118,14 +160,34 @@ interface SSHConnectionRequest {
   authType: SSHAuthType;
 }
 
+export interface SSHServiceLimits {
+  /**
+   * How long a health check's commands may take, all five together, once it has
+   * connected. A server that takes longer is reported offline.
+   */
+  healthCheckCommandsMs?: number;
+  /**
+   * How long closing a connection waits for the server to close its side before
+   * closing the socket outright.
+   */
+  closeGraceMs?: number;
+}
+
 export class SSHService {
   private connectionPool = new Map<string, SSHConnection>();
   private maxConnections = 3; // Further reduced to prevent overwhelming servers
   private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
   private connectionTimeout = 300000; // 5 minutes - longer for terminal sessions
   private channelCounts = new Map<string, number>(); // Track open channels
+  private readonly healthCheckCommandsMs: number;
+  private readonly closeGraceMs: number;
 
-  constructor() {
+  constructor({
+    healthCheckCommandsMs = 30_000,
+    closeGraceMs = 5_000,
+  }: SSHServiceLimits = {}) {
+    this.healthCheckCommandsMs = healthCheckCommandsMs;
+    this.closeGraceMs = closeGraceMs;
     // Clean up stale connections every 2 minutes
     setInterval(() => {
       this.cleanupStaleConnections();
@@ -409,7 +471,7 @@ export class SSHService {
         if (settled) return;
         settled = true;
         clearTimeout(connectionTimeout);
-        sshClient.end();
+        this.disconnect(sshClient);
         reject(error);
       };
       const connectionTimeout = setTimeout(() => {
@@ -420,7 +482,7 @@ export class SSHService {
         .on("ready", () => {
           if (settled) {
             // Too late: nobody is waiting for it, so nobody else would close it.
-            sshClient.end();
+            this.disconnect(sshClient);
             return;
           }
           settled = true;
@@ -431,7 +493,9 @@ export class SSHService {
         // listening would end the process, and what the connection was doing fails by
         // itself.
         .on("error", fail);
-      connectOverOwnSocket(sshClient, {
+      // The handlers above only ever run after this returns, so `disconnect` finds the
+      // socket recorded. If it throws, connectOverOwnSocket has closed the socket itself.
+      const socket = connectOverOwnSocket(sshClient, {
         host,
         username,
         ...(authType === "password"
@@ -456,6 +520,7 @@ export class SSHService {
           hmac: ["hmac-sha2-256", "hmac-sha2-512"],
         },
       });
+      socketOf.set(sshClient, socket);
     });
   }
 
@@ -489,10 +554,13 @@ export class SSHService {
   }
 
   /**
-   * Closes a connection that `connect` handed back.
+   * Closes a connection that `connect` made. The server gets `closeGraceMs` to close its
+   * side, and then the socket closes anyway.
    */
   public disconnect(connection: Client): void {
-    connection.end();
+    const socket = socketOf.get(connection);
+    if (socket) closeConnection(connection, socket, this.closeGraceMs);
+    else connection.end();
   }
 
   async checkServerHealth(server: {
@@ -533,16 +601,23 @@ export class SSHService {
         server.id,
       );
 
-      // Get system information, and close the connection however that went
+      // Get system information, unless the server takes too long, and close the
+      // connection however that went. A command that never finishes would otherwise
+      // hold the request and its connection for good.
       const {
         platformResult,
         releaseResult,
         cpuResult,
         memoryResult,
         uptimeResult,
-      } = await readSystemInfo(connection).finally(() =>
-        this.disconnect(connection),
-      );
+      } = await withinTime(
+        readSystemInfo(connection),
+        this.healthCheckCommandsMs,
+        () =>
+          new Error(
+            `Health check timed out: ${server.address} didn't answer its commands within ${this.healthCheckCommandsMs / 1000} seconds.`,
+          ),
+      ).finally(() => this.disconnect(connection));
 
       // Parse memory information
       let totalMemory = "";

@@ -9,6 +9,10 @@
  *
  * Where it matters which call goes first, the first command a server gets waits until the
  * test lets it through, so the overlap is the same on every run.
+ *
+ * Then servers that misbehave: one that never answers a command, and one that never
+ * closes its side after the service says goodbye. Neither may hold a call or a socket
+ * for good. The service gets small limits there, so nothing waits for its real ones.
  */
 // For the host key verifier. With no key on file, it records the one it's shown.
 let mockStoredHostKey: string | null = null;
@@ -157,6 +161,99 @@ async function startServer(
   };
   started.push(fake);
   return fake;
+}
+
+interface ServerThatNeverCloses {
+  port: number;
+  /** Connections to it that it hasn't closed. */
+  open: () => number;
+  /** Of those, the ones whose client has closed its side. */
+  closedByClient: () => number;
+  close: () => Promise<void>;
+}
+
+const neverClosing: ServerThatNeverCloses[] = [];
+afterEach(async () => {
+  await Promise.all(neverClosing.splice(0).map((server) => server.close()));
+});
+
+/**
+ * Passes everything on, both ways, to the SSH server `behind`, but never closes its side
+ * of a connection. The client's goodbye reaches the SSH server, which closes, but that
+ * never reaches the client. So a client waiting for the server to close waits forever.
+ */
+async function startServerThatNeverCloses(
+  behind: FakeServer,
+): Promise<ServerThatNeverCloses> {
+  const open = new Set<net.Socket>();
+  const closedByClient = new Set<net.Socket>();
+  const server = net.createServer({ allowHalfOpen: true }, (socket) => {
+    open.add(socket);
+    socket.on("end", () => closedByClient.add(socket));
+    socket.on("close", () => {
+      open.delete(socket);
+      closedByClient.delete(socket);
+    });
+    socket.on("error", () => undefined);
+    const upstream = net.connect(behind.port, LOOPBACK);
+    upstream.on("error", () => undefined);
+    socket.pipe(upstream);
+    upstream.pipe(socket, { end: false });
+  });
+  await new Promise<void>((resolve) => server.listen(0, LOOPBACK, resolve));
+  const fake = {
+    port: (server.address() as net.AddressInfo).port,
+    open: () => open.size,
+    closedByClient: () => closedByClient.size,
+    close: () =>
+      new Promise<void>((resolve) => {
+        for (const socket of open) socket.destroy();
+        server.close(() => resolve());
+      }),
+  };
+  neverClosing.push(fake);
+  return fake;
+}
+
+/** TCP sockets open in this process: the service's, and the fake servers' ends. */
+const tcpSocketsHere = () =>
+  process
+    .getActiveResourcesInfo()
+    .filter((resource) => resource === "TCPSocketWrap").length;
+
+/**
+ * The service's socket has closed though the server never closed its side: once the SSH
+ * server behind it has closed, the only TCP socket left in this process is the one that
+ * server still holds. It saw the client close its side first, so the service said
+ * goodbye before it stopped waiting.
+ */
+async function closedThoughServerNeverDid(
+  server: ServerThatNeverCloses,
+  behind: FakeServer,
+) {
+  await until(
+    "the service's socket to close",
+    () =>
+      behind.open() === 0 &&
+      server.open() === 1 &&
+      server.closedByClient() === 1 &&
+      tcpSocketsHere() === 1,
+  );
+  await server.close();
+  await nothingStaysOpen(behind);
+}
+
+/** What `promise` comes to, or `still waiting` if that takes over `ms`. */
+async function settlesWithin<T>(ms: number, promise: Promise<T>) {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<"still waiting">((resolve) => {
+    timer = setTimeout(() => resolve("still waiting"), ms);
+  });
+  try {
+    return await Promise.race([promise, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const wait = (ms = 0) =>
@@ -435,5 +532,102 @@ describe("SSHService, closing what it opened", () => {
     }
     expect(a.commands).toEqual([]);
     await nothingStaysOpen(a);
+  });
+});
+
+describe("SSHService, with a server that never answers or never closes", () => {
+  const LIMITS = { healthCheckCommandsMs: 400, closeGraceMs: 300 };
+  const TIMED_OUT = {
+    online: false,
+    systemInfo: OFFLINE_SYSTEM_INFO,
+    error:
+      "Health check timed out: 127.0.0.1 didn't answer its commands within 0.4 seconds.",
+  };
+  const neverAnswer = new Promise<void>(() => undefined);
+
+  beforeEach(() => {
+    sshService = new SSHService(LIMITS);
+  });
+
+  it("stops waiting for a health check command that never finishes", async () => {
+    const a = await startServer(SERVER_A.answers, { holdFirst: neverAnswer });
+
+    const started = performance.now();
+    const health = await settlesWithin(
+      10_000,
+      sshService.checkServerHealth(serverRow(1, a)),
+    );
+
+    expect(health).toEqual(TIMED_OUT);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(
+      LIMITS.healthCheckCommandsMs,
+    );
+    expect(a.commands).toEqual(["uname -s"]);
+    await nothingStaysOpen(a);
+  });
+
+  it("limits a health check's commands together, not one at a time", async () => {
+    // Each answer comes well inside the limit, and all five well outside it.
+    const a = await startServer(SERVER_A.answers, { delayMs: 300 });
+
+    const health = await settlesWithin(
+      10_000,
+      sshService.checkServerHealth(serverRow(1, a)),
+    );
+
+    expect(health).toEqual(TIMED_OUT);
+    expect(a.commands.length).toBeLessThan(HEALTH_CHECK.length);
+    await nothingStaysOpen(a);
+  });
+
+  it("closes a connection test's socket though the server never closes its side", async () => {
+    const a = await startServer(SERVER_A.answers);
+    const neverCloses = await startServerThatNeverCloses(a);
+
+    await expect(
+      sshService.testConnection(
+        LOOPBACK,
+        PASSWORD,
+        USERNAME,
+        neverCloses.port,
+        "password",
+      ),
+    ).resolves.toEqual({ success: true, message: "Connection successful" });
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes a health check's socket at a server that neither answers nor closes", async () => {
+    const a = await startServer(SERVER_A.answers, { holdFirst: neverAnswer });
+    const neverCloses = await startServerThatNeverCloses(a);
+
+    const health = await settlesWithin(
+      10_000,
+      sshService.checkServerHealth({
+        ...serverRow(1, a),
+        port: neverCloses.port,
+      }),
+    );
+
+    expect(health).toEqual(TIMED_OUT);
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes the socket after a refused password, though the server never closes its side", async () => {
+    const a = await startServer(SERVER_A.answers);
+    const neverCloses = await startServerThatNeverCloses(a);
+
+    await expect(
+      sshService.testConnection(
+        LOOPBACK,
+        "not the password",
+        USERNAME,
+        neverCloses.port,
+        "password",
+      ),
+    ).resolves.toEqual({
+      success: false,
+      message: "All configured authentication methods failed",
+    });
+    await closedThoughServerNeverDid(neverCloses, a);
   });
 });
