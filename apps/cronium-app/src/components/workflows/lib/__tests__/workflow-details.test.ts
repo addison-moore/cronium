@@ -13,6 +13,7 @@ import {
   applyCronSchedulingToggle,
   applyServerOverrideToggle,
   buildWorkflowUpdatePayload,
+  fieldsChangedSince,
   workflowDetailsSchema,
   workflowToFormValues,
 } from "../workflow-details";
@@ -259,6 +260,42 @@ describe("buildWorkflowUpdatePayload", () => {
         data: { connectionType: ConnectionType.ON_FAILURE },
       },
     ]);
+  });
+});
+
+describe("fieldsChangedSince", () => {
+  const sent = buildWorkflowUpdatePayload(
+    7,
+    makeFormData({ name: "renamed", tags: ["ops"], scheduleNumber: 2 }),
+    [],
+    [],
+  );
+
+  it("is empty when the form still holds what was sent", () => {
+    expect(
+      fieldsChangedSince(
+        sent,
+        makeFormData({ name: "renamed", tags: ["ops"], scheduleNumber: 2 }),
+      ),
+    ).toEqual({});
+  });
+
+  it("names each field typed into since, comparing arrays by value", () => {
+    expect(
+      fieldsChangedSince(
+        sent,
+        makeFormData({
+          name: "renamed again",
+          tags: ["ops", "nightly"],
+          scheduleNumber: 2,
+          shared: true,
+        }),
+      ),
+    ).toEqual({
+      name: "renamed again",
+      tags: ["ops", "nightly"],
+      shared: true,
+    });
   });
 });
 

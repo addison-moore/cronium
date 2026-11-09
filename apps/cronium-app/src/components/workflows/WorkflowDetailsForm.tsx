@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useController, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@cronium/ui";
 import { Button } from "@cronium/ui";
@@ -41,6 +41,7 @@ import {
   applyCronSchedulingToggle,
   applyServerOverrideToggle,
   buildWorkflowUpdatePayload,
+  fieldsChangedSince,
   workflowDetailsSchema,
   workflowToFormValues,
 } from "./lib/workflow-details";
@@ -61,21 +62,42 @@ export default function WorkflowDetailsForm({
   const { toast } = useToast();
   const [tagInput, setTagInput] = useState("");
 
+  const storedValues = useMemo(
+    () => workflowToFormValues(workflow),
+    [workflow],
+  );
+
   // Single source of truth: react-hook-form, seeded from the workflow so the
   // first paint already shows the stored trigger/schedule (a parallel local
   // state mirror previously rendered every workflow as "Manual" until a field
   // changed, and silently dropped trigger/schedule edits on save).
   const form = useForm<WorkflowDetailsFormData>({
     resolver: zodResolver(workflowDetailsSchema),
-    defaultValues: workflowToFormValues(workflow),
+    // What's stored, compared by value. The page passes a new workflow object after
+    // every read, a refocus included, because Date fields defeat React Query's
+    // structural sharing. When a stored value really has changed, a field nobody has
+    // edited takes it and an edited one keeps what was typed, so a save doesn't write
+    // the old value of something changed elsewhere. Anything that edits a field from
+    // outside a FormField needs shouldDirty to count as an edit.
+    values: storedValues,
+    resetOptions: {
+      keepDirtyValues: true,
+      keepErrors: true,
+      keepIsSubmitted: true,
+    },
   });
+
+  // Unregistered, an array is kept or replaced item by item, so a removed tag came
+  // back with a read. Neither has an input that would register it.
+  useController({ control: form.control, name: "tags" });
+  useController({ control: form.control, name: "overrideServerIds" });
 
   // Re-render on any change so the conditional sections (schedule, override)
   // track the live form values.
   const formValues = form.watch();
 
   /** Write a helper-computed partial back into the form (dirty-tracked). */
-  const applyValues = (next: WorkflowDetailsFormData) => {
+  const applyValues = (next: Partial<WorkflowDetailsFormData>) => {
     for (const [key, value] of Object.entries(next) as [
       keyof WorkflowDetailsFormData,
       WorkflowDetailsFormData[keyof WorkflowDetailsFormData],
@@ -86,12 +108,17 @@ export default function WorkflowDetailsForm({
     }
   };
 
+  const utils = trpc.useUtils();
+
   // tRPC mutation for updating workflow
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
-    onSuccess: (updatedWorkflow) => {
+    onSuccess: async (updatedWorkflow, sent) => {
       if (updatedWorkflow) {
+        // A read that left before this save could land after it and put the old
+        // values back, now that nothing counts as edited.
+        await utils.workflows.getById.cancel({ id: updatedWorkflow.id });
         // Pass only the base workflow properties to onUpdate
-        onUpdate({
+        const saved: Workflow = {
           id: updatedWorkflow.id,
           name: updatedWorkflow.name,
           description: updatedWorkflow.description,
@@ -113,7 +140,15 @@ export default function WorkflowDetailsForm({
           webhookKeyHash: null,
           runLocation: updatedWorkflow.runLocation,
           source: updatedWorkflow.source,
-        });
+        };
+        // Start again from what was saved, so a change made elsewhere afterwards
+        // shows. form.reset applies resetOptions too, so keepDirtyValues has to be
+        // turned off here, or every saved field would still count as edited.
+        // Anything typed while the save was on its way wasn't sent, and stays an edit.
+        const typedSinceSent = fieldsChangedSince(sent, form.getValues());
+        form.reset(workflowToFormValues(saved), { keepDirtyValues: false });
+        applyValues(typedSinceSent);
+        onUpdate(saved);
         toast({
           title: "Success",
           description: "Workflow updated successfully",
@@ -129,12 +164,6 @@ export default function WorkflowDetailsForm({
       });
     },
   });
-
-  // Re-seed when the workflow prop changes (e.g. after a successful save the
-  // parent passes the updated workflow back down).
-  useEffect(() => {
-    form.reset(workflowToFormValues(workflow));
-  }, [workflow, form]);
 
   const onSubmit = async (data: WorkflowDetailsFormData) => {
     try {
@@ -154,7 +183,9 @@ export default function WorkflowDetailsForm({
   const addTag = () => {
     const currentTags = form.getValues("tags");
     if (tagInput.trim() && !currentTags.includes(tagInput.trim())) {
-      form.setValue("tags", [...currentTags, tagInput.trim()]);
+      form.setValue("tags", [...currentTags, tagInput.trim()], {
+        shouldDirty: true,
+      });
       setTagInput("");
     }
   };
@@ -164,6 +195,7 @@ export default function WorkflowDetailsForm({
     form.setValue(
       "tags",
       currentTags.filter((tag) => tag !== tagToRemove),
+      { shouldDirty: true },
     );
   };
 
@@ -203,10 +235,7 @@ export default function WorkflowDetailsForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
