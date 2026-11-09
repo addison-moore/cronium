@@ -592,6 +592,15 @@ func TestParityBashFailuresUnderSetE(t *testing.T) {
 			name:   "a refused connection",
 			script: "export CRONIUM_RUNTIME_API=http://127.0.0.1:1 CRONIUM_API_ENDPOINT=http://127.0.0.1:1\ncronium_output x 2>/dev/null\necho not reached\n",
 		},
+		{
+			name:   "an increment that isn't an integer",
+			script: "cronium_increment_variable NOPE\ncronium_increment_variable NOPE abc 2>/dev/null\necho not reached\n",
+			stdout: "1\n",
+		},
+		{
+			name:   "a stored value that isn't an integer",
+			script: "cronium_set_variable TEXT abc\ncronium_increment_variable TEXT 2>/dev/null\necho not reached\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result := compareRuns(t, types.ScriptTypeBash, "set -euo pipefail\n"+tc.script)
@@ -601,6 +610,404 @@ func TestParityBashFailuresUnderSetE(t *testing.T) {
 			}
 			if result.stdout != tc.stdout {
 				t.Errorf("stdout = %q, want %q", result.stdout, tc.stdout)
+			}
+		})
+	}
+}
+
+// A variable has to read back as the script set it. The container's SDK went by jq, which
+// reads 010, +5, .5, inf and nan as numbers and writes them its own way, so they were stored
+// as 10, 5, 0.5 and 1.7976931348623157e+308, and nan was refused because jq writes it as null.
+// Even a number JSON allows could change, as 1e3 became 1E+3. A remote server's helpers go
+// by Go's JSON parser and kept them all, so one script stored different values on each side.
+func TestParityBashVariablesReadBackAsSet(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	// value is one shell word, and stored is what it should read back as if that isn't the
+	// value itself.
+	cases := []struct{ value, stored string }{
+		// Numbers JSON doesn't allow, which jq reads anyway. They go as strings.
+		{value: "010"},
+		{value: "09"},
+		{value: "00"},
+		{value: "-010"},
+		{value: "-00"},
+		{value: "+5"},
+		{value: ".5"},
+		{value: "-.5"},
+		{value: "5."},
+		{value: "1.e3"},
+		{value: "nan"},
+		{value: "NaN"},
+		{value: "-nan"},
+		{value: "nan1"},
+		{value: "sNaN"},
+		{value: "inf"},
+		{value: "Infinity"},
+		{value: "-Infinity"},
+		{value: "' 010 '"},
+		{value: "0x10"},
+		{value: "1_000"},
+
+		// Numbers JSON allows. They go as written, and the runtime stores that text.
+		{value: "0"},
+		{value: "-0"},
+		{value: "42"},
+		{value: "1e3"},
+		{value: "1E3"},
+		{value: "1e+3"},
+		{value: "1E+3"},
+		{value: "1e-3"},
+		{value: "1.0"},
+		{value: "1.50"},
+		{value: "0.10"},
+		{value: "1e1000"},
+		{value: "9007199254740993"},
+		{value: "12345678901234567890"},
+		{value: "100000000000000000000"},
+		{value: "' 42 '", stored: "42"},
+
+		// The same inside a value. The first three aren't JSON, so they stay as typed.
+		{value: `'{"a":010}'`},
+		{value: `'{"a": 010}'`},
+		{value: `'[nan, +5]'`},
+		{value: `'{"a": 1e3, "b": [1.50, 2]}'`, stored: `{"a":1e3,"b":[1.50,2]}`},
+		{value: `'{"a":1,"a":2}'`},
+
+		// A number in a string, or anything like one, isn't one.
+		{value: `'"010"'`, stored: "010"},
+		{value: `'{"a":"010, 1e3 or nan"}'`},
+		{value: `'{"a":"say \"010\""}'`},
+	}
+
+	var script, want strings.Builder
+	for i, tc := range cases {
+		stored := tc.stored
+		if stored == "" {
+			stored = strings.Trim(tc.value, "'")
+		}
+		fmt.Fprintf(&script, "cronium_set_variable V%d %s; echo \"%d rc=$? [$(cronium_get_variable V%d)]\"\n", i, tc.value, i, i)
+		fmt.Fprintf(&want, "%d rc=0 [%s]\n", i, stored)
+	}
+
+	for _, tc := range []struct{ name, mode string }{
+		{"with no strict mode", ""},
+		{"under set -euo pipefail", "set -euo pipefail\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := compareRuns(t, types.ScriptTypeBash, tc.mode+script.String())
+			if result.stdout != want.String() {
+				t.Errorf("read back\n%s", lineDiff(want.String(), result.stdout))
+			}
+			if result.stderr != "" {
+				t.Errorf("stderr = %q", result.stderr)
+			}
+			if !strings.Contains(strings.Join(result.requests, "\n"), `PUT /executions/exec-parity/variables/V0 {"value":"010"}`) {
+				t.Errorf("010 wasn't sent as a string:\n%s", strings.Join(result.requests, "\n"))
+			}
+		})
+	}
+}
+
+// What a script appends can make a number too, and a bash a script starts has the helpers too.
+func TestParityBashAppendsAndChildrenKeepNumbers(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	result := compareRuns(t, types.ScriptTypeBash, `cronium_append_variable ZERO 0
+cronium_append_variable ZERO 10
+echo "zero [$(cronium_get_variable ZERO)]"
+cronium_append_variable ONE 1
+cronium_append_variable ONE 3 e
+echo "one [$(cronium_get_variable ONE)]"
+bash -c 'cronium_set_variable CHILD 010'
+echo "child [$(cronium_get_variable CHILD)]"
+bash -c 'cronium_increment_variable CHILD'
+bash -c 'cronium_increment_variable CHILD abc'; echo "child rc=$?"
+`)
+
+	want := "zero [010]\none [1e3]\nchild [010]\n11\nchild rc=1\n"
+	if result.stdout != want {
+		t.Errorf("stdout = %q, want %q", result.stdout, want)
+	}
+	if want := "Error: Increment 'abc' is not a 64-bit integer, so variable 'CHILD' was not changed\n"; result.stderr != want {
+		t.Errorf("stderr = %q, want %q", result.stderr, want)
+	}
+}
+
+// Output and a tool action's config are the same question: only JSON is sent as JSON. A
+// config that isn't JSON worked in a container, with 010 sent as 10 and nan as null, and
+// failed on a remote server.
+func TestParityBashOutputAndToolConfigGoByJSON(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	result := compareRuns(t, types.ScriptTypeBash, `for value in 010 +5 .5 nan inf 42 1.5 '{"a":010}' '{"a":1}'; do
+  cronium_output "$value"; echo "output $value rc=$?"
+done
+for config in '{"n":010}' '[nan]' '{"n":+5}' '1 2' ''; do
+  cronium_execute_tool_action sql run_query "$config" 2>&1; echo "tool $config rc=$?"
+done
+cronium_execute_tool_action sql run_query '{"n":1}' >/dev/null; echo "good config rc=$?"
+`)
+
+	requests := strings.Join(result.requests, "\n")
+	for _, want := range []string{
+		`output {"data":"010"}`,
+		`output {"data":"+5"}`,
+		`output {"data":".5"}`,
+		`output {"data":"nan"}`,
+		`output {"data":"inf"}`,
+		`output {"data":42}`,
+		`output {"data":1.5}`,
+		`output {"data":"{\"a\":010}"}`,
+		`output {"data":{"a":1}}`,
+		`POST /tool-actions/execute {"action":"run_query","config":{"n":1},"tool":"sql"}`,
+	} {
+		if !strings.Contains(requests, want) {
+			t.Errorf("requests are missing %q:\n%s", want, requests)
+		}
+	}
+	if got := strings.Count(requests, "/tool-actions/execute"); got != 1 {
+		t.Errorf("%d tool actions sent, want only the good one:\n%s", got, requests)
+	}
+	if got := strings.Count(result.stdout, "Error: Invalid JSON configuration for tool action\n"); got != 5 {
+		t.Errorf("%d configs refused, want 5:\n%s", got, result.stdout)
+	}
+	if !strings.Contains(result.stdout, "good config rc=0") {
+		t.Errorf("stdout:\n%s", result.stdout)
+	}
+}
+
+// bashJSONCheckCorpus is everything up to two characters from what JSON is made of, then
+// what jq reads and JSON doesn't allow, on its own and inside values.
+func bashJSONCheckCorpus() []string {
+	alphabet := []string{"0", "1", "-", "+", ".", "e", `"`, "[", "]", "{", "}", ":", ",", " ", "\n", "x"}
+	corpus := []string{""}
+	for _, first := range alphabet {
+		corpus = append(corpus, first)
+		for _, second := range alphabet {
+			corpus = append(corpus, first+second)
+		}
+	}
+	for _, leaf := range []string{
+		"0", "-0", "42", "-42", "1.5", "1.50", "0.5", "1e3", "1E3", "1e+3", "1e-3", "1.5E-3", "1e1000",
+		"12345678901234567890", "true", "false", "null", `"a"`, `"010"`, `"[1,010]"`, `"a\"b"`, `"a\\"`,
+		`"\u00e9"`, `"é✓"`, `"a,b:c"`, `{}`, `[]`, `{"a":{"b":[1,{"c":null}]}}`,
+
+		"010", "00", "01.5", "-010", "-00", "+5", "+0", ".5", "-.5", "5.", "-5.", "1.e3", ".5e3", "1e", "1e+", "--5", "1-",
+		"nan", "NaN", "NAN", "-nan", "nan1", "sNaN", "inf", "-inf", "Inf", "Infinity", "-Infinity", "infinity", "True", "NULL",
+		"nul", "0x10", "1_000", "'a'", `"a`, `a"`, `"\q"`, "\"a\tb\"", "\"a\nb\"", "1 2", `"a" "b"`, "[1 2]", "[1,]", "[,1]",
+		`{"a":1,}`, `{"a" 1}`, `{a:1}`, `{1:2}`, "[1]]", "[[1]", "{", "}", "#", "// x", "é",
+	} {
+		corpus = append(corpus,
+			leaf,
+			" "+leaf+" ",
+			"\n"+leaf+"\n",
+			"["+leaf+"]",
+			"[1, "+leaf+"]",
+			"["+leaf+",\n1]",
+			`{"a":`+leaf+`}`,
+			`{"a": [`+leaf+`], "b": "010"}`,
+		)
+	}
+	return corpus
+}
+
+// TestBashJSONCheckGoesByTheRunnersRule holds the container's check to what a remote server's
+// helpers do with the same text, in helpers.jsonOrString. jq's parser is the reason this
+// needs a test: what it accepts has changed between versions, and it isn't what JSON allows.
+func TestBashJSONCheckGoesByTheRunnersRule(t *testing.T) {
+	requireTools(t, "bash", "jq")
+
+	sdk, err := filepath.Abs(repoPath("apps", "runtime", "runtime-helpers", "bash", "cronium.sh"))
+	if err != nil {
+		t.Fatalf("failed to resolve the SDK path: %v", err)
+	}
+
+	corpus := bashJSONCheckCorpus()
+	var values bytes.Buffer
+	for _, value := range corpus {
+		values.WriteString(value + "\x00")
+	}
+	cmd := exec.Command("bash", "-c", `source "$1"
+while IFS= read -r -d '' value; do
+  if _cronium_is_json "$value"; then echo json; else echo text; fi
+done`, "bash", sdk)
+	cmd.Stdin = &values
+	cmd.Dir = t.TempDir()
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to run the check: %v", err)
+	}
+
+	verdicts := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(verdicts) != len(corpus) {
+		t.Fatalf("%d verdicts for %d values", len(verdicts), len(corpus))
+	}
+	counts := map[string]int{}
+	for i, value := range corpus {
+		want := "text"
+		if trimmed := bytes.TrimSpace([]byte(value)); len(trimmed) > 0 && json.Valid(trimmed) {
+			want = "json"
+		}
+		counts[want]++
+		if verdicts[i] != want {
+			t.Errorf("%q is %s in a container and %s on a remote server", value, verdicts[i], want)
+		}
+	}
+	if counts["json"] < 100 || counts["text"] < 100 {
+		t.Errorf("corpus has too little of one kind: %v", counts)
+	}
+}
+
+// incrementCase is one call to cronium_increment_variable.
+type incrementCase struct {
+	stored string // Nothing stored if empty.
+	args   string // Shell words after the key.
+	output string // What the call prints, stderr included. KEY stands for its key.
+	status int    // A call that fails has to leave stored as it was.
+}
+
+func incrementRefused(increment string) string {
+	return "Error: Increment '" + increment + "' is not a 64-bit integer, so variable 'KEY' was not changed"
+}
+
+const storedRefused = "Error: Variable 'KEY' is not a 64-bit integer, so it was not changed"
+
+// TestParityBashIncrementCountsInDecimal covers what $((current + increment)) did with the text
+// it was given, on both sides. A stored 010 was octal and became 9, with status 0 and no
+// message, and 09 failed with `value too great for base`. An increment was an expression, so
+// abc counted as 0, or ended a `set -u` script, and a[$(command)] ran the command. Past 64
+// bits a number wrapped: a stored 99999999999999999999 became 7766279631452241920.
+func TestParityBashIncrementCountsInDecimal(t *testing.T) {
+	requireTools(t, "bash", "curl", "jq")
+
+	cases := []incrementCase{
+		// A stored number counts in decimal, whatever it starts with.
+		{stored: "010", output: "11"},
+		{stored: "09", output: "10"},
+		{stored: "0009", output: "10"},
+		{stored: "00", output: "1"},
+		{stored: "-010", output: "-9"},
+		{stored: "-09", output: "-8"},
+		{stored: "-0", output: "1"},
+		{stored: "+5", output: "6"},
+		{stored: "000000000000000000000000000005", output: "6"},
+
+		// So does an increment.
+		{stored: "5", args: "010", output: "15"},
+		{stored: "5", args: "09", output: "14"},
+		{stored: "5", args: "00", output: "5"},
+		{stored: "5", args: "-010", output: "-5"},
+		{stored: "5", args: "-09", output: "-4"},
+		{stored: "5", args: "+010", output: "15"},
+		{stored: "5", args: "+3", output: "8"},
+		{stored: "5", args: "-3", output: "2"},
+		{stored: "5", args: "0", output: "5"},
+		{stored: "5", args: "-0", output: "5"},
+		{stored: "010", args: "010", output: "20"},
+		{stored: "-010", args: "-010", output: "-20"},
+		{stored: "-010", args: "010", output: "0"},
+
+		// A variable with no value starts from 0.
+		{output: "1"},
+		{args: "010", output: "10"},
+		{args: "-010", output: "-10"},
+
+		// An increment that isn't an integer. Each of these changes nothing and returns 1,
+		// and most used to work in some way or other.
+		{stored: "5", args: "abc", output: incrementRefused("abc"), status: 1},
+		{stored: "5", args: "shell_number", output: incrementRefused("shell_number"), status: 1},
+		{stored: "5", args: "null", output: incrementRefused("null"), status: 1},
+		{stored: "5", args: "''", output: incrementRefused(""), status: 1},
+		{stored: "5", args: "' 5'", output: incrementRefused(" 5"), status: 1},
+		{stored: "5", args: "'5 '", output: incrementRefused("5 "), status: 1},
+		{stored: "5", args: "1.5", output: incrementRefused("1.5"), status: 1},
+		{stored: "5", args: "1e3", output: incrementRefused("1e3"), status: 1},
+		{stored: "5", args: "0x10", output: incrementRefused("0x10"), status: 1},
+		{stored: "5", args: "'2#101'", output: incrementRefused("2#101"), status: 1},
+		{stored: "5", args: "1+1", output: incrementRefused("1+1"), status: 1},
+		{stored: "5", args: "-", output: incrementRefused("-"), status: 1},
+		{stored: "5", args: "+", output: incrementRefused("+"), status: 1},
+		{stored: "5", args: "--5", output: incrementRefused("--5"), status: 1},
+		{stored: "5", args: "+-5", output: incrementRefused("+-5"), status: 1},
+		{stored: "5", args: "'a[$(echo ran > injected)]'", output: incrementRefused("a[$(echo ran > injected)]"), status: 1},
+
+		// A stored value that isn't one.
+		{stored: "abc", output: storedRefused, status: 1},
+		{stored: "1.5", output: storedRefused, status: 1},
+		{stored: "1e3", output: storedRefused, status: 1},
+		{stored: "0x10", output: storedRefused, status: 1},
+		{stored: " 5", output: storedRefused, status: 1},
+		{stored: "-", output: storedRefused, status: 1},
+		{stored: "shell_number", output: storedRefused, status: 1},
+
+		// As far as 64 bits go, and no further.
+		{stored: "9223372036854775806", output: "9223372036854775807"},
+		{stored: "9223372036854775807", output: "Error: Adding 1 to variable 'KEY' goes past 64 bits, so it was not changed", status: 1},
+		{stored: "9223372036854775807", args: "-1", output: "9223372036854775806"},
+		{stored: "-9223372036854775807", args: "-1", output: "-9223372036854775808"},
+		{stored: "-9223372036854775808", args: "1", output: "-9223372036854775807"},
+		{stored: "-9223372036854775808", args: "-1", output: "Error: Adding -1 to variable 'KEY' goes past 64 bits, so it was not changed", status: 1},
+		{stored: "-1", args: "-9223372036854775808", output: "Error: Adding -9223372036854775808 to variable 'KEY' goes past 64 bits, so it was not changed", status: 1},
+		{stored: "0", args: "-9223372036854775808", output: "-9223372036854775808"},
+		{stored: "9223372036854775808", output: storedRefused, status: 1},
+		{stored: "-9223372036854775809", output: storedRefused, status: 1},
+		{stored: "18446744073709551616", output: storedRefused, status: 1},
+		{stored: "99999999999999999999", output: storedRefused, status: 1},
+		{stored: "5", args: "9223372036854775808", output: incrementRefused("9223372036854775808"), status: 1},
+		{stored: "5", args: "18446744073709551616", output: incrementRefused("18446744073709551616"), status: 1},
+	}
+
+	script := "shell_number=3\n"
+	var want strings.Builder
+	for i, tc := range cases {
+		key := fmt.Sprintf("V%d", i)
+		if tc.stored != "" {
+			// As a JSON string, so that this doesn't depend on how a number is stored.
+			script += fmt.Sprintf("cronium_set_variable %s '\"%s\"'\n", key, tc.stored)
+		}
+		script += fmt.Sprintf("out=$(cronium_increment_variable %s %s 2>&1); echo \"%s [$out] rc=$? now [$(cronium_get_variable %s)]\"\n", key, tc.args, key, key)
+		after := tc.output
+		if tc.status != 0 {
+			after = tc.stored
+		}
+		fmt.Fprintf(&want, "%s [%s] rc=%d now [%s]\n", key, strings.ReplaceAll(tc.output, "KEY", key), tc.status, after)
+	}
+	script += "if [ -e injected ]; then echo \"an increment ran a command\"; fi\n"
+
+	for _, mode := range []struct{ name, line string }{
+		{"with no strict mode", ""},
+		{"under set -u", "set -u\n"},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			result := compareRuns(t, types.ScriptTypeBash, mode.line+script)
+
+			if result.stdout != want.String() {
+				t.Errorf("results\n%s", lineDiff(want.String(), result.stdout))
+			}
+			if result.stderr != "" {
+				t.Errorf("stderr = %q", result.stderr)
+			}
+			if result.exitCode != 0 {
+				t.Errorf("exit code = %d", result.exitCode)
+			}
+
+			// A value rewritten as itself would pass the check above, and abc used to do
+			// that. So count the writes.
+			requests := strings.Join(result.requests, "\n")
+			for i, tc := range cases {
+				writes := strings.Count(requests, fmt.Sprintf("PUT /executions/exec-parity/variables/V%d ", i))
+				wantWrites := 0
+				if tc.stored != "" {
+					wantWrites++
+				}
+				if tc.status == 0 {
+					wantWrites++
+				}
+				if writes != wantWrites {
+					t.Errorf("V%d (%q, %q): %d writes, want %d", i, tc.stored, tc.args, writes, wantWrites)
+				}
 			}
 		})
 	}

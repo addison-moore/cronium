@@ -302,7 +302,7 @@ func (e *Executor) Cleanup(ctx context.Context, job *types.Job) error {
 // createContainer creates a new container for the job
 func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkID string, timing *ExecutionTiming) (string, error) {
 	// Select image based on script type
-	image := e.getImageForScript(job.Execution.Script.Type)
+	image := e.getImageForScript(ctx, job.Execution.Script.Type)
 
 	// Try to pull the image first (in case it's not available locally)
 	if timing != nil {
@@ -379,30 +379,6 @@ func (e *Executor) createContainer(ctx context.Context, job *types.Job, networkI
 	}
 
 	return resp.ID, nil
-}
-
-// getImageForScript returns the appropriate image for the script type
-func (e *Executor) getImageForScript(scriptType types.ScriptType) string {
-	// Default images if not configured
-	defaults := map[string]string{
-		"BASH":   "cronium/runner:bash-alpine",
-		"PYTHON": "cronium/runner:python-alpine",
-		"NODEJS": "cronium/runner:node-alpine",
-	}
-
-	// Get configured image or use default
-	imageKey := string(scriptType)
-	if image, ok := e.config.Images[strings.ToLower(imageKey)]; ok && image != "" {
-		return image
-	}
-
-	// Fallback to defaults
-	if defaultImage, ok := defaults[imageKey]; ok {
-		return defaultImage
-	}
-
-	// Ultimate fallback
-	return "cronium/runner:bash-alpine"
 }
 
 // scriptNotDeliveredExitCode is what a job exits with when its script reached the

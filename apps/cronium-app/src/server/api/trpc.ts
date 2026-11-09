@@ -21,6 +21,11 @@ import {
   isAdminMfaEnforced,
   type AuthorizedPrincipal,
 } from "../security/authorization";
+import {
+  AccountCheckFailedError,
+  CredentialCheckFailedError,
+  checkingCredentials,
+} from "../security/credential-check";
 import { capabilityForRoute } from "../security/route-capabilities";
 
 /**
@@ -39,6 +44,9 @@ interface CreateContextOptions {
   // Provenance of the request, e.g. "mcp" — stamped onto created records so
   // events/workflows made by an AI agent are attributable. null otherwise.
   requestSource?: string | null;
+  // The request's token couldn't be checked, so the session is null without that
+  // meaning the token is bad. See createTRPCContext.
+  credentialCheckFailed?: boolean;
 }
 
 /**
@@ -58,6 +66,7 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
     headers: opts.headers,
     tokenScopes: opts.tokenScopes ?? null,
     requestSource: opts.requestSource ?? null,
+    ...(opts.credentialCheckFailed && { credentialCheckFailed: true }),
   };
 };
 
@@ -76,7 +85,8 @@ function readRequestSource(headers: Headers): string | null {
  * Build a Session from an `Authorization: Bearer <api-token>` header, so
  * headless clients (e.g. the MCP server) can act as the token's owner without a
  * browser session. Cookie sessions take precedence; this is only consulted when
- * there is no session. Returns null when there is no valid token.
+ * there is no session. Returns null when there is no valid token, and throws
+ * CredentialCheckFailedError when it couldn't be checked.
  */
 export const sessionFromApiToken = async (
   headers: Headers,
@@ -90,7 +100,10 @@ export const sessionFromApiToken = async (
   if (!auth) return null;
 
   const { storage } = await import("../storage");
-  const user = await storage.getUser(auth.userId);
+  const user = await checkingCredentials(
+    "Error reading an API token's owner",
+    () => storage.getUser(auth.userId),
+  );
   // Bearer principals must be live: a disabled/pending owner's tokens stop
   // working immediately, not at token expiry.
   if (user?.status !== UserStatus.ACTIVE) return null;
@@ -133,13 +146,25 @@ export const createTRPCContext = async (
       requestSource,
     });
   }
-  const tokenAuth = await sessionFromApiToken(headers);
-  return createInnerTRPCContext({
-    session: tokenAuth?.session ?? null,
-    headers,
-    tokenScopes: tokenAuth?.scopes ?? null,
-    requestSource,
-  });
+  try {
+    const tokenAuth = await sessionFromApiToken(headers);
+    return createInnerTRPCContext({
+      session: tokenAuth?.session ?? null,
+      headers,
+      tokenScopes: tokenAuth?.scopes ?? null,
+      requestSource,
+    });
+  } catch (error) {
+    if (!(error instanceof CredentialCheckFailedError)) throw error;
+    // Throwing here would fail every procedure, and a public one never reads the
+    // session. So this waits for a procedure that needs one: enforceUserIsAuthed.
+    return createInnerTRPCContext({
+      session: null,
+      headers,
+      requestSource,
+      credentialCheckFailed: true,
+    });
+  }
 };
 
 /**
@@ -200,6 +225,7 @@ export const publicProcedure = t.procedure;
  */
 const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.session?.user) {
+    if (ctx.credentialCheckFailed) throw new CredentialCheckFailedError();
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({
@@ -230,9 +256,19 @@ const enforceLivePrincipal = t.middleware(async ({ ctx, next }) => {
       message: "Session is no longer valid. Please sign in again.",
     });
   }
-  const principal = await getAuthorizedPrincipal(sessionUser.id, {
-    expectedSessionVersion: sessionUser.sessionVersion,
-  });
+  let principal: AuthorizedPrincipal;
+  try {
+    principal = await getAuthorizedPrincipal(sessionUser.id, {
+      expectedSessionVersion: sessionUser.sessionVersion,
+    });
+  } catch (error) {
+    // Only a token's client acts on the status: a cookie session's is this app's own
+    // pages, which show the message.
+    if (ctx.tokenScopes !== null && error instanceof AccountCheckFailedError) {
+      throw new CredentialCheckFailedError();
+    }
+    throw error;
+  }
   return next({
     ctx: {
       ...ctx,

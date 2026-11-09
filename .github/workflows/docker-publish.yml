@@ -28,7 +28,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # An orchestrator runs jobs in the images published with it, so it's built knowing their
+  # exact tag, the one this run also publishes them under. Not "main" or "latest": those move,
+  # and a job's images aren't in the compose file, so `docker compose pull` wouldn't update
+  # them on a host. An upgrade changes this tag, so the next job pulls what goes with it.
+  published-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Work out the tag
+        id: tag
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) tag="${GITHUB_REF_NAME#v}" ;;
+            # The same as type=sha,prefix={{branch}}- in the metadata steps below.
+            refs/heads/*) tag="${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}" ;;
+            *) tag=latest ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build-and-push:
+    # After the runner images, so an orchestrator is never published asking for ones that
+    # aren't there, which a cancelled run could otherwise leave behind.
+    needs: [published-tag, publish-runner-images]
     # Pull requests stay on GitHub-hosted runners: a fork PR running on
     # self-hosted would execute untrusted code on our own machine. PR builds
     # never push images anyway (see `push:` below).
@@ -129,26 +152,6 @@ jobs:
             BUILD_VERSION=${{ github.ref_name }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
-      # Build and push Orchestrator
-      - name: Build and push Orchestrator
-        id: build-orchestrator
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          file: ./apps/orchestrator/Dockerfile
-          platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-orchestrator.outputs.tags }}
-          labels: ${{ steps.meta-orchestrator.outputs.labels }}
-          # SBOM + provenance attestations (3.4/3.5), pushed with the image.
-          sbom: ${{ github.event_name != 'pull_request' }}
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}:buildcache
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME_ORCHESTRATOR) || '' }}
-          build-args: |
-            BUILD_VERSION=${{ github.ref_name }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
-
       # Build and push Runtime
       - name: Build and push Runtime
         id: build-runtime
@@ -167,6 +170,26 @@ jobs:
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME_RUNTIME) || '' }}
           build-args: |
             BUILD_VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+      # Build and push Orchestrator
+      - name: Build and push Orchestrator
+        id: build-orchestrator
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./apps/orchestrator/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-orchestrator.outputs.tags }}
+          labels: ${{ steps.meta-orchestrator.outputs.labels }}
+          # SBOM + provenance attestations (3.4/3.5), pushed with the image.
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ORCHESTRATOR }}:buildcache
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME_ORCHESTRATOR) || '' }}
+          build-args: |
+            BUILD_VERSION=${{ needs.published-tag.outputs.tag }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
       # Sign images with cosign
@@ -263,3 +286,136 @@ jobs:
           echo "- Image: \`${{ env.IMAGE_NAME_RUNTIME }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Tags: \`${{ steps.meta-runtime.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Digest: \`${{ steps.build-runtime.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # What a job's script runs in. The orchestrator pulls these by name on a fresh install, at
+  # the tag of the rest of its stack, so they carry the same tags as the images above. See
+  # apps/orchestrator/internal/executors/container/images.go.
+  publish-runner-images:
+    name: build-and-push-runner (${{ matrix.image }})
+    needs: published-tag
+    # The same as above: a fork's pull request never runs on our own machine.
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # For signing images with cosign
+      security-events: write # For uploading Trivy results to GitHub Security
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: bash
+            context: ./apps/runtime/container-images/bash
+          - image: python
+            context: ./apps/runtime/container-images/python
+          - image: node
+            context: ./apps/runtime/container-images/nodejs
+    env:
+      IMAGE_NAME: ${{ github.repository }}-runner-${{ matrix.image }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          platforms: linux/amd64
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-,enable=${{ startsWith(github.ref, 'refs/heads/') }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # SBOM + provenance attestations (3.4/3.5), pushed with the image.
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Sign the image
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes "$REGISTRY/$IMAGE_NAME@${{ steps.build.outputs.digest }}"
+
+      - name: Run Trivy vulnerability scanner
+        if: github.event_name != 'pull_request' && steps.build.outputs.digest != ''
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: "sarif"
+          output: "trivy-runner.sarif"
+        continue-on-error: true
+
+      - name: Check if the SARIF file exists
+        id: check-sarif
+        if: github.event_name != 'pull_request'
+        run: |
+          if [ -f trivy-runner.sarif ]; then
+            echo "file_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "file_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        if: github.event_name != 'pull_request' && steps.check-sarif.outputs.file_exists == 'true'
+        with:
+          sarif_file: trivy-runner.sarif
+          category: trivy-runner-${{ matrix.image }}
+          wait-for-processing: false
+        continue-on-error: true
+
+  # GitHub can create a new package as private, whatever the repository is, and a fresh
+  # install has no credentials to pull it with, so every script on it would fail. Only the
+  # package's owner can change that, in the package's settings. This has its own job so that
+  # it says so without holding up the images above.
+  check-runner-images-can-be-pulled:
+    name: check-runner-image (${{ matrix.image }})
+    if: github.event_name != 'pull_request'
+    needs: [published-tag, publish-runner-images]
+    runs-on: ubuntu-latest
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [bash, python, node]
+    steps:
+      - name: Check a host with no credentials can pull it
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-runner-${{ matrix.image }}:${{ needs.published-tag.outputs.tag }}
+        run: |
+          if ! DOCKER_CONFIG="$(mktemp -d)" docker manifest inspect "$IMAGE" > /dev/null; then
+            echo "::error::$IMAGE can't be pulled without credentials. Make the package public: https://github.com/${{ github.repository_owner }}?tab=packages"
+            exit 1
+          fi
