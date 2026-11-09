@@ -12,6 +12,11 @@ import {
 } from "../trpc";
 import { EventStatus, RunLocation } from "@/shared/schema";
 import {
+  NO_SERVERS_MESSAGE,
+  isStrandedRemoteEvent,
+  saveStrandsEvent,
+} from "@/shared/event-servers";
+import {
   createEventSchema,
   updateEventSchema,
   eventQuerySchema,
@@ -40,10 +45,11 @@ import { failureWithStack } from "@/lib/pg-errors";
 
 /**
  * A fork writes its own links to the source event's servers, and no write can
- * link an archived server. Refuse rather than leave the server out: a REMOTE
- * draft with no server still activates and then runs in a local container, with
- * only a warning in the server log, so the fork would quietly move the script.
- * The source itself can't run until its owner deals with these servers.
+ * link an archived server. Refuse rather than leave the server out: the fork
+ * would quietly lose a server it was meant to run on, and if that was its only
+ * one, it would be a REMOTE draft that can't be activated or run
+ * (shared/event-servers.ts). The source itself can't run until its owner deals
+ * with these servers.
  *
  * Only call this for the event's owner, because it names the servers.
  */
@@ -219,6 +225,14 @@ export const eventsRouter = createTRPCRouter({
           input.selectedServerIds,
         );
 
+        const current = await storage.getEventWithRelations(input.id);
+        if (current && saveStrandsEvent(current, input)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: NO_SERVERS_MESSAGE,
+          });
+        }
+
         const { id, envVars, selectedServerIds, ...eventData } = input;
 
         // Filter out undefined values to satisfy exactOptionalPropertyTypes
@@ -297,6 +311,14 @@ export const eventsRouter = createTRPCRouter({
       const userId = ctx.session.user.id;
       try {
         await assertEventRelations(input.id, userId, "execute");
+
+        const current = await storage.getEventWithRelations(input.id);
+        if (current && isStrandedRemoteEvent(current)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: NO_SERVERS_MESSAGE,
+          });
+        }
 
         // Update event status to ACTIVE
         await storage.updateScript(input.id, { status: EventStatus.ACTIVE });
@@ -393,7 +415,9 @@ export const eventsRouter = createTRPCRouter({
           throw new TRPCError({
             code: "CONFLICT",
             message:
-              "A previous run of this event is still active (overlap policy: SKIP)",
+              result.skipped === "no_servers"
+                ? NO_SERVERS_MESSAGE
+                : "A previous run of this event is still active (overlap policy: SKIP)",
           });
         }
 

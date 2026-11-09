@@ -18,6 +18,7 @@ import { Button } from "@cronium/ui";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@cronium/ui";
+import { useEarlyFormInput } from "@/hooks/useEarlyFormInput";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -36,6 +37,8 @@ export default function ForgotPassword() {
       email: "",
     },
   });
+
+  const earlyInput = useEarlyFormInput(form);
 
   const forgotPasswordMutation = trpc.userAuth.forgotPassword.useMutation({
     onSuccess: (data) => {
@@ -136,6 +139,7 @@ export default function ForgotPassword() {
 
         <Form {...form}>
           <form
+            {...earlyInput}
             onSubmit={form.handleSubmit(onSubmit)}
             className="mt-8 space-y-6"
           >

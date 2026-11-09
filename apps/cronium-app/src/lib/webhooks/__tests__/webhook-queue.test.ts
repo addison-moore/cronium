@@ -7,35 +7,62 @@ jest.mock("../WebhookManager", () => ({
   WebhookManager: { getInstance: () => ({ processDelivery }) },
 }));
 
+import type { SerializedPayload } from "../delivery-body";
 import {
+  deliveryOwnBytes,
+  MAX_HELD_BYTES,
+  MAX_HELD_BYTES_PER_OWNER,
+  MAX_HELD_BYTES_PER_WEBHOOK,
   MAX_RUNNING_DELIVERIES,
   MAX_RUNNING_PER_OWNER,
   MAX_RUNNING_PER_WEBHOOK,
   WebhookQueue,
+  type DeliveryTarget,
   type QueueItem,
+  type QueueReservation,
 } from "../WebhookQueue";
 
-type Enqueue = Omit<QueueItem, "id" | "attempts">;
+const payload = (body = "{}"): SerializedPayload => ({
+  event: "e",
+  timestamp: new Date(),
+  body: Buffer.from(body),
+});
+
+const target = (
+  webhookId = 1,
+  retryConfig?: QueueItem["retryConfig"],
+): DeliveryTarget => ({
+  webhookId,
+  url: "https://hooks.example/in",
+  secret: "decrypted-secret",
+  headers: {},
+  ...(retryConfig !== undefined && { retryConfig }),
+});
+
+interface OneDelivery {
+  target: DeliveryTarget;
+  ownerUserId: string;
+}
 
 const item = (
   retryConfig?: QueueItem["retryConfig"],
   webhookId = 1,
   ownerUserId = "tenant-a",
-): Enqueue => ({
-  webhookId,
-  ownerUserId,
-  webhookEventId: 2,
-  url: "https://hooks.example/in",
-  secret: "decrypted-secret",
-  headers: {},
-  payload: {
-    id: "2",
-    event: "e",
-    timestamp: new Date(),
-    data: {},
-  },
-  ...(retryConfig !== undefined && { retryConfig }),
-});
+): OneDelivery => ({ target: target(webhookId, retryConfig), ownerUserId });
+
+/** One event to one webhook, as the manager does it. */
+function enqueue(queue: WebhookQueue, delivery: OneDelivery) {
+  const body = payload();
+  const reservation = queue.reserve(delivery.ownerUserId, body.body.length, [
+    delivery.target,
+  ]);
+  accepted(reservation).enqueue(2, body);
+}
+
+function accepted(reservation: QueueReservation) {
+  if (reservation.refused) throw new Error(`Refused: ${reservation.refused}`);
+  return reservation;
+}
 
 const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -85,7 +112,7 @@ describe("WebhookQueue", () => {
     processDelivery.mockResolvedValue({ success: true });
     const queue = new WebhookQueue();
 
-    await queue.enqueue(item());
+    enqueue(queue, item());
     await flush();
 
     expect(processDelivery).toHaveBeenCalledTimes(1);
@@ -96,7 +123,8 @@ describe("WebhookQueue", () => {
     processDelivery.mockResolvedValue({ success: false, statusCode: 500 });
     const queue = new WebhookQueue();
 
-    await queue.enqueue(
+    enqueue(
+      queue,
       item({ maxRetries: 3, retryDelay: 100, backoffMultiplier: 2 }),
     );
     await flush();
@@ -126,7 +154,8 @@ describe("WebhookQueue", () => {
     });
     const queue = new WebhookQueue();
 
-    await queue.enqueue(
+    enqueue(
+      queue,
       item({ maxRetries: 3, retryDelay: 100, backoffMultiplier: 2 }),
     );
     await flush();
@@ -144,9 +173,9 @@ describe("what a delivery can hold up", () => {
     const queue = new WebhookQueue();
 
     for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK + 2; i++) {
-      await queue.enqueue(item(undefined, 1));
+      enqueue(queue, item(undefined, 1));
     }
-    await queue.enqueue(item(undefined, 2));
+    enqueue(queue, item(undefined, 2));
     await tick();
     await tick();
 
@@ -161,9 +190,9 @@ describe("what a delivery can hold up", () => {
     const webhooks = MAX_RUNNING_PER_OWNER; // One running on each is enough.
 
     for (let webhookId = 1; webhookId <= webhooks + 1; webhookId++) {
-      await queue.enqueue(item(undefined, webhookId, "tenant-a"));
+      enqueue(queue, item(undefined, webhookId, "tenant-a"));
     }
-    await queue.enqueue(item(undefined, 100, "tenant-b"));
+    enqueue(queue, item(undefined, 100, "tenant-b"));
     await tick();
 
     expect(processDelivery).toHaveBeenCalledTimes(MAX_RUNNING_PER_OWNER + 1);
@@ -179,7 +208,7 @@ describe("what a delivery can hold up", () => {
       webhookId <= MAX_RUNNING_DELIVERIES + 1;
       webhookId++
     ) {
-      await queue.enqueue(item(undefined, webhookId, `tenant-${webhookId}`));
+      enqueue(queue, item(undefined, webhookId, `tenant-${webhookId}`));
     }
     await tick();
 
@@ -195,13 +224,11 @@ describe("what a delivery can hold up", () => {
     const fullTenants = MAX_RUNNING_DELIVERIES / MAX_RUNNING_PER_OWNER;
     for (let tenant = 0; tenant < fullTenants; tenant++) {
       for (let i = 0; i < MAX_RUNNING_PER_OWNER; i++) {
-        await queue.enqueue(
-          item(undefined, tenant * 100 + i, `tenant-${tenant}`),
-        );
+        enqueue(queue, item(undefined, tenant * 100 + i, `tenant-${tenant}`));
       }
     }
-    await queue.enqueue(item(undefined, 0, "tenant-0"));
-    await queue.enqueue(item(undefined, 9999, "tenant-with-nothing-running"));
+    enqueue(queue, item(undefined, 0, "tenant-0"));
+    enqueue(queue, item(undefined, 9999, "tenant-with-nothing-running"));
     await tick();
     expect(running).toHaveLength(MAX_RUNNING_DELIVERIES);
 
@@ -219,11 +246,11 @@ describe("what a delivery can hold up", () => {
 
     // The tenant at its limit on two webhooks, with an older backlog on one.
     for (let i = 0; i < MAX_RUNNING_PER_OWNER / 2; i++) {
-      await queue.enqueue(item(undefined, 1));
-      await queue.enqueue(item(undefined, 2));
+      enqueue(queue, item(undefined, 1));
+      enqueue(queue, item(undefined, 2));
     }
-    await queue.enqueue(item(undefined, 1));
-    await queue.enqueue(item(undefined, 3));
+    enqueue(queue, item(undefined, 1));
+    enqueue(queue, item(undefined, 3));
     await tick();
     expect(running).toHaveLength(MAX_RUNNING_PER_OWNER);
 
@@ -241,8 +268,8 @@ describe("what a delivery can hold up", () => {
 
     // A backlog behind each webhook's limit, then every slot free again.
     for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK + 3; i++) {
-      await queue.enqueue(item(undefined, 1));
-      await queue.enqueue(item(undefined, 2));
+      enqueue(queue, item(undefined, 1));
+      enqueue(queue, item(undefined, 2));
     }
     await flush();
     expect(running).toHaveLength(MAX_RUNNING_PER_WEBHOOK * 2);
@@ -264,7 +291,7 @@ describe("what a delivery can hold up", () => {
     const queue = new WebhookQueue();
 
     for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK + 1; i++) {
-      await queue.enqueue(item());
+      enqueue(queue, item());
     }
     await flush();
     expect(running).toHaveLength(MAX_RUNNING_PER_WEBHOOK);
@@ -273,7 +300,7 @@ describe("what a delivery can hold up", () => {
 
     // Nothing looked at the queue when those ended. The new event does.
     expect(running).toHaveLength(0);
-    await queue.enqueue(item());
+    enqueue(queue, item());
     await flush();
     expect(running).toHaveLength(1);
     expect(retained(queue).size).toBe(1);
@@ -288,9 +315,9 @@ describe("what a delivery can hold up", () => {
     const slowRetry = { maxRetries: 2, retryDelay: 3_600_000 };
 
     for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK; i++) {
-      await queue.enqueue(item(slowRetry));
+      enqueue(queue, item(slowRetry));
     }
-    await queue.enqueue(item(slowRetry));
+    enqueue(queue, item(slowRetry));
     await tick();
     expect(running).toHaveLength(MAX_RUNNING_PER_WEBHOOK);
 
@@ -322,7 +349,7 @@ describe("what a delivery can hold up", () => {
     const quickRetry = { maxRetries: 2, retryDelay: 100 };
 
     for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK + 1; i++) {
-      await queue.enqueue(item(quickRetry));
+      enqueue(queue, item(quickRetry));
     }
     await tick();
     expect(running).toHaveLength(MAX_RUNNING_PER_WEBHOOK);
@@ -361,7 +388,7 @@ describe("what a delivery can hold up", () => {
     const rounds = MAX_RUNNING_DELIVERIES / MAX_RUNNING_PER_WEBHOOK + 1;
     for (let round = 0; round < rounds; round++) {
       for (let i = 0; i < MAX_RUNNING_PER_WEBHOOK; i++) {
-        await queue.enqueue(item(oneAttempt));
+        enqueue(queue, item(oneAttempt));
       }
       await flush();
 
@@ -370,5 +397,270 @@ describe("what a delivery can hold up", () => {
       running.splice(0).forEach(end);
       await flush();
     }
+  });
+});
+
+describe("what the queue holds", () => {
+  const MiB = 1024 * 1024;
+  const own = deliveryOwnBytes(target());
+
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    warn = jest.spyOn(console, "warn").mockImplementation();
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  /** An event this long, and nothing of that length in memory but its count. */
+  const reserve = (
+    queue: WebhookQueue,
+    bodyBytes: number,
+    webhookIds: number[] = [1],
+    ownerUserId = "tenant-a",
+  ) =>
+    queue.reserve(
+      ownerUserId,
+      bodyBytes,
+      webhookIds.map((webhookId) => target(webhookId)),
+    );
+
+  /** Claims that never start running, so they hold their room until told. */
+  const fill = (
+    queue: WebhookQueue,
+    webhookIds: number[],
+    ownerUserId = "tenant-a",
+  ) => {
+    for (const webhookId of webhookIds) {
+      accepted(
+        reserve(
+          queue,
+          MAX_HELD_BYTES_PER_WEBHOOK - own,
+          [webhookId],
+          ownerUserId,
+        ),
+      );
+    }
+  };
+
+  it("fits an event that takes a webhook exactly to its limit, and no more", () => {
+    const queue = new WebhookQueue();
+
+    expect(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own + 1).refused).toBe(
+      "webhook",
+    );
+
+    accepted(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own));
+    expect(reserve(queue, 0).refused).toBe("webhook");
+  });
+
+  it("keeps a tenant to its limit however many webhooks it has", () => {
+    const queue = new WebhookQueue();
+    const webhooks = MAX_HELD_BYTES_PER_OWNER / MAX_HELD_BYTES_PER_WEBHOOK;
+
+    fill(
+      queue,
+      Array.from({ length: webhooks }, (_, n) => n + 1),
+    );
+
+    expect(reserve(queue, 0, [100]).refused).toBe("owner");
+  });
+
+  it("leaves one tenant's room alone when another's is used up", () => {
+    const queue = new WebhookQueue();
+
+    fill(queue, [1, 2], "tenant-a");
+
+    accepted(reserve(queue, MiB, [3], "tenant-b"));
+    expect(reserve(queue, MiB, [4], "tenant-a").refused).toBe("owner");
+  });
+
+  it("keeps everyone to the total", () => {
+    const queue = new WebhookQueue();
+    const tenants = MAX_HELD_BYTES / MAX_HELD_BYTES_PER_OWNER;
+    const webhooks = MAX_HELD_BYTES_PER_OWNER / MAX_HELD_BYTES_PER_WEBHOOK;
+
+    for (let tenant = 0; tenant < tenants; tenant++) {
+      fill(
+        queue,
+        Array.from({ length: webhooks }, (_, n) => tenant * 100 + n),
+        `tenant-${tenant}`,
+      );
+    }
+
+    expect(reserve(queue, 0, [9999], "tenant-with-nothing").refused).toBe(
+      "total",
+    );
+  });
+
+  it("counts an event's body once at the tenant, however many webhooks it goes to", () => {
+    const queue = new WebhookQueue();
+    const webhooks = [1, 2, 3];
+    const events = 3;
+    const body = 10 * MiB;
+
+    // Past the tenant's limit if each webhook's share counted, when there's one copy.
+    expect(events * webhooks.length * body).toBeGreaterThan(
+      MAX_HELD_BYTES_PER_OWNER,
+    );
+
+    for (let event = 0; event < events; event++) {
+      expect(accepted(reserve(queue, body, webhooks)).full).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["URL", { url: "x".repeat(MAX_HELD_BYTES_PER_WEBHOOK) }],
+    ["secret", { secret: "x".repeat(MAX_HELD_BYTES_PER_WEBHOOK) }],
+    [
+      "custom headers",
+      { headers: { "X-Long": "x".repeat(MAX_HELD_BYTES_PER_WEBHOOK) } },
+    ],
+  ])("counts a delivery's own copy of its %s", (_what, long) => {
+    const queue = new WebhookQueue();
+
+    expect(
+      queue.reserve("tenant-a", 1, [{ ...target(), ...long }]).refused,
+    ).toBe("webhook");
+  });
+
+  it("has a limit on tiny events too, through what each delivery costs", () => {
+    const queue = new WebhookQueue();
+    const fits = Math.floor(MAX_HELD_BYTES_PER_WEBHOOK / (own + 2));
+
+    for (let event = 0; event < fits; event++) {
+      accepted(reserve(queue, 2));
+    }
+
+    expect(fits).toBeLessThan(20_000);
+    expect(reserve(queue, 2).refused).toBe("webhook");
+  });
+
+  it("leaves out a webhook with no room while another has some", async () => {
+    processDelivery.mockResolvedValue({ success: true });
+    const queue = new WebhookQueue();
+    fill(queue, [1]);
+
+    const reservation = accepted(reserve(queue, 1, [1, 2]));
+    reservation.enqueue(2, payload());
+    await flush();
+
+    expect(reservation.full.map(({ webhookId }) => webhookId)).toEqual([1]);
+    expect(processDelivery.mock.calls.map(([id]) => id)).toEqual([2]);
+  });
+
+  it("refuses an event when none of its webhooks has room", () => {
+    const queue = new WebhookQueue();
+    fill(queue, [1, 2]);
+
+    expect(reserve(queue, 1, [1, 2]).refused).toBe("webhook");
+  });
+
+  it("gives the room back when told the event isn't going out", () => {
+    const queue = new WebhookQueue();
+
+    for (let i = 0; i < 3; i++) {
+      accepted(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own)).cancel();
+    }
+
+    expect(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own).refused).toBe(
+      undefined,
+    );
+  });
+
+  it("gives back a fanned-out event's body with the last of its deliveries", async () => {
+    const running = holdDeliveries();
+    const queue = new WebhookQueue();
+
+    // Together these take the tenant exactly to its limit.
+    const body = MAX_HELD_BYTES_PER_WEBHOOK - own;
+    const fannedOut = accepted(reserve(queue, body, [1, 2]));
+    fannedOut.enqueue(2, payload());
+    await flush();
+    expect(running).toHaveLength(2);
+    accepted(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - 2 * own, [3]));
+    expect(reserve(queue, 0, [4]).refused).toBe("owner");
+
+    // One delivery over gives back only what it held itself.
+    running[0]!.finish({ success: true });
+    await flush();
+    expect(reserve(queue, 1, [4]).refused).toBe("owner");
+
+    running[1]!.finish({ success: true });
+    await flush();
+    accepted(reserve(queue, MiB, [4]));
+  });
+
+  it.each([
+    ["succeeds", { success: true }],
+    ["fails for good", { success: false, retryable: false }],
+  ])("gives the room back when a delivery %s", async (_how, result) => {
+    processDelivery.mockResolvedValue(result);
+    const queue = new WebhookQueue();
+
+    for (let round = 0; round < 3; round++) {
+      const reservation = accepted(
+        reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own),
+      );
+      reservation.enqueue(2, payload());
+      await flush();
+    }
+  });
+
+  it("keeps a retry's room while it waits, so new events are the ones refused", async () => {
+    processDelivery.mockResolvedValue({ success: false, statusCode: 500 });
+    const queue = new WebhookQueue();
+    const retrying = {
+      ...target(1, { maxRetries: 2, retryDelay: 60_000, backoffMultiplier: 1 }),
+    };
+
+    const reservation = accepted(
+      queue.reserve("tenant-a", MAX_HELD_BYTES_PER_WEBHOOK - own, [retrying]),
+    );
+    reservation.enqueue(2, payload());
+    await flush();
+
+    // One attempt over and the other waiting out its backoff.
+    expect(processDelivery).toHaveBeenCalledTimes(1);
+    expect(retained(queue).size).toBe(1);
+    expect(reserve(queue, 1).refused).toBe("webhook");
+
+    // Nothing moved it, so it goes out when it's due, and only then is the room free.
+    jest.advanceTimersByTime(60_000);
+    await flush();
+    await tick();
+    expect(processDelivery).toHaveBeenCalledTimes(2);
+    expect(retained(queue).size).toBe(0);
+    accepted(reserve(queue, 1));
+  });
+
+  it("gives the room back when a delivery runs out of attempts", async () => {
+    processDelivery.mockResolvedValue({ success: false, statusCode: 500 });
+    const queue = new WebhookQueue();
+
+    const reservation = accepted(
+      queue.reserve("tenant-a", MAX_HELD_BYTES_PER_WEBHOOK - own, [
+        target(1, { maxRetries: 1 }),
+      ]),
+    );
+    reservation.enqueue(2, payload());
+    await flush();
+
+    expect(retained(queue).size).toBe(0);
+    accepted(reserve(queue, MAX_HELD_BYTES_PER_WEBHOOK - own));
+  });
+
+  it("tells the server log, at most once a minute", () => {
+    const queue = new WebhookQueue();
+    fill(queue, [1]);
+
+    reserve(queue, 1);
+    reserve(queue, 1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain('"webhook" limit');
+
+    jest.advanceTimersByTime(60_000);
+    reserve(queue, 1);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 });

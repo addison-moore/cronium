@@ -103,6 +103,17 @@ const createEventSchema = z
   )
   .refine(
     (data) =>
+      // Same rule as events.create (shared/schemas/events.ts).
+      data.runLocation === RunLocation.LOCAL ||
+      !!data.serverId ||
+      (data.selectedServerIds?.length ?? 0) > 0,
+    {
+      message: "Server selection is required for remote execution",
+      path: ["serverId"],
+    },
+  )
+  .refine(
+    (data) =>
       !data.customSchedule || validateCronExpr(data.customSchedule).valid,
     { message: "Invalid cron expression", path: ["customSchedule"] },
   )

@@ -67,7 +67,7 @@ These environment variables must be set for the application to function correctl
 | `AUTH_URL`                 | NextAuth base URL                                                                                                                                                                                              | `string` (URL)          | Yes      | `http://localhost:3000`                 | 📱      |
 | `AUTH_SECRET`              | NextAuth encryption secret                                                                                                                                                                                     | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` | 📱      |
 | `ENCRYPTION_KEY`           | Data encryption key (active). Encrypts every secret at rest via the versioned vault + tool-credential scheme                                                                                                   | `string` (64 hex)       | Yes      | Generate with `openssl rand -hex 32`    | 📱      |
-| `ENCRYPTION_KEYS_RETIRED`  | JSON array of former `ENCRYPTION_KEY` values kept in the keyring during a key rotation, so secrets under them still decrypt and job tokens under them verify. Empty/unset otherwise. See "Key rotation" below. | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
+| `ENCRYPTION_KEYS_RETIRED`  | JSON array of former `ENCRYPTION_KEY` values kept during a key rotation so secrets under them decrypt and job tokens verify. Empty/unset otherwise. The app won't start if it's malformed. See "Key rotation". | `string` (JSON array)   | No       | e.g. `["<old-hex-key>"]`                | 📱      |
 | `JWT_SECRET`               | JWT signing secret                                                                                                                                                                                             | `string` (min 32 chars) | Yes      | Generate with `openssl rand -base64 32` |
 | `CRONIUM_ORCHESTRATOR_KEY` | Orchestrator service-identity credential — the app verifies it on the orchestrator-facing routes (claim, heartbeat, health/metrics)                                                                            | `string`                | Yes      | Generate with `openssl rand -base64 32` |
 | `SOCKET_BROADCAST_KEY`     | Authenticates internal broadcasts from the app/worker to the socket server                                                                                                                                     | `string`                | Yes      | Generate with `openssl rand -base64 32` |
@@ -166,7 +166,16 @@ Analytics render only in production builds, so `pnpm dev` never sends events.
 
 OAuth apps used by tool integrations (currently Google Sheets). Register the
 redirect URI `{AUTH_URL}/api/oauth/callback` with the provider. Users then
-click "Connect" on the tool's credential card to authorize their account.
+click "Connect" on the tool's credential card to authorize their account, and
+the Tools page says how it went when the provider sends them back.
+
+Set these for the app and the worker, which runs tool actions and refreshes
+their tokens. Both Compose files pass them on from `.env`.
+
+Open Cronium at the address in `AUTH_URL` to connect an account. The flow is
+tied to the browser by a cookie on the address it starts from, and the provider
+always comes back to `AUTH_URL`, so starting anywhere else ends in "OAuth
+session could not be verified for this browser".
 
 | Variable                        | Description                                    | Type     | Default | Required |
 | ------------------------------- | ---------------------------------------------- | -------- | ------- | -------- |
@@ -241,7 +250,10 @@ sweeper, and retention. All values have sensible defaults.
 | `WORKER_HEALTH_PORT`                     | HTTP health endpoint port (container healthcheck)                                  | `number` | `5003`              | No       |
 | `WORKER_DISPATCH_INTERVAL_MS`            | Schedule dispatcher tick interval                                                  | `number` | `5000`              | No       |
 | `WORKER_CLAIM_INTERVAL_MS`               | In-process job claim interval                                                      | `number` | `2000`              | No       |
+| `WORKER_SWEEP_INTERVAL_MS`               | Lease and timeout sweeper interval                                                 | `number` | `30000`             | No       |
 | `WORKER_MAX_CONCURRENT`                  | Max concurrent in-process (tool/HTTP) executions                                   | `number` | `10`                | No       |
+| `WORKER_DB_CHECKOUT_LIMIT_MS`            | How long the worker can hold a database connection before closing it as hung       | `number` | `300000`            | No       |
+| `WORKER_LISTEN_PROBE_INTERVAL_MS`        | How often the worker checks that its `LISTEN` connection still answers             | `number` | `30000`             | No       |
 | `CRONIUM_JOB_RETENTION_DAYS`             | Days to keep finished jobs, with their executions and transitions. Their logs stay | `number` | `30`                | No       |
 | `CRONIUM_LOG_RETENTION_DAYS`             | Days to keep run logs                                                              | `number` | `90`                | No       |
 | `CRONIUM_WORKFLOW_RETENTION_DAYS`        | Days to keep finished workflow runs, their step rows and workflow log lines        | `number` | `90`                | No       |
@@ -254,6 +266,13 @@ For the `*_RETENTION_DAYS` variables, `0` keeps that data forever. An unset or
 empty variable uses the default. Any other value that isn't a number of days up
 to 36500 is ignored with a warning in the worker's log, and that data is kept
 until it is fixed. See [Data Retention](./DEPLOYMENT.md#data-retention).
+
+`WORKER_DB_CHECKOUT_LIMIT_MS` gets the worker out from behind a database connection
+that has stopped answering without closing, since nothing else ends that wait. What
+was using the connection fails and is tried again, and the worker's log says
+`Closed N database connection(s)`. A statement or transaction that really takes this
+long is cut off and rolled back, so raise the limit if that line appears while the
+database is healthy. An unset, empty or unreadable value uses the default.
 
 ### Orchestrator Service (cronium-orchestrator)
 
@@ -523,6 +542,7 @@ openssl rand -base64 32  # For SOCKET_BROADCAST_KEY
 4. **Containerization**: Container-related variables are prepared for future isolation features
 5. **Service Architecture**: The application uses multiple services (app, websocket, orchestrator) that communicate via internal URLs
 6. **Proxies**: HTTP request events, outbound webhooks and user-supplied AI endpoints ignore `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` and always connect directly, because a proxy would resolve the target itself and bypass the SSRF guard. These features need direct outbound access from the app and worker.
+7. **Name resolution**: HTTP request events, outbound webhooks and user-supplied AI endpoints read `/etc/hosts`, then ask the name servers in `/etc/resolv.conf` directly, so a host whose name server hangs can't hold up anything else in the process. They don't try search domains, so give these a fully qualified name. A host is refused if its name server doesn't answer for IPv4 or for IPv6, even if it answered for the other.
 
 ## Key rotation (`ENCRYPTION_KEY`)
 
@@ -589,9 +609,13 @@ docker compose exec -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-
 #    this: their job tokens stay valid while the old key is retired.
 
 # 3. Give both services both keys. Change these two lines in .env, keeping the single
-#    quotes, restart, and note the time. docker compose restart wouldn't load them.
+#    quotes. This should print "Environment validation passed": the services won't start
+#    on a typo in either line, and everything is still running at this point.
 #      ENCRYPTION_KEY=<new-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]'
+docker compose run --rm --no-deps cronium-app node apps/cronium-app/scripts/validate-env.cjs
+
+# Restart, and note the time. docker compose restart wouldn't load the new values.
 docker compose up -d --no-deps cronium-app cronium-worker
 date -u '+%F %T'
 
@@ -653,12 +677,26 @@ those values may still be under the old key, so don't take it as the last one.
   can't either. Replace each one it names in the app.
 - **It warns about sensitive settings.** Older ciphertext is stored outside the vault,
   which is how the bootstrap seed used to store `SMTP_PASSWORD`. After step 3 the app
-  can't read it and uses the ciphertext as the value, so an SMTP login fails with only a
-  log line to show for it. Step 0 moves these too.
-- **It warns about API tokens.** These are from before tokens were hashed. Each is hashed
-  the first time it's used. One nobody has used since stops working at step 3, with a
-  401, and has to be replaced. Use each one it names once first, or issue a new one. It
-  doesn't count revoked or expired tokens.
+  can't read it, so email stops, password resets answer that email isn't configured, and
+  AI requests that need the key fail and say why. Nothing goes out with the ciphertext,
+  and the admin settings say the value can't be read. Step 0 moves these too. Enter any it
+  can't move again in the admin settings: saving with the field blank keeps the old value,
+  so it has to be typed.
+- **It counts API tokens as `hashed`, or warns about them.** Tokens from before hashing
+  stay encrypted until they're used, and the app can read them only with the active key.
+  **If the old key leaked, you do have to act on these, and the rest of this doesn't
+  apply:** step 4 of [If the old key leaked](#if-the-old-key-leaked) revokes them, which
+  only works before the driver's first real pass, and each owner has to issue a new one.
+  On the usual steps you don't need to use or replace them. Step 4 hashes each one a key
+  in the ring can open, and the dry run's `hashed` count says how many. A hash needs no
+  key, so rolling back doesn't affect them.
+  Until step 4 reaches it, each one gets a 401 from step 3 on. To avoid that, run the
+  driver once before step 2 with no keys on the command, as in step 4: with only the
+  current key it has nothing else to move, so it only hashes them. The warning names any
+  token no key in the ring can open, which gets a 401 already and can't be hashed. Add
+  the key it was saved under to `ENCRYPTION_KEYS_RETIRED`, in step 1's command and at
+  step 3, or issue a new one. Revoked and expired tokens get a 401 either way, so it
+  leaves them alone and doesn't count them.
 - **It warns about env var values copied into unfinished jobs.** Each job it names was
   queued with a copy of an env var from before the vault. The driver can't move that copy,
   so the job fails at step 3 with `Could not prepare this job to run`. Let the job finish
@@ -675,6 +713,15 @@ those values may still be under the old key, so don't take it as the last one.
   including webhooks sent to Cronium, so a sender needs to retry. Nothing is dispatched
   until the worker is back. Signed-in users stay signed in. A tool action or HTTP request
   running in the worker gets up to 30 seconds to finish when it stops.
+- **A malformed `ENCRYPTION_KEYS_RETIRED` keeps the app and worker down until it's
+  fixed,** which is why step 3 checks `.env` before restarting. If one gets through,
+  `docker compose up` fails after about 5 seconds with
+  `dependency failed to start: container ... is unhealthy`. The app keeps restarting and
+  answers nothing, and the worker doesn't start. `docker compose logs cronium-app` says
+  what's wrong, without printing the value. Nothing has run on the new key and no row has
+  moved, so correct the line and run the command again, or put the two old lines back. A
+  list that's well formed but holds the wrong key still starts, which is why step 3 also
+  checks that something reads.
 - **Nothing stops between the restarts.** About 500 requests to the app all succeeded
   while the driver moved 20,000 rows, so steps 4 and 5 can take as long as they need.
 - **A script running at step 3 carries on.** Its job token is signed with the old key,
@@ -705,10 +752,11 @@ first. This also covers a failed check at step 3, because anything saved since t
 restart is under the new key, and the driver brings it back.
 
 ```bash
-# 1. Change these two lines in .env, restart, and note the time. Running scripts carry on,
-#    because tokens signed with either key still verify.
+# 1. Change these two lines in .env, check them as in step 3, restart, and note the time.
+#    Running scripts carry on, because tokens signed with either key still verify.
 #      ENCRYPTION_KEY=<old-hex-key>
 #      ENCRYPTION_KEYS_RETIRED='["<new-hex-key>"]'
+docker compose run --rm --no-deps cronium-app node apps/cronium-app/scripts/validate-env.cjs
 docker compose up -d --no-deps cronium-app cronium-worker
 date -u '+%F %T'
 docker compose exec cronium-app printenv ENCRYPTION_KEY ENCRYPTION_KEYS_RETIRED
@@ -751,18 +799,26 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 # 3. Stop the app and worker. From here nobody's token is accepted, forged or real.
 docker compose stop cronium-app cronium-worker
 
-# 4. Move the rows from a one-off worker container, which gets both keys for this one
+# 4. Revoke the API tokens from before hashing. A hash keeps a token's value, so step 5
+#    would keep each one working for anyone with the old key and a copy of the database,
+#    where a key change alone stops one nobody has used. Run this before step 5's first
+#    pass, because after that they can't be told apart. It names what it revokes, so each
+#    owner can issue a new one once the services are back.
+docker compose exec postgres psql -U cronium -d cronium -c \
+  "UPDATE api_tokens SET status = 'REVOKED', updated_at = now() WHERE status = 'ACTIVE' AND token !~ '^[0-9a-f]{64}$' RETURNING id, name, user_id;"
+
+# 5. Move the rows from a one-off worker container, which gets both keys for this one
 #    command. Re-run until it prints "Total re-encrypted: 0; errors: 0".
 docker compose run --rm --no-deps -e ENCRYPTION_KEY="$NEW" -e ENCRYPTION_KEYS_RETIRED='["<old-hex-key>"]' \
   cronium-worker node apps/cronium-app/dist/rotate-secrets.cjs
 
-# 5. Change these lines in .env and start the services. The printenv should print nothing.
+# 6. Change these lines in .env and start the services. The printenv should print nothing.
 #      ENCRYPTION_KEY=<new-hex-key>
 #      ENCRYPTION_KEYS_RETIRED=
 docker compose up -d --no-deps cronium-app cronium-worker
 docker compose exec cronium-app printenv ENCRYPTION_KEYS_RETIRED
 
-# 6. Finished jobs keep their env var copies under the old key, so anyone holding it and a
+# 7. Finished jobs keep their env var copies under the old key, so anyone holding it and a
 #    copy of the database can read them. This removes them, and touches only finished jobs.
 docker compose exec postgres psql -U cronium -d cronium -c \
   "UPDATE jobs SET payload = payload - 'environment' WHERE status NOT IN ('queued', 'claimed', 'running') AND payload ? 'environment';"
@@ -770,11 +826,13 @@ docker compose exec postgres psql -U cronium -d cronium -c \
 
 This costs more downtime and some running work:
 
-- **The app answers nothing from step 3 until step 5 finishes.** That's the driver's time
+- **The app answers nothing from step 3 until step 6 finishes.** That's the driver's time
   on top of the restart. On a Mac, with the published compose file and the real image, it
   was about 7 seconds with a few hundred secrets and 12 with 20,000 variables, 6 of them
   the driver's. On a heavily loaded machine the driver alone took 5.5 minutes for those
   rows.
+- **Each API token step 4 names stops working for good,** unlike on the usual steps, so
+  whatever uses it fails until its owner issues a new one.
 - **A script running at step 3 loses its result,** the same way as one running at step 6
   of the usual steps.
 - **A job still queued at step 3 runs normally once the services are back,** because the
@@ -783,7 +841,10 @@ This costs more downtime and some running work:
 
 Rotating doesn't undo the leak. Anyone with the old key can still read a backup taken
 before the rotation, and could use forged tokens until step 3, so replace the passwords,
-SSH keys and API credentials your secrets hold too.
+SSH keys and API credentials your secrets hold too. A token hashed before step 4 keeps
+working, and a copy of the database from before it was hashed gives it away to anyone with
+the old key. Nothing tells those from newer tokens, so if such a copy may have leaked as
+well, replace every API token.
 
 An older `docker-compose.yml`, with `env_file` under `cronium-orchestrator`, leaves the old
 key in the environment of the orchestrator and runtime, though neither uses it. To clear

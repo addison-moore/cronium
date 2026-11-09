@@ -240,6 +240,24 @@ describe("WebhookSecurity.generateDeliverySignature", () => {
     );
   });
 
+  it("signs the same bytes the same way, as a string or a buffer", () => {
+    const body = '{"text":"é😀"}';
+
+    expect(
+      sec.generateDeliverySignature(
+        timestamp,
+        "delivery-1",
+        Buffer.from(body),
+        SECRET,
+      ),
+    ).toBe(
+      sec.generateDeliverySignature(timestamp, "delivery-1", body, SECRET),
+    );
+    expect(sec.generateSignature(Buffer.from(body), SECRET)).toBe(
+      sec.generateSignature(body, SECRET),
+    );
+  });
+
   it("doesn't let bytes move between the id and the body", () => {
     expect(
       sec.generateDeliverySignature(timestamp, "id.start", "rest", SECRET),

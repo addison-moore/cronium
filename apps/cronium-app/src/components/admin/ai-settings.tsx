@@ -37,6 +37,8 @@ const copy = {
   save: "Save",
   fallbackNote:
     "Showing common models. Enter your API key and refresh to load the models your account can actually use.",
+  keyUnreadable:
+    "The saved key can't be decrypted. This usually means ENCRYPTION_KEY changed. Enter the key again and save.",
   customHelp:
     "Any OpenAI-compatible endpoint (Groq, Together, Fireworks, OpenRouter, Ollama, vLLM, ...) for open models like Kimi, Qwen, or Llama.",
 } as const;
@@ -100,6 +102,7 @@ interface SystemSettings {
   geminiApiKey?: string;
   customAiApiKey?: string;
   customAiBaseUrl?: string;
+  unreadableSecrets?: string[];
 }
 
 interface AiSettingsProps {
@@ -133,6 +136,8 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
 
   const provider = form.watch("aiProvider") ?? "openai";
   const apiKey = form.watch(PROVIDER_KEY_FIELD[provider]) ?? "";
+  const keyUnreadable =
+    settings.unreadableSecrets?.includes(PROVIDER_KEY_FIELD[provider]) ?? false;
   const baseUrl = form.watch("customAiBaseUrl") ?? "";
 
   const [models, setModels] = React.useState<AiModelOption[]>(
@@ -306,15 +311,27 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                     aria-describedby={
                       fieldState.error
                         ? `${PROVIDER_KEY_FIELD[provider]}-error`
-                        : undefined
+                        : keyUnreadable
+                          ? `${PROVIDER_KEY_FIELD[provider]}-unreadable`
+                          : undefined
                     }
                     {...field}
                     value={field.value ?? ""}
                   />
-                  <p className="text-muted-foreground text-xs">
-                    For security the current key is never shown. Leave blank to
-                    keep the existing key, or enter a new one to replace it.
-                  </p>
+                  {keyUnreadable ? (
+                    <p
+                      id={`${PROVIDER_KEY_FIELD[provider]}-unreadable`}
+                      className="text-destructive text-sm"
+                    >
+                      {copy.keyUnreadable}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      For security the current key is never shown. Leave blank
+                      to keep the existing key, or enter a new one to replace
+                      it.
+                    </p>
+                  )}
                   {fieldState.error && (
                     <p
                       id={`${PROVIDER_KEY_FIELD[provider]}-error`}
@@ -378,7 +395,7 @@ export function AiSettings({ settings, onSave }: AiSettingsProps) {
                   {modelFetchError ? (
                     <p className="text-warning-text text-sm">
                       Couldn&apos;t fetch the live model list — showing common
-                      models instead. Provider error: {modelFetchError}
+                      models instead. {modelFetchError}
                     </p>
                   ) : (
                     modelSource === "fallback" &&

@@ -31,12 +31,11 @@
  */
 
 import { createHmac, hkdfSync, timingSafeEqual } from "crypto";
+import { parseRetiredKeys } from "../../../scripts/retired-keys.cjs";
 
 const SCHEME = "cap.1";
 const HKDF_INFO = "cronium-job-capability-v1";
 const KEY_LENGTH = 32;
-// What env.mjs and the secret vault require of an ENCRYPTION_KEY.
-const MASTER_KEY_FORMAT = /^[0-9a-fA-F]{64}$/;
 
 /**
  * Fine-grained capabilities a job token may carry. Each job-scoped internal
@@ -134,31 +133,19 @@ function deriveSigningKey(master: string): Buffer {
  * there is dropped, never derived from: HKDF happily takes an empty string, and
  * the key that gives is one anyone can compute.
  *
- * A bad list must not throw. authorizeCapability only turns CapabilityError into a
+ * A process refuses to start on a bad list, so this only sees one that got past that.
+ * Even then it must not throw. authorizeCapability only turns CapabilityError into a
  * 403, and the orchestrator drops a completion report that gets a 403, so a typo here
  * must not cost active-key tokens anything. Tokens under the unreadable keys just
  * stop verifying, which fails closed.
  */
 function retiredMasterKeys(): string[] {
-  const raw = process.env.ENCRYPTION_KEYS_RETIRED;
-  if (!raw) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = undefined;
-  }
-  const entries: unknown[] = Array.isArray(parsed) ? parsed : [];
-  const keys = entries
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter((entry) => MASTER_KEY_FORMAT.test(entry));
-
-  if (!Array.isArray(parsed) || keys.length !== entries.length) {
-    // The value stays out of the log: even a malformed list holds key material.
+  const { keys, problem } = parseRetiredKeys(
+    process.env.ENCRYPTION_KEYS_RETIRED,
+  );
+  if (problem) {
     console.warn(
-      "[Security] ENCRYPTION_KEYS_RETIRED should be a JSON array of 64-hex keys. Ignoring what isn't, so job tokens signed under those keys won't verify.",
+      `[Security] ENCRYPTION_KEYS_RETIRED ${problem} Ignoring anything that isn't a key, so job tokens signed under those keys won't verify.`,
     );
   }
   return keys;

@@ -7,6 +7,32 @@ import {
 } from "./types";
 import { failureWithStack } from "@/lib/pg-errors";
 
+/**
+ * Why a token endpoint refused. The reason ends up in a redirect's URL and the log, so
+ * only RFC 6749's two fields are taken from the answer: the rest of it could be a
+ * gateway's whole error page.
+ */
+function readTokenError(
+  status: number,
+  body: string,
+): { code?: string; reason: string } {
+  try {
+    const { error, error_description: description } = JSON.parse(
+      body,
+    ) as Record<string, unknown>;
+    if (typeof error === "string") {
+      return {
+        code: error,
+        reason:
+          typeof description === "string" ? `${description} (${error})` : error,
+      };
+    }
+  } catch {
+    // Not JSON, so nothing in it was written for a caller.
+  }
+  return { reason: `the provider answered ${status}` };
+}
+
 export abstract class BaseOAuthProvider implements OAuthProvider {
   constructor(protected config: OAuthProviderConfig) {}
 
@@ -51,9 +77,12 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
       });
 
       if (!response.ok) {
-        const error = await response.text();
+        const { reason } = readTokenError(
+          response.status,
+          await response.text(),
+        );
         throw new OAuthError(
-          `Token exchange failed: ${error}`,
+          `Token exchange failed: ${reason}`,
           "token_exchange_failed",
           response.status,
         );
@@ -92,10 +121,13 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
       });
 
       if (!response.ok) {
-        const error = await response.text();
+        const { code, reason } = readTokenError(
+          response.status,
+          await response.text(),
+        );
         throw new OAuthError(
-          `Token refresh failed: ${error}`,
-          "token_refresh_failed",
+          `Token refresh failed: ${reason}`,
+          code ?? "token_refresh_failed",
           response.status,
         );
       }
@@ -153,6 +185,15 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
   }
 
   protected parseTokenResponse(response: OAuthTokenResponse): OAuthToken {
+    // The type is only a cast of whatever came back, and a provider can answer 200 with
+    // an error in the body.
+    if (typeof response.access_token !== "string" || !response.access_token) {
+      throw new OAuthError(
+        "The provider's answer had no access token",
+        "invalid_token_response",
+      );
+    }
+
     const token: OAuthToken = {
       accessToken: response.access_token,
       tokenType: response.token_type ?? "Bearer",

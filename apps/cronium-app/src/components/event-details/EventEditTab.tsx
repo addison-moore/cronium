@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { useRouter } from "next/navigation";
 import EventForm from "@/components/event-form/EventForm-lazy";
 import { type Event } from "./types";
@@ -12,12 +12,15 @@ interface EventEditTabProps {
   event: Event;
   onEventUpdate: (event: Event) => void;
   onRefreshLogs: () => void;
+  // False while another tab is showing. The form stays mounted, as EventDetails says.
+  active?: boolean;
 }
 
-export function EventEditTab({
+function EventEditTabContent({
   event,
   onEventUpdate,
   onRefreshLogs,
+  active = true,
 }: EventEditTabProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -133,7 +136,15 @@ export function EventEditTab({
         eventId={event.id}
         onSuccess={handleSuccess}
         layout="embedded"
+        active={active}
       />
     </div>
   );
 }
+
+// Out of sight it has nothing to update, and the page re-renders on every log poll. The
+// form takes whatever has changed in the event when it comes back.
+export const EventEditTab = memo(
+  EventEditTabContent,
+  (previous, next) => previous.active === false && next.active === false,
+);

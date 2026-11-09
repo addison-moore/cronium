@@ -19,6 +19,7 @@ import {
 import { Input } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { sameOriginRedirect } from "@/lib/safe-redirect";
+import { useEarlyFormInput } from "@/hooks/useEarlyFormInput";
 
 const signinSchema = z.object({
   username: z.string().min(1, "Username or email is required"),
@@ -64,6 +65,8 @@ export default function SignIn() {
       totp: "",
     },
   });
+
+  const earlyInput = useEarlyFormInput(form);
 
   const {
     handleSubmit,
@@ -200,7 +203,11 @@ export default function SignIn() {
         )}
 
         <Form {...form}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          <form
+            {...earlyInput}
+            onSubmit={handleSubmit(onSubmit)}
+            className="mt-8 space-y-6"
+          >
             <div className="space-y-4 rounded-md shadow-sm">
               <FormField
                 control={form.control}

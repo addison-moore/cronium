@@ -127,6 +127,7 @@ import { isSetupRequired } from "@/lib/first-run";
 import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
+import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
 // Real (unmocked) hash helper: reset tokens are stored hashed at rest, so the
 // tests assert storage only ever sees hashApiToken(rawToken).
 import { hashApiToken } from "@/lib/api-token-hash";
@@ -486,6 +487,33 @@ describe("userAuth.forgotPassword", () => {
     // The account is never even looked up, and no token is minted.
     expect(s.getUserByEmail).not.toHaveBeenCalled();
     expect(s.createPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it("reports a saved password it can't decrypt the same way, for any email", async () => {
+    mocked(getSmtpSettings).mockRejectedValue(
+      new UnreadableSettingError("smtpPassword"),
+    );
+
+    s.getUserByEmail.mockResolvedValue(userRow());
+    const registered = await publicCaller()
+      .userAuth.forgotPassword({ email: "alice@example.com" })
+      .catch((e: unknown) => e);
+
+    s.getUserByEmail.mockResolvedValue(undefined);
+    const unknown = await publicCaller()
+      .userAuth.forgotPassword({ email: "nobody@example.com" })
+      .catch((e: unknown) => e);
+
+    // An anonymous caller learns nothing about this instance's secrets.
+    const answer = {
+      code: "BAD_REQUEST",
+      message: "Email is not configured. Please contact your administrator.",
+    };
+    expect(registered).toMatchObject(answer);
+    expect(unknown).toMatchObject(answer);
+    expect(s.getUserByEmail).not.toHaveBeenCalled();
+    expect(s.createPasswordResetToken).not.toHaveBeenCalled();
+    expect(mocked(sendPasswordResetEmail)).not.toHaveBeenCalled();
   });
 
   it("does not wait for the mail server, so timing cannot reveal the account exists", async () => {

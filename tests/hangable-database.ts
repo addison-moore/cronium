@@ -41,6 +41,13 @@ export async function hangableDatabase(databaseUrl: string) {
       hung = true;
       stopRelaying.forEach((stop) => stop());
     },
+    /**
+     * New connections work again, and those already open stay silent for good: what a
+     * failover, or a firewall that has forgotten them, leaves behind.
+     */
+    acceptNewConnections: () => {
+      hung = false;
+    },
     close: () => {
       sockets.forEach((socket) => socket.destroy());
       proxy.close();

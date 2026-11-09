@@ -106,6 +106,14 @@ services:
       # AI (optional)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CRONIUM_AI_ALLOW_PRIVATE_URLS: ${CRONIUM_AI_ALLOW_PRIVATE_URLS:-}
+      # OAuth apps for tool integrations such as Google Sheets (optional)
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      OAUTH_MICROSOFT_CLIENT_ID: ${OAUTH_MICROSOFT_CLIENT_ID:-}
+      OAUTH_MICROSOFT_CLIENT_SECRET: ${OAUTH_MICROSOFT_CLIENT_SECRET:-}
+      OAUTH_MICROSOFT_TENANT_ID: ${OAUTH_MICROSOFT_TENANT_ID:-}
+      OAUTH_SLACK_CLIENT_ID: ${OAUTH_SLACK_CLIENT_ID:-}
+      OAUTH_SLACK_CLIENT_SECRET: ${OAUTH_SLACK_CLIENT_SECRET:-}
     ports:
       - "${APP_PORT:-3000}:3000"
       # Host reverse proxies can reach this loopback bind. Containerized
@@ -162,6 +170,15 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CRONIUM_AI_ALLOW_PRIVATE_URLS: ${CRONIUM_AI_ALLOW_PRIVATE_URLS:-}
+      # OAuth apps for tool integrations such as Google Sheets (optional). Also on the
+      # worker, which runs those tools' actions and refreshes their tokens.
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      OAUTH_MICROSOFT_CLIENT_ID: ${OAUTH_MICROSOFT_CLIENT_ID:-}
+      OAUTH_MICROSOFT_CLIENT_SECRET: ${OAUTH_MICROSOFT_CLIENT_SECRET:-}
+      OAUTH_MICROSOFT_TENANT_ID: ${OAUTH_MICROSOFT_TENANT_ID:-}
+      OAUTH_SLACK_CLIENT_ID: ${OAUTH_SLACK_CLIENT_ID:-}
+      OAUTH_SLACK_CLIENT_SECRET: ${OAUTH_SLACK_CLIENT_SECRET:-}
     healthcheck:
       test:
         [

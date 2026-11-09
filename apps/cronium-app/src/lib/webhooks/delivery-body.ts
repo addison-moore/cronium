@@ -16,6 +16,22 @@ export const MAX_WEBHOOK_REQUEST_BYTES = 8 * 1024 * 1024;
 /** `webhook_events.id` is a serial, so an event's id can't be longer than this. */
 const LONGEST_EVENT_ID = 2_147_483_647;
 
+/**
+ * A delivery's body as the bytes that go out, and what its headers repeat from it.
+ *
+ * The queue holds this, not the event's parsed data. Measured through the real endpoint,
+ * parsed data takes anything from 1 to 21 times its JSON on the heap, depending on what
+ * the sender put in it: a 1 MB request of `[{},{},...]` took 21 MB. Bytes take what they
+ * say, whatever is in them, so a limit that counts them is a limit on memory. One copy
+ * also serves every attempt and every webhook an event goes to, where each running
+ * attempt used to make its own string and buffer.
+ */
+export interface SerializedPayload {
+  event: string;
+  timestamp: Date;
+  body: Buffer;
+}
+
 /** The delivery body for a stored event. A retry has to produce what the first
  * attempt sent, so both build it here. */
 export function deliveryPayload(
@@ -32,12 +48,37 @@ export function deliveryPayload(
   };
 }
 
+/** The bytes a delivery sends, ready to wait in the queue for as long as it takes. */
+export function serializePayload(payload: WebhookPayload): SerializedPayload {
+  const text = JSON.stringify(payload);
+  // Not `Buffer.from`, which cuts short buffers out of a shared 8 KB pool. One waiting
+  // here for hours would keep its whole pool from being freed.
+  const body = Buffer.allocUnsafeSlow(Buffer.byteLength(text));
+  body.write(text);
+  return { event: payload.event, timestamp: payload.timestamp, body };
+}
+
 /** What to say about a delivery body past the limit. Undefined if it's within it. */
-export function bodyTooLong(rawBody: string): string | undefined {
+export function bodyTooLong(rawBody: string | Buffer): string | undefined {
   const bytes = Buffer.byteLength(rawBody);
   if (bytes <= MAX_WEBHOOK_REQUEST_BYTES) return undefined;
   const count = (n: number) => n.toLocaleString("en-US");
   return `This event is too long to deliver: its body would be ${count(bytes)} bytes, and the limit is 8 MB (${count(MAX_WEBHOOK_REQUEST_BYTES)} bytes).`;
+}
+
+/** The body of an event that has no row yet, so no id. It has the longest id instead. */
+function longestBody(
+  event: string,
+  data: Record<string, unknown>,
+  metadata?: Record<string, unknown>,
+): string {
+  return JSON.stringify(
+    deliveryPayload(
+      { id: LONGEST_EVENT_ID, event, createdAt: new Date() },
+      data,
+      metadata,
+    ),
+  );
 }
 
 /**
@@ -51,13 +92,17 @@ export function eventTooLong(
   data: Record<string, unknown>,
   metadata?: Record<string, unknown>,
 ): string | undefined {
-  return bodyTooLong(
-    JSON.stringify(
-      deliveryPayload(
-        { id: LONGEST_EVENT_ID, event, createdAt: new Date() },
-        data,
-        metadata,
-      ),
-    ),
-  );
+  return bodyTooLong(longestBody(event, data, metadata));
+}
+
+/**
+ * How long an event's body will be, for claiming room in the queue before the event has
+ * a row. It can be up to 9 bytes over, like `eventTooLong`.
+ */
+export function eventBodyBytes(
+  event: string,
+  data: Record<string, unknown>,
+  metadata?: Record<string, unknown>,
+): number {
+  return Buffer.byteLength(longestBody(event, data, metadata));
 }
