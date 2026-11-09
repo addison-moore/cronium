@@ -5,21 +5,25 @@
  * `verifyWebhook` consumes the id before the rest is decided. A request refused after
  * that has done nothing, so sending it again isn't a replay, and a 401 would read as
  * an attack to a sender keeping its id across attempts and stop it retrying. A request
- * that stored a row or queued a delivery is the opposite: its id has to stay used, or a
- * replay repeats what it did. So these count rows and requests at the receiver as well
+ * that stored its event or queued a delivery is the opposite: its id has to stay used, or
+ * a replay repeats what it did. So these count rows and requests at the receiver as well
  * as reading the answers.
+ *
+ * An event's two `webhook_events` rows go in one transaction, so until its COMMIT nothing
+ * can have been stored, and only a COMMIT with no answer leaves Cronium unable to tell.
  */
 import { createHmac, randomUUID } from "node:crypto";
 import http from "node:http";
-import type { AddressInfo } from "node:net";
+import type { AddressInfo, Socket } from "node:net";
 import { performance } from "node:perf_hooks";
 import { asc, eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { NextRequest } from "next/server";
-import type { PoolClient, QueryConfig } from "pg";
+import { Client, type QueryConfig } from "pg";
 import { POST as postToInboundRoute } from "@/app/api/webhooks/[key]/route";
 import { cacheService } from "@/lib/cache/cache-service";
 import { RateLimitService } from "@/lib/rate-limit-service";
+import { MAX_INBOUND_EVENT_NAME_CHARS } from "@/lib/webhooks/storable-event";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { WebhookQueue } from "@/lib/webhooks/WebhookQueue";
 import { WebhookSecurity } from "@/lib/webhooks/WebhookSecurity";
@@ -123,7 +127,11 @@ const manager = WebhookManager.getInstance();
 const managerQueue = () =>
   (
     manager as unknown as {
-      webhookQueue: { queue: Map<string, unknown>; processing: Set<string> };
+      webhookQueue: {
+        queue: Map<string, unknown>;
+        processing: Set<string>;
+        heldBytes: number;
+      };
     }
   ).webhookQueue;
 
@@ -133,6 +141,9 @@ const queueFinished = () =>
     () =>
       managerQueue().queue.size === 0 && managerQueue().processing.size === 0,
   );
+
+/** Room `prepareEvent` claimed has to come back when nothing is queued after all. */
+const expectNoRoomHeld = () => expect(managerQueue().heldBytes).toBe(0);
 
 const deliveryStatuses = async (webhookId: number) =>
   (
@@ -268,10 +279,79 @@ async function onEventRow(body: string) {
 const refuseEventRows = (condition: string) =>
   onEventRow(`IF ${condition} THEN RAISE EXCEPTION 'refused'; END IF;`);
 
+/** Run this inside Postgres for each new webhook_events row, as its COMMIT runs. */
+async function atCommit(body: string) {
+  await pool.query(`
+    CREATE FUNCTION at_commit() RETURNS trigger AS $$
+    BEGIN
+      ${body}
+      RETURN NULL;
+    END
+    $$ LANGUAGE plpgsql`);
+  await pool.query(`
+    CREATE CONSTRAINT TRIGGER at_commit AFTER INSERT ON webhook_events
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION at_commit()`);
+}
+
+/** A FATAL, so the connection ends, and then time for it to take effect. */
+const KILL_OWN_CONNECTION = `
+  PERFORM pg_terminate_backend(pg_backend_pid());
+  PERFORM pg_sleep(5);`;
+
 async function allowEventRows() {
   await pool.query("DROP TRIGGER IF EXISTS on_event_row ON webhook_events");
   await pool.query("DROP FUNCTION IF EXISTS on_event_row");
+  await pool.query("DROP TRIGGER IF EXISTS at_commit ON webhook_events");
+  await pool.query("DROP FUNCTION IF EXISTS at_commit");
 }
+
+/**
+ * Have Postgres run the next statement `matches` picks and its answer never arrive: the
+ * socket stops being read before the statement goes out, and closes once `ran` says
+ * Postgres has run it. A connection lost at that moment looks the same from here as one
+ * lost before the statement got there. A transaction's statements go through its own
+ * client, so this watches every client.
+ */
+function loseTheAnswerToTheNext(
+  matches: (text: string) => boolean,
+  ran: (backendPid: number) => Promise<boolean>,
+) {
+  const realQuery = Client.prototype.query as (...args: unknown[]) => unknown;
+  const spy = jest
+    .spyOn(Client.prototype, "query")
+    .mockImplementation(function (this: Client, ...args: unknown[]) {
+      const config = args[0] as QueryConfig | string;
+      if (typeof config === "object" && matches(config.text)) {
+        spy.mockRestore();
+        const client = this as Client & {
+          connection: { stream: Socket };
+          processID: number;
+        };
+        const socket = client.connection.stream;
+        socket.pause();
+        // Whatever happens, the request gets its answer, and the test says what's wrong.
+        void until("the statement to run", () => ran(client.processID))
+          .catch(() => undefined)
+          .finally(() => socket.destroy());
+      }
+      return realQuery.apply(this, args);
+    } as never);
+}
+
+/** Whether that connection's last statement was this one, and it's waiting for the next. */
+async function ranAndWaiting(backendPid: number, statement: string) {
+  const { rows } = await pool.query<{ state: string; query: string }>(
+    "SELECT state, query FROM pg_stat_activity WHERE pid = $1",
+    [backendPid],
+  );
+  return (
+    rows[0]?.state === "idle in transaction" &&
+    rows[0].query.startsWith(statement)
+  );
+}
+
+const EVENT_INSERT = 'insert into "webhook_events"';
 
 /** A ciphertext is bound to its row, so another webhook's can't be read as this one's. */
 async function unreadableSecretOn(webhookId: number, other: Webhook) {
@@ -408,7 +488,7 @@ describe("a request refused for its body", () => {
   });
 });
 
-describe("a 500 from before the first write", () => {
+describe("a 500 before anything is committed", () => {
   /** Another webhook taking the event, whose secret can't be read. */
   async function aSubscriberWithAnUnreadableSecret(webhook: Webhook) {
     const owner = (
@@ -451,17 +531,47 @@ describe("a 500 from before the first write", () => {
       failure: /P0001/,
     },
     {
-      name: "Postgres can't store a value in it",
-      refused: {
-        contentType: "application/json",
-        body: '{"note":"\\u0000"}',
+      // The endpoint's own row went in first, and goes with it.
+      name: "Postgres refuses the row its deliveries go out on",
+      breakIt: async () => {
+        await refuseEventRows(`NEW.event = 'webhook.${EVENT}'`);
+        return allowEventRows;
       },
-      failure: /22P05/,
+      failure: /P0001/,
     },
     {
-      name: "its name is too long for the endpoint's own row",
-      refused: { ...AN_EVENT, event: "x".repeat(256) },
-      failure: /22001/,
+      // Postgres's own answer to the COMMIT, which says nothing went in. Only for the
+      // endpoint's own row, so the other is left if it was written outside the
+      // transaction.
+      name: "Postgres refuses the COMMIT",
+      breakIt: async () => {
+        await atCommit(
+          `IF NEW.event = '${EVENT}' THEN RAISE EXCEPTION 'refused at commit'; END IF;`,
+        );
+        return allowEventRows;
+      },
+      failure: /P0001/,
+    },
+    {
+      // Which says nothing about the statement, but its transaction ends with it.
+      name: "the connection ends during the endpoint's own insert",
+      breakIt: async () => {
+        await onEventRow(
+          `IF NEW.event = '${EVENT}' THEN ${KILL_OWN_CONNECTION} END IF;`,
+        );
+        return allowEventRows;
+      },
+      failure: /not queryable|terminated/,
+    },
+    {
+      name: "the connection ends during the insert of the row its deliveries go out on",
+      breakIt: async () => {
+        await onEventRow(
+          `IF NEW.event = 'webhook.${EVENT}' THEN ${KILL_OWN_CONNECTION} END IF;`,
+        );
+        return allowEventRows;
+      },
+      failure: /not queryable|terminated/,
     },
   ])("leaves its id free when $name", async ({ refused, breakIt, failure }) => {
     const receiver = await startReceiver();
@@ -475,7 +585,28 @@ describe("a 500 from before the first write", () => {
     });
     expect(logged()).toMatch(failure);
     expect(await storedEvents()).toEqual([]);
+    expectNoRoomHeld();
     await fix?.();
+
+    await expectTakenOnce(webhook, deliveryId);
+    await expectOneEventSent(webhook, receiver);
+  });
+
+  it("leaves its id free when the answer to the endpoint's own insert is lost after it ran", async () => {
+    const receiver = await startReceiver();
+    const webhook = await webhookAt(await tenant(), receiver.url);
+    const deliveryId = randomUUID();
+
+    // Outside a transaction this row could be in, with only the answer lost. In one,
+    // Postgres rolls it back once the connection's gone, because nothing committed it.
+    loseTheAnswerToTheNext(
+      (text) => text.startsWith(EVENT_INSERT),
+      (backendPid) => ranAndWaiting(backendPid, EVENT_INSERT),
+    );
+    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(500);
+    expect(logged()).toMatch(/not queryable|terminated/);
+    expect(await storedEvents()).toEqual([]);
+    expectNoRoomHeld();
 
     await expectTakenOnce(webhook, deliveryId);
     await expectOneEventSent(webhook, receiver);
@@ -483,49 +614,61 @@ describe("a 500 from before the first write", () => {
 });
 
 describe("a 500 once the request may have had an effect", () => {
-  it("keeps its id used when the row its deliveries go out on is refused", async () => {
+  it("keeps its id used when the COMMIT's answer is lost after it went in", async () => {
     const receiver = await startReceiver();
     const webhook = await webhookAt(await tenant(), receiver.url);
     const deliveryId = randomUUID();
 
-    await refuseEventRows(`NEW.event = 'webhook.${EVENT}'`);
+    loseTheAnswerToTheNext(
+      (text) => text === "commit",
+      async () => (await storedEvents()).length > 0,
+    );
     expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(500);
-    expect(logged()).toMatch(/P0001/);
-    expect(await storedEvents()).toEqual([EVENT]);
+    expect(logged()).toMatch(/not queryable|terminated/);
 
+    // Both rows are in, and Cronium couldn't tell, so it queued nothing and gave the
+    // room back.
+    expect(await storedEvents()).toEqual(ROWS_OF_AN_EVENT);
+    expectNoRoomHeld();
+    await queueFinished();
+    expect(receiver.requests).toBe(0);
+    expect(await deliveryStatuses(webhook.id)).toEqual([]);
+
+    // A replay can't store it again.
     expect(await send(webhook, AN_EVENT, deliveryId)).toMatchObject({
       status: 401,
       answer: { error: REPLAYED },
     });
-    await allowEventRows();
-    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
-    expect(await storedEvents()).toEqual([EVENT]);
-    await queueFinished();
-    expect(receiver.requests).toBe(0);
+    expect(await storedEvents()).toEqual(ROWS_OF_AN_EVENT);
 
-    // That event never went out, and a new id is what sends it. All that's repeated
-    // is the endpoint's own row, which no delivery is sent from.
+    // Its history has nothing for it, which is what tells its sender to use a new id.
     expect((await send(webhook)).status).toBe(200);
     await queueFinished();
-    expect(await storedEvents()).toEqual([EVENT, ...ROWS_OF_AN_EVENT]);
+    expect(await storedEvents()).toEqual([
+      ...ROWS_OF_AN_EVENT,
+      ...ROWS_OF_AN_EVENT,
+    ]);
     expect(receiver.requests).toBe(1);
+    expect(await deliveryStatuses(webhook.id)).toEqual(["success"]);
   });
 
-  it("keeps its id used when a name fits the endpoint's own row and not the other", async () => {
+  it("keeps its id used when the connection ends during the COMMIT, which can't tell", async () => {
     const receiver = await startReceiver();
-    const webhook = await webhookAt(await tenant(), receiver.url, {
-      events: ["*"],
-    });
+    const webhook = await webhookAt(await tenant(), receiver.url);
     const deliveryId = randomUUID();
-    // 255 is the column's limit, and the second row's name has `webhook.` in front.
-    const longName = { ...AN_EVENT, event: "x".repeat(250) };
 
-    expect((await send(webhook, longName, deliveryId)).status).toBe(500);
-    expect(logged()).toMatch(/22001/);
-    expect(await storedEvents()).toEqual([longName.event]);
+    // Postgres says so itself, with a FATAL, but a COMMIT can have gone through before
+    // one of those.
+    await atCommit(KILL_OWN_CONNECTION);
+    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(500);
+    expect(logged()).toMatch(/not queryable|terminated/);
+    await allowEventRows();
 
-    expect((await send(webhook, longName, deliveryId)).status).toBe(401);
-    expect(await storedEvents()).toEqual([longName.event]);
+    // Nothing went in this time, and what Cronium was told doesn't say so.
+    expect(await storedEvents()).toEqual([]);
+    expectNoRoomHeld();
+    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
+    expect(await storedEvents()).toEqual([]);
     await queueFinished();
     expect(receiver.requests).toBe(0);
   });
@@ -557,73 +700,219 @@ describe("a 500 once the request may have had an effect", () => {
     expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
     await expectOneEventSent(webhook, receiver);
   });
+});
 
-  /**
-   * Have Postgres run the next insert into webhook_events and its answer never arrive:
-   * the socket stops being read before the statement goes out, and closes once the row
-   * is in. A connection lost at that moment looks the same from here as one lost
-   * before the statement got there.
-   */
-  function loseTheAnswerToTheNextEventInsert() {
-    const realQuery = pool.query.bind(pool) as (
-      ...args: unknown[]
-    ) => Promise<unknown>;
-    const spy = jest.spyOn(pool, "query").mockImplementation(((
-      ...args: unknown[]
-    ) => {
-      const { text } = args[0] as QueryConfig;
-      if (text.startsWith('insert into "webhook_events"')) {
-        spy.mockRestore();
-        pool.once("acquire", (client: PoolClient) => {
-          const socket = client.connection.stream;
-          socket.pause();
-          // Whatever happens, the request gets its answer, and the test says what's wrong.
-          void until(
-            "the row to go in",
-            async () => (await storedEvents()).length > 0,
-          )
-            .catch(() => undefined)
-            .finally(() => socket.destroy());
-        });
-      }
-      return realQuery(...args);
-    }) as never);
-  }
+describe("a request Postgres could never store", () => {
+  /** What the endpoint's log says about each request to this webhook, in order. */
+  const loggedRequests = async (webhookId: number) =>
+    db
+      .select({ success: webhookLogs.success, error: webhookLogs.error })
+      .from(webhookLogs)
+      .where(eq(webhookLogs.webhookId, webhookId))
+      .orderBy(asc(webhookLogs.id));
 
-  it("keeps its id used when the first insert's answer is lost after it went in", async () => {
-    const receiver = await startReceiver();
-    const webhook = await webhookAt(await tenant(), receiver.url);
-    const deliveryId = randomUUID();
-
-    loseTheAnswerToTheNextEventInsert();
-    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(500);
-    expect(logged()).toMatch(/Connection terminated unexpectedly/);
-    expect(await storedEvents()).toEqual([EVENT]);
-
-    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
-    expect(await storedEvents()).toEqual([EVENT]);
-    await queueFinished();
-    expect(receiver.requests).toBe(0);
+  /** One character, though it's two of a string's `length`. */
+  const EMOJI = "\u{1F600}";
+  const NUL = /it has a NUL character \(U\+0000\)/;
+  const halfAPair = (codeUnit: string) =>
+    new RegExp(
+      `half of a UTF-16 surrogate pair \\(U\\+${codeUnit}\\) on its own`,
+    );
+  const json = (body: string): SentEvent => ({
+    contentType: "application/json",
+    body,
   });
 
-  it("keeps its id used when the connection ends during the first insert, which can't tell", async () => {
+  it.each<{ name: string; refused: SentEvent; error: RegExp }>([
+    {
+      name: "a NUL in a JSON value",
+      refused: json('{"note":"\\u0000"}'),
+      error: NUL,
+    },
+    {
+      name: "a NUL in a JSON key",
+      refused: json('{"a\\u0000":1}'),
+      error: NUL,
+    },
+    {
+      name: "a NUL nested in an array",
+      refused: json('{"notes":[["fine","\\u0000"]]}'),
+      error: NUL,
+    },
+    {
+      name: "a NUL byte in a plain-text body",
+      refused: { contentType: "text/plain", body: "a\u0000b" },
+      error: NUL,
+    },
+    {
+      name: "a NUL in a form",
+      refused: {
+        contentType: "application/x-www-form-urlencoded",
+        body: "note=%00",
+      },
+      error: NUL,
+    },
+    {
+      name: "a NUL in its name",
+      refused: { ...json('{"event":"order\\u0000created"}'), event: null },
+      error: NUL,
+    },
+    {
+      name: "half a surrogate pair in a JSON value",
+      refused: json('{"note":"\\ud83d"}'),
+      error: halfAPair("D83D"),
+    },
+    {
+      name: "half a surrogate pair in a JSON key",
+      refused: json('{"\\ude00":1}'),
+      error: halfAPair("DE00"),
+    },
+    {
+      name: "half a surrogate pair in its name",
+      refused: { ...json('{"event":"order\\ud83d"}'), event: null },
+      error: halfAPair("D83D"),
+    },
+  ])(
+    "is refused with a 400 before anything is written when it has $name, and its id stays free",
+    async ({ refused, error }) => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url, {
+        events: ["*"],
+      });
+      const deliveryId = randomUUID();
+
+      const answer = await send(webhook, refused, deliveryId);
+      expect(answer.status).toBe(400);
+      expect(answer.answer.error).toMatch(error);
+      // The same bytes are the same mistake, not a replay.
+      expect((await send(webhook, refused, deliveryId)).status).toBe(400);
+      expect(await storedEvents()).toEqual([]);
+      expectNoRoomHeld();
+      // Said where the webhook's owner can see it, as a 413 is.
+      expect(await loggedRequests(webhook.id)).toEqual([
+        { success: false, error: answer.answer.error },
+        { success: false, error: answer.answer.error },
+      ]);
+
+      await expectTakenOnce(webhook, deliveryId);
+      await expectOneEventSent(webhook, receiver);
+    },
+  );
+
+  it("takes what only looks like those", async () => {
     const receiver = await startReceiver();
     const webhook = await webhookAt(await tenant(), receiver.url);
-    const deliveryId = randomUUID();
 
-    // Postgres says so itself, with a FATAL, but that isn't a refusal of the statement.
-    await onEventRow(`
-      PERFORM pg_terminate_backend(pg_backend_pid());
-      PERFORM pg_sleep(5);`);
-    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(500);
-    expect(logged()).toMatch(/57P01/);
-    await allowEventRows();
+    // A whole pair is one character, spelled out in escapes or not. `\\u0000` is a
+    // backslash and the letters `u0000`. Only NUL is refused of the control characters.
+    const body = `{"escapedPair":"\\ud83d\\ude00","pair":"${EMOJI}","written":"\\\\u0000","control":"\\u0001","last":"\\uffff","${EMOJI}":"in a key"}`;
+    expect((await send(webhook, json(body))).status).toBe(200);
+    await expectOneEventSent(webhook, receiver);
 
-    // Nothing went in this time, and what Cronium was told doesn't say so.
-    expect(await storedEvents()).toEqual([]);
-    expect((await send(webhook, AN_EVENT, deliveryId)).status).toBe(401);
-    expect(await storedEvents()).toEqual([]);
-    expect(receiver.requests).toBe(0);
+    const [stored] = await db
+      .select({ payload: webhookEvents.payload })
+      .from(webhookEvents)
+      .where(eq(webhookEvents.event, EVENT));
+    expect(stored!.payload).toMatchObject({
+      escapedPair: EMOJI,
+      pair: EMOJI,
+      written: "\\u0000",
+      control: "\u0001",
+      last: "\uffff",
+      [EMOJI]: "in a key",
+    });
+  });
+
+  describe("its name", () => {
+    const named = (event: string): SentEvent => ({ ...AN_EVENT, event });
+    const longest = "x".repeat(MAX_INBOUND_EVENT_NAME_CHARS);
+    const tooLong = "x".repeat(MAX_INBOUND_EVENT_NAME_CHARS + 1);
+
+    it("can be as long as `webhook.<name>` fits in `webhook_events.event`", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url, {
+        events: ["*"],
+      });
+
+      expect(MAX_INBOUND_EVENT_NAME_CHARS).toBe(247);
+      expect((await send(webhook, named(longest))).status).toBe(200);
+      await queueFinished();
+      expect(await storedEvents()).toEqual([longest, `webhook.${longest}`]);
+      expect(`webhook.${longest}`).toHaveLength(255);
+      expect(receiver.requests).toBe(1);
+    });
+
+    it("is refused with a 400 before anything is written when it's longer, and its id stays free", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url, {
+        events: ["*"],
+      });
+      const deliveryId = randomUUID();
+
+      expect(await send(webhook, named(tooLong), deliveryId)).toMatchObject({
+        status: 400,
+        answer: {
+          error:
+            "This event's name is too long: it has 248 characters, and the limit is 247.",
+        },
+      });
+      expect(await storedEvents()).toEqual([]);
+      expectNoRoomHeld();
+      await queueFinished();
+      expect(receiver.requests).toBe(0);
+
+      expect((await send(webhook, named(longest), deliveryId)).status).toBe(
+        200,
+      );
+      expect(await send(webhook, named(longest), deliveryId)).toMatchObject({
+        status: 401,
+        answer: { error: REPLAYED },
+      });
+      await queueFinished();
+      expect(await storedEvents()).toEqual([longest, `webhook.${longest}`]);
+      expect(receiver.requests).toBe(1);
+    });
+
+    it("is refused when it's longer whether or not anything subscribes to it", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url, {
+        events: ["something.else"],
+      });
+
+      // Only the endpoint's own row would go in, and that would fit, but the answer
+      // shouldn't change when a webhook subscribes to everything.
+      expect((await send(webhook, named(tooLong))).status).toBe(400);
+      expect(await storedEvents()).toEqual([]);
+
+      expect((await send(webhook, named(longest))).status).toBe(200);
+      expect(await storedEvents()).toEqual([longest]);
+      await queueFinished();
+      expect(receiver.requests).toBe(0);
+    });
+
+    it("is counted in characters, as Postgres counts them", async () => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url, {
+        events: ["*"],
+      });
+      // Each is two of a string's `length`. Headers can't carry these, so the body does.
+      const inBody = (characters: number): SentEvent => ({
+        ...json(JSON.stringify({ event: EMOJI.repeat(characters) })),
+        event: null,
+      });
+
+      expect((await send(webhook, inBody(248))).status).toBe(400);
+      expect(await storedEvents()).toEqual([]);
+
+      const longestInEmoji = EMOJI.repeat(MAX_INBOUND_EVENT_NAME_CHARS);
+      expect((await send(webhook, inBody(247))).status).toBe(200);
+      await queueFinished();
+      expect(await storedEvents()).toEqual([
+        longestInEmoji,
+        `webhook.${longestInEmoji}`,
+      ]);
+      expect(receiver.requests).toBe(1);
+    });
   });
 });
 
