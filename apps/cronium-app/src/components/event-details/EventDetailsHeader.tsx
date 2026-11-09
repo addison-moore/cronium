@@ -42,10 +42,14 @@ export function EventDetailsHeader({
         </Button>
       </div>
 
+      {/* A long name truncates rather than widening the page. Without `min-w-0` on
+          each flex item around the heading, `truncate` does nothing: those items
+          won't shrink below the name's full width, and the page grows past the
+          screen, taking the header's theme and menu buttons with it. */}
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <EventTypeIcon type={event.type} size={20} />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <EventTypeIcon type={event.type} size={20} className="shrink-0" />
             <h1 className="truncate text-xl font-bold">{event.name}</h1>
           </div>
           <ClickableStatusBadge
@@ -54,7 +58,9 @@ export function EventDetailsHeader({
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* From lg the buttons share the name's row. The name gives up the room,
+            or they'd squeeze into a column beside it. */}
+        <div className="flex shrink-0 flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"

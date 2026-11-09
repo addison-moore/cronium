@@ -94,7 +94,10 @@ export function EventOverviewTab({
                 <span className="text-muted-foreground">
                   {copy.eventName}:{" "}
                 </span>
-                <span className="font-medium">{event.name}</span>
+                {/* A name with nowhere to break, such as 240 characters of
+                    snake_case, breaks to fit the card instead of running past it
+                    and widening the page. */}
+                <span className="font-medium break-words">{event.name}</span>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">{copy.eventId}: </span>

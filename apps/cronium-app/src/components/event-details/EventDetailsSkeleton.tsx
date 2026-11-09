@@ -5,12 +5,13 @@ import { Tabs, TabsList, Tab, TabsContent } from "@cronium/ui";
 export function EventDetailsSkeleton() {
   return (
     <PageShell>
-      {/* Header skeleton */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-8 w-8" /> {/* Back button */}
-          <div>
-            <Skeleton className="mb-2 h-8 w-64" /> {/* Event name */}
+      {/* Header skeleton. On a phone the buttons go under the name, and the name's
+          bar narrows to fit, instead of widening the page while it loads. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <Skeleton className="h-8 w-8 shrink-0" /> {/* Back button */}
+          <div className="min-w-0">
+            <Skeleton className="mb-2 h-8 w-64 max-w-full" /> {/* Event name */}
             <Skeleton className="h-4 w-48" /> {/* Status and date */}
           </div>
         </div>

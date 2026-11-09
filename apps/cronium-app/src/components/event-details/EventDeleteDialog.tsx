@@ -39,9 +39,13 @@ export function EventDeleteDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{copy.title}</AlertDialogTitle>
+          {/* The dialog is a grid, and its column grows to the longest word, so a
+              name with nowhere to break pushed Cancel and Delete off the screen.
+              `wrap-anywhere` lets it break mid-word instead. */}
           <AlertDialogDescription>
-            {copy.warning} <strong>{eventName}</strong>? This action cannot be
-            undone.
+            {copy.warning}{" "}
+            <strong className="wrap-anywhere">{eventName}</strong>? This action
+            cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
