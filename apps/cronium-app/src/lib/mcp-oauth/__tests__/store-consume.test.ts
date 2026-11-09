@@ -7,19 +7,23 @@
 // consume path exercises the real atomic single-use semantics.
 jest.mock("@/lib/cache/cache-service", () => {
   const store = new Map<string, string>();
+  const put = jest.fn(async (key: string, value: unknown) => {
+    store.set(key, JSON.stringify(value));
+  });
   return {
     __store: store,
     cacheService: {
       set: jest.fn(async (key: string, value: unknown) => {
-        store.set(key, JSON.stringify(value));
+        await put(key, value);
         return true;
       }),
-      get: jest.fn(async (key: string) => {
+      setStrict: put,
+      getStrict: jest.fn(async (key: string) => {
         const v = store.get(key);
         return v === undefined ? null : (JSON.parse(v) as unknown);
       }),
       delete: jest.fn(async (key: string) => store.delete(key)),
-      getdel: jest.fn(async (key: string) => {
+      getdelStrict: jest.fn(async (key: string) => {
         const v = store.get(key);
         if (v === undefined) return null;
         store.delete(key);
@@ -32,6 +36,7 @@ jest.mock("@/lib/cache/cache-service", () => {
 import {
   allowRefresh,
   consumeRefresh,
+  disallowRefresh,
   peekAuthCode,
   peekRefresh,
   putAuthCode,
@@ -40,12 +45,12 @@ import {
 
 const mocked = jest.requireMock("@/lib/cache/cache-service") as {
   __store: Map<string, string>;
-  cacheService: { getdel: jest.Mock };
+  cacheService: { getdelStrict: jest.Mock };
 };
 
 beforeEach(() => {
   mocked.__store.clear();
-  mocked.cacheService.getdel.mockClear();
+  mocked.cacheService.getdelStrict.mockClear();
 });
 
 describe("takeAuthCode (single use via GETDEL)", () => {
@@ -61,7 +66,7 @@ describe("takeAuthCode (single use via GETDEL)", () => {
 
     const first = await takeAuthCode("code-1");
     expect(first?.sub).toBe("u1");
-    expect(mocked.cacheService.getdel).toHaveBeenCalledTimes(1);
+    expect(mocked.cacheService.getdelStrict).toHaveBeenCalledTimes(1);
 
     const replay = await takeAuthCode("code-1");
     expect(replay).toBeNull();
@@ -100,7 +105,7 @@ describe("peeking", () => {
 
     expect((await peekAuthCode("code-3"))?.sub).toBe("u3");
     expect((await peekAuthCode("code-3"))?.sub).toBe("u3");
-    expect(mocked.cacheService.getdel).not.toHaveBeenCalled();
+    expect(mocked.cacheService.getdelStrict).not.toHaveBeenCalled();
 
     expect((await takeAuthCode("code-3"))?.sub).toBe("u3");
     expect(await peekAuthCode("code-3")).toBeNull();
@@ -117,7 +122,7 @@ describe("peeking", () => {
 
     expect((await peekRefresh("jti-2"))?.sub).toBe("u2");
     expect((await peekRefresh("jti-2"))?.sub).toBe("u2");
-    expect(mocked.cacheService.getdel).not.toHaveBeenCalled();
+    expect(mocked.cacheService.getdelStrict).not.toHaveBeenCalled();
 
     expect((await consumeRefresh("jti-2"))?.sub).toBe("u2");
     expect(await peekRefresh("jti-2")).toBeNull();
@@ -126,6 +131,22 @@ describe("peeking", () => {
   it("finds nothing under a name it wasn't given", async () => {
     await expect(peekAuthCode("never-issued")).resolves.toBeNull();
     await expect(peekRefresh("never-issued")).resolves.toBeNull();
+  });
+});
+
+describe("disallowRefresh", () => {
+  it("takes a jti back off the list", async () => {
+    await allowRefresh("jti-3", {
+      sub: "u3",
+      cid: "c3",
+      scope: "mcp",
+      aud: "a",
+      sv: 1,
+    });
+
+    await disallowRefresh("jti-3");
+
+    expect(await consumeRefresh("jti-3")).toBeNull();
   });
 });
 
