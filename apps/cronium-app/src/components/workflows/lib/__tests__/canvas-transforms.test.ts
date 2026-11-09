@@ -1,4 +1,4 @@
-import type { Connection, Edge } from "@xyflow/react";
+import type { Connection, Edge, Node } from "@xyflow/react";
 import { ConnectionType, EventType } from "@/shared/schema";
 import {
   type AvailableEvent,
@@ -9,6 +9,7 @@ import {
   normalizeEdge,
   normalizeEdges,
   withCurrentEventDetails,
+  workflowGraphKey,
 } from "../canvas-transforms";
 
 const events: AvailableEvent[] = [
@@ -328,5 +329,101 @@ describe("withCurrentEventDetails", () => {
     withCurrentEventDetails([node], [event]);
 
     expect(node.data).toEqual({ eventId: 7, label: "Nightly" });
+  });
+});
+
+describe("workflowGraphKey", () => {
+  const node = (id: string, eventId: number, x: number, y = 0): Node => ({
+    id,
+    position: { x, y },
+    data: { eventId },
+  });
+  const edge = (
+    source: string,
+    target: string,
+    connectionType?: ConnectionType,
+  ): Edge => ({
+    id: `${source}-${target}`,
+    source,
+    target,
+    ...(connectionType && { data: { connectionType } }),
+  });
+
+  const nodes = [node("a", 1, 0), node("b", 2, 300)];
+  const edges = [edge("a", "b", ConnectionType.ON_SUCCESS)];
+  const key = workflowGraphKey(nodes, edges);
+
+  it("is the same under the new ids a save gives every node", () => {
+    expect(
+      workflowGraphKey(
+        [node("node-7", 1, 0), node("node-8", 2, 300)],
+        [edge("node-7", "node-8", ConnectionType.ON_SUCCESS)],
+      ),
+    ).toBe(key);
+  });
+
+  it("doesn't depend on the order nodes and connections come in", () => {
+    const three = [node("a", 1, 0), node("b", 2, 300), node("c", 3, 600)];
+    const both = [edge("a", "b"), edge("a", "c")];
+
+    expect(workflowGraphKey([...three].reverse(), [...both].reverse())).toBe(
+      workflowGraphKey(three, both),
+    );
+  });
+
+  it("ignores what a node shows about its event, and React Flow's own fields", () => {
+    const shown: Node = {
+      ...node("a", 1, 0),
+      data: { eventId: 1, label: "Renamed", description: "New", tags: ["x"] },
+      selected: true,
+      dragging: false,
+      measured: { width: 192, height: 60 },
+    };
+    const drawn: Edge = {
+      ...edge("a", "b", ConnectionType.ON_SUCCESS),
+      id: "e-a-b",
+      animated: true,
+      selected: true,
+    };
+
+    expect(workflowGraphKey([shown, nodes[1]!], [drawn])).toBe(key);
+  });
+
+  it("takes a connection with no condition as Always, as the server does", () => {
+    expect(workflowGraphKey(nodes, [edge("a", "b")])).toBe(
+      workflowGraphKey(nodes, [edge("a", "b", ConnectionType.ALWAYS)]),
+    );
+  });
+
+  it("leaves out a connection to a node that isn't there, which a save drops", () => {
+    expect(workflowGraphKey(nodes, [...edges, edge("a", "gone")])).toBe(key);
+  });
+
+  it.each<[string, Node[], Edge[]]>([
+    ["a node added", [...nodes, node("c", 3, 600)], edges],
+    ["a node removed", [nodes[0]!], []],
+    ["a node moved", [node("a", 1, 15), nodes[1]!], edges],
+    ["a node's event", [node("a", 3, 0), nodes[1]!], edges],
+    ["a connection removed", nodes, []],
+    [
+      "a connection turned round",
+      nodes,
+      [edge("b", "a", ConnectionType.ON_SUCCESS)],
+    ],
+    [
+      "a connection's condition",
+      nodes,
+      [edge("a", "b", ConnectionType.ON_FAILURE)],
+    ],
+  ])("changes with %s", (_change, changedNodes, changedEdges) => {
+    expect(workflowGraphKey(changedNodes, changedEdges)).not.toBe(key);
+  });
+
+  it("tells apart which of two nodes on one event a connection leaves from", () => {
+    const twins = [node("a", 1, 0), node("b", 1, 300), node("c", 2, 600)];
+
+    expect(workflowGraphKey(twins, [edge("a", "c")])).not.toBe(
+      workflowGraphKey(twins, [edge("b", "c")]),
+    );
   });
 });

@@ -519,6 +519,20 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
+/** Leave the window and come back, which reads the workflow again. */
+async function readWorkflowAgain() {
+  const reads = sent("workflows.getById").length;
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  await waitFor(
+    () => expect(sent("workflows.getById").length).toBeGreaterThan(reads),
+    FIND,
+  );
+  await settle();
+}
+
 // What React Flow needs from a browser and jsdom doesn't have. A node with no measured
 // size stays hidden, and a hidden element has no role for these tests to find.
 class ResizeObserverStub {
@@ -693,18 +707,14 @@ describe("a workflow page after a save from its edit modal", () => {
     it("doesn't count as an unsaved change, and doesn't save the workflow", async () => {
       const { user } = await openPage("canvas");
       await canvasToSettle();
-      // Opening the canvas counts as a change by itself, so start from after a save.
-      await waitFor(() => expect(saveButton()).toBeEnabled(), FIND);
-      await user.click(saveButton());
-      await waitFor(() => expect(saveButton()).toBeDisabled(), FIND);
-      const saves = sent("workflows.update").length;
+      expect(saveButton()).toBeDisabled();
 
       await saveFromModal(user, canvasNode, "nightly", rename(user, "renamed"));
       await canvasNode.find("renamed");
-      await settle();
+      await readWorkflowAgain();
 
       expect(saveButton()).toBeDisabled();
-      expect(sent("workflows.update")).toHaveLength(saves);
+      expect(sent("workflows.update")).toHaveLength(0);
     });
 
     it("leaves edits that aren't saved yet, still unsaved", async () => {
@@ -719,6 +729,33 @@ describe("a workflow page after a save from its edit modal", () => {
 
       expect(canvasNodes()).toHaveLength(1);
       expect(saveButton()).toBeEnabled();
+    });
+
+    // The rename changes the event `workflows.getById` nests in each node, so the read
+    // after it is a new answer. Taking it used to put back the deleted node everywhere
+    // but the canvas, and turn Save off.
+    it("keeps edits that aren't saved yet when the workflow is read again", async () => {
+      const { user } = await openPage("canvas");
+      await canvasToSettle();
+      await deleteNode(user, "weekly");
+
+      await saveFromModal(user, canvasNode, "nightly", rename(user, "renamed"));
+      await canvasNode.find("renamed");
+      await readWorkflowAgain();
+
+      expect(canvasNodes()).toHaveLength(1);
+      expect(saveButton()).toBeEnabled();
+      await user.click(saveButton());
+      await waitFor(
+        () => expect(sent("workflows.update")).toHaveLength(1),
+        FIND,
+      );
+      const [saved] = sent("workflows.update") as Array<{
+        nodes: Array<{ data: { eventId: number } }>;
+        edges: unknown[];
+      }>;
+      expect(saved!.nodes.map((node) => node.data.eventId)).toEqual([NIGHTLY]);
+      expect(saved!.edges).toEqual([]);
     });
 
     it.each([
