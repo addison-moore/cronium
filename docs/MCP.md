@@ -124,7 +124,15 @@ by the `/api/mcp` route; only the value `"mcp"` is honored.
 
 - `src/app/api/mcp/route.ts`, `.../tools.ts` — remote JSON-RPC endpoint + the
   single tool-surface definition.
-- `src/app/api/mcp/oauth/*`, `src/lib/mcp-oauth/*` — OAuth 2.1 server.
+- `src/app/api/mcp/oauth/*`, `src/lib/mcp-oauth/*` — OAuth 2.1 server. The token
+  endpoint reads a grant's owner before it takes the code or refresh token, so when
+  Postgres is down it answers a 503 with `temporarily_unavailable` and nothing is used
+  up. GETDEL alone decides who gets a token, so requests that pass the read together
+  still let one through. Clients, codes and refresh tokens live in Valkey, read and
+  written with `cacheService`'s strict methods, so a Valkey that can't be asked is the
+  same 503 rather than a missing key. The new refresh token is stored before the old
+  one is taken, so a write Valkey refuses, at `maxmemory` under `noeviction`, leaves
+  the client the token it has.
 - `src/server/api/routers/mcp.ts` — `getCapabilities` + `validatePlan`.
 - `src/server/token-scopes.ts` — scope catalog + enforcement helper.
 - `src/server/api/trpc.ts` — token auth, `tokenScopes`, `requestSource`, `enforceTokenScopes`.

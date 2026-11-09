@@ -49,7 +49,7 @@ export const serverEndpoints: readonly ApiEndpoint[] = [
         type: "string",
         required: true,
         description:
-          "Private key, including its BEGIN and END lines. Cronium connects with it first and answers 400 if the connection fails.",
+          "Private key, including its BEGIN and END lines. Cronium connects with it first and answers 400 if the connection fails, or 429 if too many connections are being checked.",
       },
       {
         name: "username",
@@ -119,7 +119,7 @@ export const serverEndpoints: readonly ApiEndpoint[] = [
         type: "string",
         required: false,
         description:
-          "New private key. Cronium connects with it first and answers 400 if the connection fails. Blank keeps the current key.",
+          "New private key. Cronium connects with it first and answers 400 if the connection fails, or 429 if too many connections are being checked. Blank keeps the current key.",
       },
       {
         name: "username",

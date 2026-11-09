@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 import { TOOL_HOSTS, isAllowedWebhookUrl } from "@/tools/utils/tool-hosts";
 
@@ -82,6 +83,7 @@ export const sendMessageAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "blue",
   developmentMode: "visual",
+  testRun: simulatedRun("Microsoft Teams"),
   inputSchema: sendMessageSchema,
   parameters: safeZodToParameters(sendMessageSchema),
   templateEncoding: (name) => (name === "webhookUrl" ? "text" : "markup"),

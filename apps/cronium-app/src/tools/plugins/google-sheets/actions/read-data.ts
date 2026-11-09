@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { simulatedRun } from "@/tools/utils/test-run";
 import { toolFetch } from "@/lib/tools/safe-fetch";
 
 // Schema for read-data action parameters
@@ -38,6 +39,7 @@ export const readDataAction: ToolAction = {
   actionType: "search",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: simulatedRun("Google Sheets"),
   inputSchema: readDataSchema,
   parameters: safeZodToParameters(readDataSchema),
   outputSchema: z.object({

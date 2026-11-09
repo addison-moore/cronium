@@ -131,6 +131,8 @@ result='{
 # Set output for next workflow node
 cronium_output "$result"
 
+# With no argument it takes stdin instead: ./build_report.sh | cronium_output
+
 # The output will be available as input to the next connected node`,
   },
   variables: {

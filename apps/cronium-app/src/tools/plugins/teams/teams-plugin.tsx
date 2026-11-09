@@ -213,10 +213,10 @@ function TeamsCredentialDisplay({
         return (
           <div
             key={tool.id}
-            className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
+            className="border-border hover:bg-muted/50 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
           >
-            <div className="flex-1">
-              <div className="mb-2 flex items-center gap-3">
+            <div className="min-w-0 flex-1 wrap-anywhere">
+              <div className="mb-2 flex flex-wrap items-center gap-3">
                 <h4 className="font-medium">{tool.name}</h4>
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
                 <ToolHealthBadge toolId={tool.id} />
@@ -241,7 +241,7 @@ function TeamsCredentialDisplay({
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-2 text-sm">
                 {hasWebhook && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">Webhook:</span>
                     <span className="font-mono text-xs">
                       {credentials.webhookUrl?.substring(0, 40)}...
@@ -250,19 +250,19 @@ function TeamsCredentialDisplay({
                 )}
                 {hasOAuth && (
                   <>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">Tenant ID:</span>
                       <span className="font-mono text-xs">
                         {credentials.tenantId}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">Client ID:</span>
                       <span className="font-mono text-xs">
                         {credentials.clientId?.substring(0, 20)}...
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">Client Secret:</span>
                       <span className="font-mono text-xs">
                         {isSecretVisible
@@ -285,7 +285,7 @@ function TeamsCredentialDisplay({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
                 <Edit className="h-4 w-4" />
               </Button>

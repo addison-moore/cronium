@@ -24,7 +24,11 @@ import {
   getServerActionById,
   getAllServerActionIds,
 } from "@/lib/tools/server-action-executor";
-import { ToolActionError, isFailureResult } from "@/lib/tools/action-result";
+import {
+  ToolActionError,
+  failureReason,
+  isFailureResult,
+} from "@/lib/tools/action-result";
 import { parseToolActionConfig } from "@/lib/tools/tool-action-config";
 import {
   QUERY_FAILED_MESSAGE,
@@ -436,11 +440,8 @@ export async function executeToolAction(
           // instead of throwing. Convert that to a throw so the breaker records
           // it and the executor's catch surfaces it as a failed job.
           if (isFailureResult(actionResult)) {
-            const errMsg = (actionResult as { error?: unknown }).error;
             throw new ToolActionError(
-              typeof errMsg === "string" && errMsg
-                ? errMsg
-                : `${action.name} reported failure`,
+              failureReason(actionResult, action.name),
               actionResult,
             );
           }

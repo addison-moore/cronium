@@ -20,11 +20,13 @@ import { credentialCache } from "@/lib/tools/credential-cache";
 import { auditLog } from "@/lib/security/audit-logger";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
 import { rateLimiter } from "@/lib/security/rate-limiter";
+import { withConnectionCheckLimit } from "@/lib/security/connection-check-limit";
 import {
   redactCredentialValues,
   mergeCredentials,
 } from "@/lib/tools/credential-redaction";
 import { redactSecrets, redactText } from "@/lib/tools/redact";
+import { failureReason, isFailureResult } from "@/lib/tools/action-result";
 
 /** Blank secret-bearing credential fields before returning a tool to a client. */
 function redactTool<T extends { credentials: Record<string, unknown> }>(
@@ -34,7 +36,12 @@ function redactTool<T extends { credentials: Record<string, unknown> }>(
 }
 import { testToolConnection } from "@/lib/tools/tool-registry";
 import { slackRouter } from "./tools/slack-routes";
-import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import {
+  QUERY_FAILED_MESSAGE,
+  describeFailure,
+  failureWithStack,
+  isQueryFailure,
+} from "@/lib/pg-errors";
 
 // Use centralized authentication from trpc.ts
 
@@ -295,6 +302,13 @@ async function validateCredentialsForType(
   }
 }
 
+/** How a form run that worked is audited: a simulation or a check didn't really run. */
+const RUN_STATUS = {
+  simulate: "SIMULATED",
+  check: "CHECKED",
+  run: "SUCCESS",
+} as const;
+
 /**
  * Write the same `tool_action_logs` audit row the scheduler path writes
  * (see tool-action-executor.ts). `eventId` is null for manual/test runs —
@@ -307,7 +321,7 @@ async function logManualToolAction(entry: {
   actionId: string;
   parameters: unknown;
   result: unknown;
-  status: "SUCCESS" | "FAILURE";
+  status: "SUCCESS" | "FAILURE" | (typeof RUN_STATUS)[keyof typeof RUN_STATUS];
   executionTime: number;
   errorMessage: string | null;
 }): Promise<void> {
@@ -432,10 +446,12 @@ export const toolsRouter = createTRPCRouter({
           toolType: tool.type,
         });
 
-        // Real provider check (SMTP verify, API auth call, webhook POST, ...)
-        const connectionResult = await testToolConnection(
-          tool.type,
-          credentials,
+        // Real provider check (SMTP verify, API auth call, webhook POST, ...). The
+        // Tools page runs this for every tool it lists when it opens, so the limit
+        // lets them wait their turn, and the badge shows a refusal as unchecked.
+        const connectionResult = await withConnectionCheckLimit(
+          ctx.session.user.id,
+          () => testToolConnection(tool.type, credentials),
         );
 
         const testResult = {
@@ -524,7 +540,9 @@ export const toolsRouter = createTRPCRouter({
         }
 
         const startTime = Date.now();
-        const result = await testToolConnection(input.type, credentials);
+        const result = await withConnectionCheckLimit(ctx.session.user.id, () =>
+          testToolConnection(input.type, credentials),
+        );
         return {
           success: result.success,
           message: result.message,
@@ -1177,6 +1195,12 @@ export const toolsRouter = createTRPCRouter({
         toolId: z.number(),
         actionId: z.string(),
         parameters: z.record(z.string(), z.unknown()),
+        // What the press asks for. A simulation or a check reaches the action as
+        // `isTest`, and only one that declares it stops there, so the others are
+        // refused rather than run for real.
+        mode: z.enum(["simulate", "check", "run"]).optional(),
+        // What a page loaded before `mode` sends, for every press. It meant a
+        // simulation for an action that simulates, and the real run for the rest.
         isTest: z.boolean().default(false),
       }),
     )
@@ -1222,6 +1246,24 @@ export const toolsRouter = createTRPCRouter({
           throw validationError;
         }
 
+        const mode =
+          input.mode ??
+          (input.isTest && action.testRun.kind === "simulated"
+            ? "simulate"
+            : "run");
+        if (mode === "check" && !action.testRun.check) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${action.name} can't be checked, so nothing was run.`,
+          });
+        }
+        if (mode === "simulate" && action.testRun.kind !== "simulated") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${action.name} can't be simulated, so nothing was run.`,
+          });
+        }
+
         // Create execution context. Variables are handled via runtime
         // helpers, not this in-process context (no action uses these).
         const context = {
@@ -1235,7 +1277,7 @@ export const toolsRouter = createTRPCRouter({
             error: (message: string) => console.error(`[ERROR] ${message}`),
             debug: (message: string) => console.debug(`[DEBUG] ${message}`),
           },
-          isTest: input.isTest,
+          isTest: mode !== "run",
           onProgress: (progress: { step: string; percentage: number }) => {
             console.log(`[PROGRESS] ${progress.step}: ${progress.percentage}%`);
           },
@@ -1276,22 +1318,42 @@ export const toolsRouter = createTRPCRouter({
           toolType: tool.type,
         });
 
-        // Execute the action
+        // Execute the action. It reports failure by throwing or by returning
+        // {success:false}/{ok:false}, and the scheduler path counts both as failed.
         const startTime = Date.now();
         let result: unknown;
+        let failure: string | undefined;
         try {
           result = (await action.execute(
             credentials,
             input.parameters,
             context,
           )) as unknown;
+          if (isFailureResult(result)) {
+            failure = failureReason(result, action.name);
+          }
         } catch (executionError) {
+          console.error(
+            "Error executing tool action:",
+            failureWithStack(executionError),
+          );
+          if (isQueryFailure(executionError)) {
+            failure = QUERY_FAILED_MESSAGE;
+          } else {
+            failure =
+              executionError instanceof Error
+                ? executionError.message
+                : String(executionError);
+          }
+        }
+        const executionTime = Date.now() - startTime;
+
+        // The credential's owner gets the reason, as the action's own answer always
+        // gave it to them. A 500 here would hide it behind a generic message.
+        if (failure !== undefined) {
+          const error = redactText(failure);
           // Audit the failed execution like the scheduler path does:
           // redacted parameters, redacted error message, null eventId.
-          const errorMessage =
-            executionError instanceof Error
-              ? executionError.message
-              : String(executionError);
           await logManualToolAction({
             toolType: tool.type,
             actionType: action.actionType,
@@ -1299,33 +1361,39 @@ export const toolsRouter = createTRPCRouter({
             parameters: redactSecrets(input.parameters),
             result: null,
             status: "FAILURE",
-            executionTime: Date.now() - startTime,
-            errorMessage: redactText(errorMessage),
+            executionTime,
+            errorMessage: error,
           });
-          throw executionError;
+          return {
+            success: false as const,
+            error,
+            executionTime,
+            actionId: action.id,
+            actionName: action.name,
+          };
         }
-        const executionTime = Date.now() - startTime;
 
-        // Audit the successful execution to tool_action_logs, mirroring the
-        // scheduler path (tool-action-executor.ts).
+        // Audit the execution to tool_action_logs, mirroring the scheduler path
+        // (tool-action-executor.ts).
         await logManualToolAction({
           toolType: tool.type,
           actionType: action.actionType,
           actionId: action.id,
           parameters: redactSecrets(input.parameters),
           result: redactSecrets(result),
-          status: "SUCCESS",
+          status: RUN_STATUS[mode],
           executionTime,
           errorMessage: null,
         });
 
         return {
-          success: true,
+          success: true as const,
           result,
           executionTime,
           actionId: action.id,
           actionName: action.name,
-          isTest: input.isTest,
+          simulated: mode === "simulate",
+          checked: mode === "check",
         };
       } catch (error) {
         console.error("Error executing tool action:", failureWithStack(error));

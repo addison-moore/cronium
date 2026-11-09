@@ -36,7 +36,7 @@ export function BulkActionsToolbar({
 
   return (
     <div className="bg-muted/50 border-border mb-4 rounded-lg border p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
           <span className="text-sm font-medium">
             {selectedCount} event(s) selected

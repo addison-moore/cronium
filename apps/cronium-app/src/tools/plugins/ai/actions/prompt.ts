@@ -1,6 +1,11 @@
 import { z } from "zod";
-import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
+import type {
+  ToolAction,
+  ExecutionContext,
+  ShownResult,
+} from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { counted, spendRun } from "@/tools/utils/test-run";
 import {
   aiCredentialsSchema,
   aiPromptSchema,
@@ -39,6 +44,67 @@ function parseJsonLoose(raw: string): unknown {
   }
 }
 
+// How each provider says the model stopped at its token limit: OpenAI and OpenAI-compatible
+// endpoints, Anthropic, Gemini.
+const STOPPED_AT_TOKEN_LIMIT = new Set(["length", "max_tokens", "MAX_TOKENS"]);
+
+interface AnswerDetails {
+  model?: unknown;
+  usage?: { inputTokens?: unknown; outputTokens?: unknown } | undefined;
+  finishReason?: unknown;
+}
+
+/**
+ * What the event form shows of an answer: its text, or in JSON mode what the next step
+ * gets without the `_ai` details, and which model answered. An answer cut off at the
+ * token limit can end mid-sentence and still read as whole, so that's said.
+ */
+function answerShown(result: unknown): ShownResult {
+  const output =
+    result && typeof result === "object"
+      ? (result as Record<string, unknown>)
+      : {};
+  const json = "_ai" in output;
+  const { _ai, ...fields } = output;
+  const details = (json ? _ai : output) as AnswerDetails | undefined;
+  const model =
+    typeof details?.model === "string" && details.model
+      ? details.model
+      : undefined;
+  const { inputTokens, outputTokens } = details?.usage ?? {};
+  const tokens = [
+    typeof inputTokens === "number"
+      ? `${counted(inputTokens, "token")} in`
+      : undefined,
+    typeof outputTokens === "number"
+      ? `${counted(outputTokens, "token")} out`
+      : undefined,
+  ].filter((part) => part !== undefined);
+  const stopped =
+    typeof details?.finishReason === "string" &&
+    STOPPED_AT_TOKEN_LIMIT.has(details.finishReason);
+
+  return {
+    type: "text",
+    format: json ? "json" : "prose",
+    text: json
+      ? JSON.stringify(fields, null, 2)
+      : typeof output.text === "string"
+        ? output.text
+        : "",
+    ...(model
+      ? {
+          about:
+            `Answered by ${model}` +
+            (tokens.length > 0 ? `, using ${tokens.join(" and ")}.` : "."),
+        }
+      : {}),
+    ...(stopped
+      ? { warning: "It stopped at Max Tokens, so the answer may be cut short." }
+      : {}),
+  };
+}
+
 export const promptAction: ToolAction = {
   id: "ai-prompt",
   name: "Prompt LLM",
@@ -50,6 +116,11 @@ export const promptAction: ToolAction = {
   actionType: "create",
   actionTypeColor: "purple",
   developmentMode: "visual",
+  testRun: spendRun(
+    "sends the prompt to the model, and your provider may charge for it",
+    "The model answered.",
+    answerShown,
+  ),
   inputSchema: aiPromptSchema,
   parameters: safeZodToParameters(aiPromptSchema),
   outputSchema: z.record(z.string(), z.unknown()),

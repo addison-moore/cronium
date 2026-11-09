@@ -27,7 +27,7 @@ jest.mock("@/lib/websocket-broadcaster", () => ({
 }));
 
 import { randomUUID } from "node:crypto";
-import { format } from "node:util";
+import { format, inspect } from "node:util";
 import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { NextRequest } from "next/server";
@@ -46,6 +46,7 @@ import { POST as triggerWorkflowWebhook } from "@/app/api/workflows/webhook/[key
 import { hashApiToken } from "@/lib/api-token-hash";
 import { hashWorkflowWebhookKey } from "@/lib/workflow-webhook-key";
 import { cacheService } from "@/lib/cache/cache-service";
+import { CacheUnavailableError } from "@/lib/cache/cache-unavailable";
 import { TokenManager } from "@/lib/oauth/TokenManager";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 import * as httpEvents from "@/lib/scheduler/http-event-executor";
@@ -1485,12 +1486,6 @@ describe("the cache", () => {
       (key) => cacheService.set(key, true),
     ],
     [
-      "getdel",
-      "Cache getdel error for key",
-      "NOREPLICAS",
-      (key) => cacheService.getdel(key),
-    ],
-    [
       "delete",
       "Cache delete error for key",
       "NOREPLICAS",
@@ -1514,6 +1509,34 @@ describe("the cache", () => {
       expect(lineStarting(`${label} mcpoauth:code:[not logged]: `)).toContain(
         refusal,
       );
+    },
+  );
+
+  // The strict methods log nothing and throw instead, so what they throw mustn't carry it.
+  it.each<[string, string, (key: string) => Promise<unknown>]>([
+    ["getStrict", "WRONGTYPE", (key) => cacheService.getStrict(key)],
+    ["getdelStrict", "NOREPLICAS", (key) => cacheService.getdelStrict(key)],
+    [
+      "setStrict",
+      "NOREPLICAS",
+      (key) => cacheService.setStrict(key, { apiKey: SECRET }, { ttl: 60 }),
+    ],
+  ])(
+    "%s throws without the key or the value",
+    async (_method, refusal, touch) => {
+      const key = `mcpoauth:code:${SECRET}`;
+      await refuseEverythingOn(key);
+
+      const error = await touch(key).then(
+        () => null,
+        (failure: unknown) => failure,
+      );
+
+      expect(error).toBeInstanceOf(CacheUnavailableError);
+      const everything = inspect(error, { depth: 10, showHidden: true });
+      expect(everything).toContain(refusal);
+      expect(everything).not.toContain(SECRET);
+      expect(logged.join("\n")).not.toContain(SECRET);
     },
   );
 

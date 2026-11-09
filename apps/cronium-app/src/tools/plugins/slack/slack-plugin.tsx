@@ -201,16 +201,16 @@ function SlackCredentialDisplay({
         return (
           <div
             key={tool.id}
-            className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
+            className="border-border hover:bg-muted/50 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
           >
-            <div className="flex-1">
-              <div className="mb-2 flex items-center gap-3">
+            <div className="min-w-0 flex-1 wrap-anywhere">
+              <div className="mb-2 flex flex-wrap items-center gap-3">
                 <h4 className="font-medium">{tool.name}</h4>
                 <StatusBadge status={tool.isActive ? "active" : "offline"} />
                 <ToolHealthBadge toolId={tool.id} />
               </div>
               <div className="text-muted-foreground grid grid-cols-1 gap-4 text-sm">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">Webhook URL:</span>
                   <span className="font-mono text-xs">
                     {isTokenVisible
@@ -234,7 +234,7 @@ function SlackCredentialDisplay({
                 </div>
               </div>
               {tool.isActive && (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -255,7 +255,7 @@ function SlackCredentialDisplay({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(tool)}>
                 <Edit className="h-4 w-4" />
               </Button>

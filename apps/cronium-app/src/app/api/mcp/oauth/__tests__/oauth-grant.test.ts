@@ -14,6 +14,9 @@ jest.mock("@/lib/mcp-oauth/store", () => ({
     store.set(`code:${code}`, data);
     return Promise.resolve();
   }),
+  peekAuthCode: jest.fn((code: string) =>
+    Promise.resolve(store.get(`code:${code}`) ?? null),
+  ),
   takeAuthCode: jest.fn((code: string) => {
     const data = store.get(`code:${code}`) ?? null;
     store.delete(`code:${code}`);
@@ -23,10 +26,17 @@ jest.mock("@/lib/mcp-oauth/store", () => ({
     store.set(`rt:${jti}`, data);
     return Promise.resolve();
   }),
+  peekRefresh: jest.fn((jti: string) =>
+    Promise.resolve(store.get(`rt:${jti}`) ?? null),
+  ),
   consumeRefresh: jest.fn((jti: string) => {
     const data = store.get(`rt:${jti}`) ?? null;
     store.delete(`rt:${jti}`);
     return Promise.resolve(data);
+  }),
+  disallowRefresh: jest.fn((jti: string) => {
+    store.delete(`rt:${jti}`);
+    return Promise.resolve();
   }),
 }));
 jest.mock("@/lib/auth-cache", () => ({
@@ -43,6 +53,8 @@ jest.mock("@/server/security/authorization", () => ({
 jest.mock("@/server/storage", () => ({ storage: { getUser: jest.fn() } }));
 
 import { createHash } from "node:crypto";
+import { CacheUnavailableError } from "@/lib/cache/cache-unavailable";
+import { getClient, putAuthCode } from "@/lib/mcp-oauth/store";
 import { GET as authorize } from "../authorize/route";
 import { POST as token } from "../token/route";
 import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
@@ -353,5 +365,51 @@ describe("revocation", () => {
     });
     const res = await exchangeCode(code);
     expect(res.status).toBe(400);
+  });
+});
+
+// Clients and codes live in Valkey, and failing to reach it says nothing about either.
+describe("authorizing while Valkey can't be asked", () => {
+  const unavailable = () => new CacheUnavailableError("Valkey isn't connected");
+
+  beforeEach(() => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it("says so, rather than calling the client unknown", async () => {
+    (getClient as jest.Mock).mockRejectedValueOnce(unavailable());
+
+    const res = await get(authorizeUrl({ state: "s" }));
+
+    expect(res.status).toBe(503);
+    const page = await res.text();
+    expect(page).toContain("look up this application");
+    expect(page).not.toContain("Unknown client_id");
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("sends the client temporarily_unavailable, not a code it didn't store", async () => {
+    const page = await get(authorizeUrl({ state: "the-state" }));
+    const href = /href="([^"]*consent=(?!deny)[^"]*)"/
+      .exec(await page.text())![1]!
+      .replace(/&amp;/g, "&");
+    (putAuthCode as jest.Mock).mockRejectedValueOnce(unavailable());
+
+    const res = await get(href);
+
+    expect(res.status).toBe(302);
+    const back = new URL(res.headers.get("location")!);
+    expect(back.origin + back.pathname).toBe(REDIRECT);
+    expect(back.searchParams.get("error")).toBe("temporarily_unavailable");
+    expect(back.searchParams.get("state")).toBe("the-state");
+    expect(back.searchParams.has("code")).toBe(false);
+  });
+
+  it("doesn't call any other failure an unavailable Valkey", async () => {
+    (putAuthCode as jest.Mock).mockRejectedValueOnce(new Error("a bug"));
+
+    await expect(approve()).rejects.toThrow("a bug");
   });
 });

@@ -6,7 +6,9 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="bg-tertiary-bg border-border w-full overflow-auto rounded-md border">
+  // `relative` makes this the containing block of anything absolute in a cell, such
+  // as an `sr-only` label. Otherwise it escapes the clip and widens the page.
+  <div className="bg-tertiary-bg border-border relative w-full overflow-auto rounded-md border">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}

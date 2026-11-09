@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { eventTooLong } from "./delivery-body";
+import { INBOUND_EVENT_PREFIX, unstorableEvent } from "./storable-event";
 import { queueFullMessage } from "./webhook-errors";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
@@ -15,6 +16,13 @@ import { failureWithStack, refusedByPostgres } from "@/lib/pg-errors";
  * and an event takes up to three.
  */
 const QUEUE_FULL_RETRY_AFTER_SECONDS = 60;
+
+/**
+ * How long a sender is told to wait when delivery ids can't be checked. It's about how
+ * long Valkey takes to come back: a restart takes seconds, and the client tries to
+ * reconnect at least every 2.
+ */
+const DELIVERY_IDS_UNAVAILABLE_RETRY_AFTER_SECONDS = 30;
 
 /** Thrown when an inbound webhook body exceeds the size cap. */
 class WebhookBodyTooLargeError extends Error {
@@ -123,6 +131,22 @@ export class WebhookRouter {
           duration: Date.now() - startTime,
         });
 
+        // Not a 401: nothing is wrong with the request, and a sender told it's replaying
+        // would stop rather than send it again.
+        if (verificationResult.unavailable) {
+          return NextResponse.json(
+            { error: verificationResult.error },
+            {
+              status: 503,
+              headers: {
+                "Retry-After": String(
+                  DELIVERY_IDS_UNAVAILABLE_RETRY_AFTER_SECONDS,
+                ),
+              },
+            },
+          );
+        }
+
         return NextResponse.json(
           { error: verificationResult.error },
           { status: 401 },
@@ -132,10 +156,9 @@ export class WebhookRouter {
       // The id is consumed now, and however this request ends before it has had an
       // effect, the id has to come back. Sending it again wouldn't be a replay, and it
       // would look like one to a sender keeping its id across attempts.
-      const deliveryId = headers["x-webhook-delivery-id"];
-      if (deliveryId) {
-        freeDeliveryId = () =>
-          this.webhookSecurity.releaseDeliveryId(webhook.id, deliveryId);
+      const { claim } = verificationResult;
+      if (claim) {
+        freeDeliveryId = () => this.webhookSecurity.releaseDeliveryId(claim);
       }
 
       // Check rate limit
@@ -181,10 +204,23 @@ export class WebhookRouter {
         webhook.transformations as Record<string, unknown> | undefined,
       );
 
+      // Postgres would refuse it on every attempt, so a 500 would only have its sender
+      // try again. Refused before anything is claimed or written.
+      const unstorable = unstorableEvent(eventType, processedData);
+      if (unstorable !== undefined) {
+        await this.logWebhookRequest(webhook.id, {
+          success: false,
+          error: unstorable,
+          duration: Date.now() - startTime,
+        });
+
+        return NextResponse.json({ error: unstorable }, { status: 400 });
+      }
+
       // Refused here, where the sender can be told. Once this answers with a success,
       // nobody is left who could do anything about an event that can't go out. Without
       // `transformations`, the limit has room for anything the cap above lets in.
-      const deliveredEvent = `webhook.${eventType}`;
+      const deliveredEvent = `${INBOUND_EVENT_PREFIX}${eventType}`;
       const deliveredMetadata = { webhookId: webhook.id, source: "webhook" };
       const tooLong = eventTooLong(
         deliveredEvent,
@@ -227,38 +263,44 @@ export class WebhookRouter {
         );
       }
 
-      // Store event, stamped with the owning tenant (the inbound webhook's
-      // owner) so downstream fan-out and reads stay tenant-scoped.
+      // Store the event, stamped with the owning tenant (the inbound webhook's owner) so
+      // downstream fan-out and reads stay tenant-scoped, along with the row its
+      // deliveries go out on. Both go in or neither does, so a failure can't leave this
+      // one stored with nothing sent, and its id used.
       let event: typeof webhookEvents.$inferSelect;
+      let committing = false;
       try {
-        const result = await db
-          .insert(webhookEvents)
-          .values({
-            event: eventType,
-            payload: processedData,
-            userId: webhook.userId,
-            sourceWebhookId: webhook.id,
-            createdAt: new Date(),
-          })
-          .returning();
+        event = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .insert(webhookEvents)
+            .values({
+              event: eventType,
+              payload: processedData,
+              userId: webhook.userId,
+              sourceWebhookId: webhook.id,
+              createdAt: new Date(),
+            })
+            .returning();
+          if (!row) throw new Error("Failed to create webhook event");
 
-        if (!result[0]) {
-          throw new Error("Failed to create webhook event");
-        }
-
-        event = result[0];
+          await prepared.store(tx);
+          committing = true;
+          return row;
+        });
       } catch (error) {
-        // Postgres saying no means nothing went in. Any other failure can come after it
-        // did, with only the answer lost, and then a replay would store it again.
-        if (!refusedByPostgres(error)) freeDeliveryId = undefined;
         prepared.cancel();
+        // Nothing stays unless the COMMIT works, and Postgres saying no to it means it
+        // didn't. With no answer to the COMMIT, or a FATAL, it may have, and then a
+        // replay would store everything again.
+        if (committing && !refusedByPostgres(error)) freeDeliveryId = undefined;
         throw error;
       }
 
       // This request has had an effect, so its id stays used, whatever fails from here.
       freeDeliveryId = undefined;
 
-      // Fan out only within the inbound webhook's own tenant (HI-01).
+      // Fan out only within the inbound webhook's own tenant (HI-01). Only now, so no
+      // delivery goes out for an event that isn't stored.
       await prepared.send();
 
       // Log successful request
