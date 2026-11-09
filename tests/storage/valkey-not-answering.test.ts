@@ -60,6 +60,7 @@ const cache = () => app.cacheModule.cacheService;
 
 let relay: QuietRelay;
 let admin: Redis;
+let valkeyUrl: string;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -149,16 +150,26 @@ const limiterWorks = async () =>
   (await app.limiter.consumeAtomicRateLimit(randomUUID(), "probe", ONE_MINUTE))
     .allowed;
 
+/** Closes a cache's client without QUIT, which nothing answers if Valkey doesn't. */
+function closeOutright(service: object): void {
+  (service as { client?: Redis | null }).client?.disconnect();
+}
+
 beforeAll(async () => {
-  relay = await quietRelayTo(process.env.VALKEY_URL!);
-  admin = new Redis(process.env.VALKEY_URL!);
+  valkeyUrl = process.env.VALKEY_URL!;
+  relay = await quietRelayTo(valkeyUrl);
+  admin = new Redis(valkeyUrl);
   process.env.VALKEY_URL = relay.url;
   process.env.REDIS_URL = relay.url;
   app = await load();
 });
 
 afterAll(async () => {
-  await cache().disconnect();
+  // Bounded, so a cache that's stuck can't keep the file from finishing.
+  await Promise.race([cache().disconnect(), sleep(5_000)]).catch(
+    () => undefined,
+  );
+  closeOutright(cache());
   admin.disconnect();
   // The relay stays up. The limiter's client has no way to close, and would try to
   // connect again every few seconds, and log it, for the rest of the run.
@@ -307,7 +318,7 @@ describe("the cache's own connection", () => {
       expect(await admin.exists("static:late")).toBe(1);
     } finally {
       relay.resume();
-      await late.disconnect();
+      closeOutright(late);
     }
   });
 
@@ -321,26 +332,39 @@ describe("the cache's own connection", () => {
       expect(read.ms).toBeLessThan(200);
       expect(mute.isAvailable()).toBe(false);
     } finally {
-      // QUIT can't be sent where nothing answers, so close it outright.
-      (mute as unknown as { client: Redis | null }).client?.disconnect();
+      closeOutright(mute);
       await silent.close();
     }
   });
 
   it("doesn't send a write again on the next connection once its caller was told it failed", async () => {
-    // A network that loses packets: this one never reaches Valkey, and the connection it
-    // went out on is closed for saying nothing.
-    relay.drop();
-    const write = await timed(
-      cache().set("static:given-up", "stale", { ttl: 60 }),
-    );
-    expect(write.settled).toEqual({ value: false });
-    expect(write.ms).toBeLessThan(VALKEY_ANSWER_MS + 1_000);
+    // A network that loses packets, between a cache of its own and Valkey: the write
+    // never reaches Valkey, and the connection it went out on is closed for saying
+    // nothing.
+    const lossy = await quietRelayTo(valkeyUrl);
+    const own = cacheAt(lossy.url);
+    try {
+      await until("its cache to connect", () => own.isAvailable());
+      lossy.drop();
+      const write = await timed(
+        own.set("static:given-up", "stale", { ttl: 60 }),
+      );
+      expect(write.settled).toEqual({ value: false });
+      expect(write.ms).toBeLessThan(VALKEY_ANSWER_MS + 1_000);
 
-    relay.restore();
-    await until("the cache to answer", cacheWorks);
-    // ioredis sends what it resends before anything new, so it would be there by now.
-    expect(await admin.exists("static:given-up")).toBe(0);
+      lossy.restore();
+      await until(
+        "its cache to answer",
+        async () =>
+          (await own.set("static:probe", true, { ttl: 60 })) &&
+          (await admin.exists("static:probe")) === 1,
+      );
+      // ioredis sends what it resends before anything new, so it would be there by now.
+      expect(await admin.exists("static:given-up")).toBe(0);
+    } finally {
+      closeOutright(own);
+      await lossy.close();
+    }
   });
 });
 
