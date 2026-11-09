@@ -2,9 +2,17 @@
  * @jest-environment node
  */
 const processDelivery = jest.fn();
+const webhooksEnabled = jest.fn();
+const recordDroppedDeliveries = jest.fn();
 
 jest.mock("../WebhookManager", () => ({
-  WebhookManager: { getInstance: () => ({ processDelivery }) },
+  WebhookManager: {
+    getInstance: () => ({
+      processDelivery,
+      webhooksEnabled,
+      recordDroppedDeliveries,
+    }),
+  },
 }));
 
 import type { SerializedPayload } from "../delivery-body";
@@ -98,8 +106,29 @@ const tick = async () => {
 const startedFor = (webhookId: number) =>
   processDelivery.mock.calls.filter(([id]) => id === webhookId).length;
 
+/** Answer reads as if these webhooks were disabled and these deleted. */
+function webhooksAre({
+  disabled = [],
+  deleted = [],
+}: {
+  disabled?: number[];
+  deleted?: number[];
+}) {
+  webhooksEnabled.mockImplementation(
+    (ids: number[]) =>
+      new Map(
+        ids
+          .filter((id) => !deleted.includes(id))
+          .map((id) => [id, !disabled.includes(id)]),
+      ),
+  );
+}
+
 beforeEach(() => {
   processDelivery.mockReset();
+  webhooksEnabled.mockReset();
+  recordDroppedDeliveries.mockReset();
+  webhooksAre({});
   jest.useFakeTimers({ doNotFake: ["setImmediate", "nextTick"] });
 });
 
@@ -662,5 +691,203 @@ describe("what the queue holds", () => {
     jest.advanceTimersByTime(60_000);
     reserve(queue, 1);
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a webhook that's been disabled or deleted", () => {
+  const LONG_BACKOFF = {
+    maxRetries: 3,
+    retryDelay: 3_600_000,
+    backoffMultiplier: 1,
+  };
+
+  const heldBytes = (queue: WebhookQueue) =>
+    (queue as unknown as { heldBytes: number }).heldBytes;
+
+  beforeEach(() => {
+    jest.spyOn(console, "warn").mockImplementation();
+    jest.spyOn(console, "error").mockImplementation();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  /** Everything has made an attempt, failed, and is waiting out a long backoff. */
+  async function waitingForRetries(queue: WebhookQueue, webhookIds: number[]) {
+    const alreadyWaiting = retained(queue).size;
+    processDelivery.mockResolvedValue({ success: false, statusCode: 500 });
+    for (const webhookId of webhookIds) {
+      enqueue(queue, item(LONG_BACKOFF, webhookId));
+    }
+    await flush();
+    expect(retained(queue).size).toBe(alreadyWaiting + webhookIds.length);
+    processDelivery.mockClear();
+    webhooksEnabled.mockClear();
+  }
+
+  it("makes no attempt once it's disabled, and has that recorded", async () => {
+    webhooksAre({ disabled: [1] });
+    const queue = new WebhookQueue();
+
+    enqueue(queue, item(LONG_BACKOFF));
+    await flush();
+
+    expect(webhooksEnabled).toHaveBeenCalledWith([1]);
+    expect(processDelivery).not.toHaveBeenCalled();
+    expect(recordDroppedDeliveries).toHaveBeenCalledWith(1, [2]);
+    expect(retained(queue).size).toBe(0);
+    expect(heldBytes(queue)).toBe(0);
+  });
+
+  it("makes no attempt once it's deleted, with nothing to record it on", async () => {
+    webhooksAre({ deleted: [1] });
+    const queue = new WebhookQueue();
+
+    enqueue(queue, item(LONG_BACKOFF));
+    await flush();
+
+    expect(processDelivery).not.toHaveBeenCalled();
+    expect(recordDroppedDeliveries).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      "[Webhook] Webhook 1 was deleted, so deliveries waiting for it were dropped: 1.",
+    );
+    expect(heldBytes(queue)).toBe(0);
+  });
+
+  it("makes the attempt when it can't read the webhook, and logs that once a minute", async () => {
+    processDelivery.mockResolvedValue({ success: true });
+    webhooksEnabled.mockRejectedValue(new Error("no connection"));
+    const queue = new WebhookQueue();
+
+    enqueue(queue, item());
+    enqueue(queue, item());
+    await flush();
+
+    expect(processDelivery).toHaveBeenCalledTimes(2);
+    expect(recordDroppedDeliveries).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("no connection"),
+    );
+
+    jest.advanceTimersByTime(60_000);
+    enqueue(queue, item());
+    await flush();
+    expect(console.error).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops what's waiting for it, retries included, and gives the room back", async () => {
+    const queue = new WebhookQueue();
+    await waitingForRetries(queue, [1, 1, 2]);
+    expect(heldBytes(queue)).toBeGreaterThan(0);
+
+    webhooksAre({ disabled: [1] });
+    await tick();
+
+    expect(processDelivery).not.toHaveBeenCalled();
+    expect(recordDroppedDeliveries).toHaveBeenCalledTimes(1);
+    expect(recordDroppedDeliveries).toHaveBeenCalledWith(1, [2, 2]);
+    expect(
+      [...retained(queue).values()].map(({ webhookId }) => webhookId),
+    ).toEqual([2]);
+
+    webhooksAre({ deleted: [2] });
+    await tick();
+
+    expect(recordDroppedDeliveries).toHaveBeenCalledTimes(1);
+    expect(retained(queue).size).toBe(0);
+    expect(heldBytes(queue)).toBe(0);
+  });
+
+  it("reads once a tick, naming each webhook once, and not at all when nothing's waiting", async () => {
+    const queue = new WebhookQueue();
+
+    await tick();
+    expect(webhooksEnabled).not.toHaveBeenCalled();
+
+    await waitingForRetries(queue, [1, 1, 1, 2]);
+    await tick();
+
+    expect(webhooksEnabled).toHaveBeenCalledTimes(1);
+    expect(webhooksEnabled).toHaveBeenCalledWith([1, 2]);
+    expect(retained(queue).size).toBe(4);
+  });
+
+  it("leaves alone what arrived during a read, which that read knows nothing about", async () => {
+    const queue = new WebhookQueue();
+    await waitingForRetries(queue, [1]);
+
+    let answer: (enabled: Map<number, boolean>) => void = () => undefined;
+    webhooksEnabled.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+    await tick();
+
+    // It has its own read before its attempt, which fails like the others did.
+    await waitingForRetries(queue, [2]);
+    answer(new Map([[1, true]]));
+    await flush();
+
+    expect(retained(queue).size).toBe(2);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("doesn't start a second look while one is running", async () => {
+    const queue = new WebhookQueue();
+    await waitingForRetries(queue, [1]);
+
+    let answer: (enabled: Map<number, boolean>) => void = () => undefined;
+    webhooksEnabled.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+    await tick();
+    await tick();
+    await tick();
+    expect(webhooksEnabled).toHaveBeenCalledTimes(1);
+
+    answer(new Map([[1, true]]));
+    await flush();
+    await tick();
+    expect(webhooksEnabled).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps what's waiting when a look can't read, and looks again next time", async () => {
+    const queue = new WebhookQueue();
+    await waitingForRetries(queue, [1]);
+
+    webhooksEnabled.mockRejectedValueOnce(new Error("no connection"));
+    await tick();
+
+    expect(retained(queue).size).toBe(1);
+    expect(heldBytes(queue)).toBeGreaterThan(0);
+    expect(console.error).toHaveBeenCalledTimes(1);
+
+    webhooksAre({ disabled: [1] });
+    await tick();
+
+    expect(retained(queue).size).toBe(0);
+    expect(heldBytes(queue)).toBe(0);
+  });
+
+  it("drops an attempt's retry on the next look if the attempt failed after it was disabled", async () => {
+    const running = holdDeliveries();
+    const queue = new WebhookQueue();
+    enqueue(queue, item(LONG_BACKOFF));
+    await flush();
+    expect(running).toHaveLength(1);
+
+    webhooksAre({ disabled: [1] });
+    await tick();
+    // Nothing can recall it, and it's not waiting, so it holds its room for now.
+    expect(heldBytes(queue)).toBeGreaterThan(0);
+
+    running[0]!.finish({ success: false, statusCode: 500 });
+    await flush();
+    await tick();
+
+    expect(processDelivery).toHaveBeenCalledTimes(1);
+    expect(recordDroppedDeliveries).toHaveBeenCalledWith(1, [2]);
+    expect(heldBytes(queue)).toBe(0);
   });
 });

@@ -171,6 +171,10 @@ Give Docker about 8GB of memory for the build. `next build` alone peaks above
 4GB and can run out of memory on a smaller machine. If it does, build somewhere
 larger or use the published images.
 
+That builds the services. The images a job runs in aren't among them, and come from
+the registry at `latest`. To run jobs in images built from your checkout too, run
+`pnpm dev:docker:build`. See [The images a job runs in](#the-images-a-job-runs-in).
+
 For the local development loop (app on the host, infrastructure in Docker),
 see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 
@@ -194,6 +198,36 @@ see [GETTING_STARTED.md](./GETTING_STARTED.md) and `pnpm dev:docker:up`.
 4. **Volumes** — `postgres-data` (database), `valkey-data` (cache),
    `orchestrator-data` (payload signing key + SSH known_hosts; losing it
    breaks registered remote runners).
+
+### The images a job runs in
+
+A container job gets two containers of its own: one for the script, in an image for its
+language, and a sidecar that answers the `cronium` helpers. The orchestrator creates them
+itself, so the job images aren't in the Compose file. It picks each image in this order:
+
+1. **One you've configured,** in `.env`. You can set any of the three languages, and the
+   others use the defaults below:
+
+   ```bash
+   CRONIUM_CONTAINER_IMAGES=bash:registry.example.com/my-bash:1.2,python:registry.example.com/my-python:1.2,nodejs:registry.example.com/my-node:1.2
+   CRONIUM_CONTAINER_RUNTIME_IMAGE=registry.example.com/my-runtime:1.2
+   ```
+
+2. **A local image under the name a source checkout builds:**
+   `cronium/runner:bash-alpine`, `cronium/runner:python-alpine`,
+   `cronium/runner:node-alpine` and `cronium/runtime-api:latest`. These are never pulled.
+3. **The published image from the same build as your orchestrator:**
+   `ghcr.io/addison-moore/cronium-runner-bash`, `cronium-runner-python`,
+   `cronium-runner-node` and `cronium-runtime`. A release uses its own version as the tag,
+   such as `1.2.0`, and a build of a branch uses the branch and commit, such as
+   `main-1a2b3c4`, even if you run it as `latest`.
+
+An image a job needs is pulled at that point if it's missing. So the first script in each
+language takes longer on a new host and after each upgrade, by about as long as
+`docker pull` takes, and the host needs to reach the registry then. On a host that can't,
+configure your own images. Through a Docker socket proxy, allow `POST /images/create`.
+Images from earlier versions stay on the host until you remove them, which
+`docker image prune -a` does for any that no container is using.
 
 ## Verification
 
@@ -255,6 +289,12 @@ docker compose up -d
   `failed to attach to container: unable to upgrade to tcp, received 403`, with whatever
   status your proxy answers, and its container is never started. Remote jobs don't use
   this endpoint.
+- **Since November 2026, a job's images come from the registry.** Before that nothing
+  published them, so scripts only ran on a host that had built or tagged
+  `cronium/runner:*` and `cronium/runtime-api:latest` itself. A host with those keeps using
+  them. To move to the published images, remove those tags. Anything set in
+  `CRONIUM_CONTAINER_IMAGES` or `CRONIUM_CONTAINER_RUNTIME_IMAGE` still applies. See
+  [The images a job runs in](#the-images-a-job-runs-in).
 - **`docker compose pull` updates the images, not `docker-compose.yml`.** Re-running the
   installer replaces the file and keeps the old one as `docker-compose.yml.bak`. Since
   November 2026 the file gives the orchestrator and runtime only the variables it lists,
@@ -370,6 +410,11 @@ of data has its own window, set in `.env`; restart the worker to apply a change.
 - **Keep the log and tool action windows at 31 days or more if you use quotas.**
   Monthly quotas count rows in those two tables, so a shorter window makes usage
   read low.
+- **OAuth connection attempts have no window.** Pressing Connect on a tool writes a
+  row to `oauth_states` that's good for 10 minutes, and coming back from the provider
+  in time removes it. Each pass deletes rows past that time, even with every variable
+  at `0`: nobody can finish an expired attempt, and it isn't history. A connected
+  tool's tokens are in another table, which this doesn't touch.
 
 The worker logs the windows in effect when it starts, and what it deleted on each
 pass. It deletes in small batches, and when a pass stops at its per-table cap it
@@ -386,6 +431,10 @@ while rewriting it and needs enough free disk for a copy.
 **Container fails to start** — `docker compose logs cronium-app`. A
 `[PREFLIGHT]` error means a secret is missing or malformed; the message names
 the variable and the command to generate it.
+
+**A script fails at once with `IMAGE_PULL_FAILED` or `failed to ensure image`** — the
+orchestrator couldn't pull the image the message names, so check that the Docker host can
+reach that registry. See [The images a job runs in](#the-images-a-job-runs-in).
 
 **"Scheduling is offline" banner / scheduled events not running** — the
 `cronium-worker` service is down or can't reach the database. Check

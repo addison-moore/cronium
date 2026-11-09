@@ -141,9 +141,10 @@ pnpm dev:docker:build
 
 ## Common Issues
 
-### "No such image: cronium/runtime-api:latest"
+### A script fails with `IMAGE_PULL_FAILED` or `failed to ensure image`
 
-The runtime API image hasn't been built. Run:
+A job uses the images `pnpm dev:docker:build` builds if they're there. Without them it
+pulls the published ones, and that pull failed. To use your own build:
 
 ```bash
 pnpm dev:docker:build

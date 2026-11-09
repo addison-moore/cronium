@@ -22,6 +22,7 @@ import {
   jobs,
   jobTransitions,
   logs,
+  oauthStates,
   quotaUsage,
   scheduleIncidents,
   servers,
@@ -45,6 +46,7 @@ import {
   WorkflowLogLevel,
   WorkflowStepStatus,
 } from "@/shared/schema";
+import { inTimeZone } from "../in-time-zone";
 import { resetDatabase, closePool } from "./helpers/db-reset";
 import {
   seedEvent,
@@ -231,6 +233,30 @@ async function seedCredential(userId: string): Promise<number> {
     })
     .returning({ id: toolCredentials.id });
   return row!.id;
+}
+
+async function seedAttempt(
+  expiresAt: Date,
+  values: Partial<typeof oauthStates.$inferInsert> = {},
+): Promise<number> {
+  const userId = await seedUser();
+  const [row] = await db
+    .insert(oauthStates)
+    .values({
+      state: `state-${Math.random()}`,
+      userId,
+      toolId: await seedCredential(userId),
+      providerId: "google",
+      redirectUri: "https://example.test/api/oauth/callback",
+      expiresAt,
+      ...values,
+    })
+    .returning({ id: oauthStates.id });
+  return row!.id;
+}
+
+async function attemptExists(id: number): Promise<boolean> {
+  return (await countRows(oauthStates, eq(oauthStates.id, id))) === 1;
 }
 
 async function seedWebhook(userId: string): Promise<number> {
@@ -925,6 +951,72 @@ describe("the record an audit purge leaves", () => {
 });
 
 /**
+ * A row says itself when it stops being usable, so this table has no window. `pass`
+ * turns every window off, so each of these also shows that none is needed.
+ */
+describe("oauth_states", () => {
+  const MINUTE = 60_000;
+  const minutesFromNow = (minutes: number) =>
+    new Date(NOW.getTime() + minutes * MINUTE);
+
+  it("purges attempts past their expiry and keeps the ones still in time", async () => {
+    const expired = await seedAttempt(minutesFromNow(-1));
+    const longExpired = await seedAttempt(daysAgo(3650));
+    const inTime = await seedAttempt(minutesFromNow(1));
+
+    const result = await pass({});
+
+    expect(await attemptExists(expired)).toBe(false);
+    expect(await attemptExists(longExpired)).toBe(false);
+    expect(await attemptExists(inTime)).toBe(true);
+    expect(result.deleted.oauth_states).toBe(2);
+  });
+
+  // OAuthFlow.handleCallback takes a row while expires_at >= now, so nothing it would
+  // still take can go.
+  it("starts exactly where the callback stops accepting", async () => {
+    const accepted = await seedAttempt(NOW);
+    const refused = await seedAttempt(new Date(NOW.getTime() - 1));
+
+    await pass({});
+
+    expect(await attemptExists(accepted)).toBe(true);
+    expect(await attemptExists(refused)).toBe(false);
+  });
+
+  it("goes by when the attempt expires, not how old the row is", async () => {
+    const oldInTime = await seedAttempt(minutesFromNow(1), {
+      createdAt: daysAgo(3650),
+    });
+    const newExpired = await seedAttempt(minutesFromNow(-1), {
+      createdAt: NOW,
+    });
+
+    await pass({});
+
+    expect(await attemptExists(oldInTime)).toBe(true);
+    expect(await attemptExists(newExpired)).toBe(false);
+  });
+
+  // The column has no time zone and holds UTC, so a cutoff formatted in local time lands
+  // hours off: east of UTC that deletes attempts still in time. CI runs in UTC, where
+  // this can't fail by itself, so these name the zones.
+  describe.each(["Asia/Tokyo", "America/New_York"])("in %s", (zone) => {
+    inTimeZone(zone);
+
+    it("applies the expiry to the hour", async () => {
+      const expired = await seedAttempt(minutesFromNow(-60));
+      const inTime = await seedAttempt(minutesFromNow(60));
+
+      await pass({});
+
+      expect(await attemptExists(expired)).toBe(false);
+      expect(await attemptExists(inTime)).toBe(true);
+    });
+  });
+});
+
+/**
  * Left out of retention on purpose: see the comment on PURGES in retention.ts.
  * These pin the reason through the real QuotaManager, so anyone adding a purge, or
  * changing how quotas read, finds out what this rested on.
@@ -1069,6 +1161,7 @@ const NOTHING_DELETED = {
   webhook_deliveries: 0,
   webhook_logs: 0,
   webhook_events: 0,
+  oauth_states: 0,
 };
 
 describe("windows", () => {
@@ -1190,6 +1283,7 @@ describe("windows", () => {
         webhook_deliveries: 1,
         webhook_logs: 1,
         webhook_events: 1,
+        oauth_states: 0,
       });
       for (const table of [
         logs,
@@ -1264,6 +1358,16 @@ describe("windows", () => {
       const result = await runRetention({ now: NOW });
 
       expect(result.deleted).toEqual(NOTHING_DELETED);
+    });
+
+    it("still purges expired OAuth attempts with every variable at 0, since none covers them", async () => {
+      for (const name of VARIABLES) process.env[name] = "0";
+      const expired = await seedAttempt(daysAgo(1));
+
+      const result = await runRetention({ now: NOW });
+
+      expect(await attemptExists(expired)).toBe(false);
+      expect(result.deleted.oauth_states).toBe(1);
     });
 
     it("gives each table its own variable", async () => {
@@ -1535,6 +1639,7 @@ describe("running alongside other work", () => {
         webhook_deliveries: 1,
         webhook_logs: 1,
         webhook_events: 1,
+        oauth_states: 0,
       });
       expect(await countRows(scheduleIncidents)).toBe(1);
       // From its cause: Drizzle's own message is only the failed SQL.

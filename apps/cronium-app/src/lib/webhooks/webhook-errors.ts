@@ -30,6 +30,14 @@ export const NOT_QUEUED_MESSAGE =
   "This event wasn't sent to this webhook, because too many of its deliveries were already waiting. Retry this delivery once they've gone out.";
 
 /**
+ * What a webhook's history says about a delivery dropped from the queue because the webhook
+ * was disabled. It's a failed attempt that made no request, and earlier attempts have rows
+ * of their own. A manual retry sends it, and refuses to until the webhook is enabled.
+ */
+export const DROPPED_WHILE_DISABLED_MESSAGE =
+  "This delivery was dropped without a request, because its webhook was disabled while it was waiting. Enable the webhook and retry this delivery to send it.";
+
+/**
  * The queue has no room for an event, and nothing about it was stored. For a caller
  * with nobody to answer: the inbound endpoint gets this as a value, to answer with a 503.
  */
