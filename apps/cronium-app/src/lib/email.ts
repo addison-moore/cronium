@@ -1,3 +1,4 @@
+import type net from "net";
 import nodemailer from "nodemailer";
 import { db } from "@/server/db";
 import { env } from "../env.mjs";
@@ -9,6 +10,7 @@ import {
   UnreadableSettingError,
 } from "@/lib/security/unreadable-setting";
 import { failureWithStack } from "@/lib/pg-errors";
+import { connectWithSearch } from "@/lib/resolve-host";
 
 // Interface for email message
 interface EmailMessage {
@@ -72,6 +74,46 @@ export async function getSmtpSettings() {
   };
 }
 
+const SMTP_CONNECTION_TIMEOUT_MS = 10_000;
+
+/**
+ * Connects to the mail server here rather than in nodemailer, because a tool's host is
+ * whatever its owner typed. nodemailer asks c-ares first, but when that gets no address,
+ * which includes a name server that hangs under compose, it falls back to `dns.lookup`:
+ * see lib/resolve-host.ts.
+ *
+ * nodemailer doesn't time this part, so `connectionTimeout` is applied here too. It does
+ * the TLS itself, on this socket, for `secure` and STARTTLS alike.
+ */
+function connectToMailServer(
+  host: string,
+  port: number,
+  callback: (
+    error: Error | null,
+    socketOptions: false | { connection: net.Socket },
+  ) => void,
+): void {
+  const socket = connectWithSearch(host, port);
+  const fail = (error: Error) => {
+    clearTimeout(timer);
+    socket.destroy();
+    callback(error, false);
+  };
+  const timer = setTimeout(
+    () =>
+      fail(
+        Object.assign(new Error("Connection timeout"), { code: "ETIMEDOUT" }),
+      ),
+    SMTP_CONNECTION_TIMEOUT_MS,
+  );
+  socket.once("error", fail);
+  socket.once("connect", () => {
+    clearTimeout(timer);
+    socket.removeListener("error", fail);
+    callback(null, { connection: socket });
+  });
+}
+
 // Build a configured nodemailer transport. Single source of truth for SMTP
 // connection options (secure flag, timeouts, self-signed handling) shared by
 // the send paths and the connection tests.
@@ -91,9 +133,11 @@ export function buildSmtpTransport(opts: {
     // Bound every phase so a scheduled execution can't hang: connect and
     // greeting were bounded, but a stall after the greeting (mid-send) could
     // still hang forever without socketTimeout.
-    connectionTimeout: 10_000,
+    connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
     greetingTimeout: 10_000,
     socketTimeout: 20_000,
+    getSocket: (_options, callback) =>
+      connectToMailServer(opts.host, opts.port, callback),
     ...(opts.allowSelfSigned ? { tls: { rejectUnauthorized: false } } : {}),
   });
 }

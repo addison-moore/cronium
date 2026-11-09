@@ -50,7 +50,11 @@ async function withClient<T>(
   fn: (db: Db, client: MongoClient) => Promise<T>,
 ): Promise<T> {
   const { MongoClient } = await import("mongodb");
+  const { lookupWithSearch } = await import("@/lib/resolve-host");
   const client = new MongoClient(buildMongoUri(credentials), {
+    // The driver would look hosts up with `dns.lookup`: see lib/resolve-host.ts. A
+    // `mongodb+srv` name is a c-ares query already, but the hosts it returns aren't.
+    lookup: lookupWithSearch,
     serverSelectionTimeoutMS: Math.min(timeoutMs, 10_000),
     connectTimeoutMS: Math.min(timeoutMs, 10_000),
     socketTimeoutMS: timeoutMs,
