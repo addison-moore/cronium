@@ -952,6 +952,36 @@ describe("it shows what a read or a prompt returned", () => {
     expect(anyResult()).not.toBeInTheDocument();
   });
 
+  it("isn't shown when another credential was chosen and the first again before it came back", async () => {
+    const user = userEvent.setup();
+    const { answer } = answerLater();
+    renderSection(RUN_QUERY, [
+      credential("SQL"),
+      { id: 2, name: "other-sql", type: "SQL" } as Tool,
+    ]);
+
+    await user.click(pressed("Run Query Now"));
+    await waitFor(() => expect(mockExecute).toHaveBeenCalled());
+    for (const name of ["other-sql", "my-sql"]) {
+      await user.click(
+        screen.getByRole("combobox", { name: "Select Credential" }),
+      );
+      await user.click(await screen.findByRole("option", { name }));
+    }
+    await act(async () => {
+      answer({ success: true, result: ROWS });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Done",
+        description: "Returned 2 rows. It ran read-only, so no data changed.",
+      }),
+    );
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
   it("goes when it runs again, and a failure leaves none", async () => {
     const user = userEvent.setup();
     renderSection(RUN_QUERY);
