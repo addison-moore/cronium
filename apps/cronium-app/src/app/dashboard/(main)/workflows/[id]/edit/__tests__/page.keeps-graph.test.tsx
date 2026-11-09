@@ -795,6 +795,24 @@ describe("the workflow edit page", () => {
       });
     });
 
+    // With keepDirtyValues, react-hook-form merges an array no field registered item by
+    // item, so a removed item can come back. The tags are one field's, so one value.
+    it("keeps a removed tag removed", async () => {
+      mockWorkflow = storedWorkflow(WORKFLOW_ID, { tags: ["prod", "backups"] });
+      const user = await openPage();
+      const prod = await screen.findByText("prod", undefined, FIND);
+      await user.click(within(prod).getByRole("button"));
+      await waitFor(() => expect(screen.queryByText("prod")).toBeNull(), FIND);
+
+      mockWorkflow.description = "Ships the build";
+      await refocus();
+
+      expect(screen.queryByText("prod")).toBeNull();
+      expect(screen.getByText("backups")).toBeInTheDocument();
+      await save(user);
+      expect(mockWorkflow.tags).toEqual(["backups"]);
+    });
+
     // The canvas keeps the graph it opened on, so a save mustn't take the difference
     // between that and what's stored now for an edit, and replace the graph.
     it("leaves a graph changed elsewhere, which the canvas doesn't show", async () => {
