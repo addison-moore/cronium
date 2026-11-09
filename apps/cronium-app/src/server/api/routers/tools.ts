@@ -301,6 +301,13 @@ async function validateCredentialsForType(
   }
 }
 
+/** How a form run that worked is audited: a simulation or a check didn't really run. */
+const RUN_STATUS = {
+  simulate: "SIMULATED",
+  check: "CHECKED",
+  run: "SUCCESS",
+} as const;
+
 /**
  * Write the same `tool_action_logs` audit row the scheduler path writes
  * (see tool-action-executor.ts). `eventId` is null for manual/test runs —
@@ -313,7 +320,7 @@ async function logManualToolAction(entry: {
   actionId: string;
   parameters: unknown;
   result: unknown;
-  status: "SUCCESS" | "FAILURE" | "SIMULATED";
+  status: "SUCCESS" | "FAILURE" | (typeof RUN_STATUS)[keyof typeof RUN_STATUS];
   executionTime: number;
   errorMessage: string | null;
 }): Promise<void> {
@@ -1183,6 +1190,12 @@ export const toolsRouter = createTRPCRouter({
         toolId: z.number(),
         actionId: z.string(),
         parameters: z.record(z.string(), z.unknown()),
+        // What the press asks for. A simulation or a check reaches the action as
+        // `isTest`, and only one that declares it stops there, so the others are
+        // refused rather than run for real.
+        mode: z.enum(["simulate", "check", "run"]).optional(),
+        // What a page loaded before `mode` sends, for every press. It meant a
+        // simulation for an action that simulates, and the real run for the rest.
         isTest: z.boolean().default(false),
       }),
     )
@@ -1228,6 +1241,24 @@ export const toolsRouter = createTRPCRouter({
           throw validationError;
         }
 
+        const mode =
+          input.mode ??
+          (input.isTest && action.testRun.kind === "simulated"
+            ? "simulate"
+            : "run");
+        if (mode === "check" && !action.testRun.check) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${action.name} can't be checked, so nothing was run.`,
+          });
+        }
+        if (mode === "simulate" && action.testRun.kind !== "simulated") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${action.name} can't be simulated, so nothing was run.`,
+          });
+        }
+
         // Create execution context. Variables are handled via runtime
         // helpers, not this in-process context (no action uses these).
         const context = {
@@ -1241,7 +1272,7 @@ export const toolsRouter = createTRPCRouter({
             error: (message: string) => console.error(`[ERROR] ${message}`),
             debug: (message: string) => console.debug(`[DEBUG] ${message}`),
           },
-          isTest: input.isTest,
+          isTest: mode !== "run",
           onProgress: (progress: { step: string; percentage: number }) => {
             console.log(`[PROGRESS] ${progress.step}: ${progress.percentage}%`);
           },
@@ -1337,10 +1368,6 @@ export const toolsRouter = createTRPCRouter({
           };
         }
 
-        // `isTest` only stops an action that reads it, so asking for it says nothing
-        // about what ran. What the action declares does.
-        const simulated = input.isTest && action.testRun.kind === "simulated";
-
         // Audit the execution to tool_action_logs, mirroring the scheduler path
         // (tool-action-executor.ts).
         await logManualToolAction({
@@ -1349,7 +1376,7 @@ export const toolsRouter = createTRPCRouter({
           actionId: action.id,
           parameters: redactSecrets(input.parameters),
           result: redactSecrets(result),
-          status: simulated ? "SIMULATED" : "SUCCESS",
+          status: RUN_STATUS[mode],
           executionTime,
           errorMessage: null,
         });
@@ -1360,7 +1387,8 @@ export const toolsRouter = createTRPCRouter({
           executionTime,
           actionId: action.id,
           actionName: action.name,
-          simulated,
+          simulated: mode === "simulate",
+          checked: mode === "check",
         };
       } catch (error) {
         console.error("Error executing tool action:", failureWithStack(error));

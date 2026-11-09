@@ -71,6 +71,9 @@ const NO_TEST_MODE = "There's no test mode: this really";
 const SLACK_LINE = `${NO_TEST_MODE} posts to Slack.`;
 const WRITES_LINE = `${NO_TEST_MODE} changes your data, and can't be undone.`;
 const READS_LINE = "Really runs on this database, read-only.";
+// An action with a check has a test mode, so its question says only what's real.
+const CHECKED_WRITES_LINE =
+  "This really changes your data, and can't be undone.";
 const simulatedLine = (service: string) =>
   `Checks the parameters only. Nothing goes to ${service}, so this doesn't show that the credential works.`;
 
@@ -101,7 +104,31 @@ const DELETE = config("MONGODB", "delete-documents", {
   collection: "orders",
   filter: '{"_id":1}',
 });
+const UPDATE = config("MONGODB", "update-documents", {
+  collection: "orders",
+  filter: '{"status":"open"}',
+  update: '{"$set":{"status":"done"}}',
+});
+const EMAIL = config("EMAIL", "send-email", {
+  to: "a@example.test",
+  subject: "s",
+  body: "b",
+});
+const DISCORD = config("DISCORD", "discord-send-message", { content: "hi" });
 const PROMPT = config("AI", "ai-prompt", { userPrompt: "hi" });
+
+/** What the form sends for each kind of press. */
+const asked = (
+  value: ToolActionConfig,
+  mode: "simulate" | "check" | "run",
+) => ({
+  toolId: 1,
+  actionId: value.actionId,
+  parameters: value.parameters,
+  mode,
+  // A server from before `mode` goes by this alone.
+  isTest: mode !== "run",
+});
 
 /** The form the section sits in, which is why a plain button in it would submit. */
 function section(value: ToolActionConfig) {
@@ -183,18 +210,6 @@ describe("the button says what it will do", () => {
   it.each<[string, string, string, string]>([
     ["SLACK", "slack-send-message", "Send Message Now", SLACK_LINE],
     [
-      "DISCORD",
-      "discord-send-message",
-      "Send Message Now",
-      `${NO_TEST_MODE} posts to Discord.`,
-    ],
-    [
-      "EMAIL",
-      "send-email",
-      "Send Email Now",
-      `${NO_TEST_MODE} sends the email.`,
-    ],
-    [
       "AI",
       "ai-prompt",
       "Prompt LLM Now",
@@ -205,8 +220,6 @@ describe("the button says what it will do", () => {
     ["MONGODB", "find-documents", "Find Documents Now", READS_LINE],
     ["MONGODB", "aggregate-documents", "Aggregate Documents Now", READS_LINE],
     ["MONGODB", "insert-documents", "Insert Documents Now", WRITES_LINE],
-    ["MONGODB", "update-documents", "Update Documents Now", WRITES_LINE],
-    ["MONGODB", "delete-documents", "Delete Documents Now", WRITES_LINE],
     ["NOTION", "create-page", "Simulate", simulatedLine("Notion")],
     ["NOTION", "search-content", "Simulate", simulatedLine("Notion")],
     ["NOTION", "update-database", "Simulate", simulatedLine("Notion")],
@@ -232,6 +245,249 @@ describe("the button says what it will do", () => {
     expect(
       screen.queryByRole("button", { name: "Test Action" }),
     ).not.toBeInTheDocument();
+    // Nothing stops these short of the real thing, so there's nothing to offer.
+    expect(
+      screen.queryByRole("button", {
+        name: /^(Count Matches|Check Login|Check Webhook)$/,
+      }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+const COUNT_DELETE_LINE =
+  "Count Matches says how many documents the filter matches, and deletes nothing.";
+
+describe("an action with a check offers it beside the real run", () => {
+  it.each<[string, ToolActionConfig, string, string, string, string]>([
+    [
+      "a MongoDB delete",
+      DELETE,
+      "Count Matches",
+      COUNT_DELETE_LINE,
+      "Delete Documents Now",
+      "Delete Documents Now really changes your data, and can't be undone.",
+    ],
+    [
+      "a MongoDB update",
+      UPDATE,
+      "Count Matches",
+      "Count Matches says how many documents the filter matches, and changes nothing. It doesn't try the update.",
+      "Update Documents Now",
+      "Update Documents Now really changes your data, and can't be undone.",
+    ],
+    [
+      "an email",
+      EMAIL,
+      "Check Login",
+      "Check Login signs in to the mail server, and sends nothing.",
+      "Send Email Now",
+      "Send Email Now really sends the email.",
+    ],
+    [
+      "a Discord message",
+      DISCORD,
+      "Check Webhook",
+      "Check Webhook asks Discord whether the webhook exists, and posts nothing.",
+      "Send Message Now",
+      "Send Message Now really posts to Discord.",
+    ],
+  ])(
+    "%s, with a line for each button",
+    (_, value, check, checkLine, button, buttonLine) => {
+      renderSection(value);
+
+      expect(pressed(check)).toHaveAccessibleDescription(checkLine);
+      expect(pressed(button)).toHaveAccessibleDescription(buttonLine);
+      expect(screen.getByText(checkLine)).toBeVisible();
+      expect(screen.getByText(buttonLine)).toBeVisible();
+      expect(screen.queryByText(/no test mode/)).not.toBeInTheDocument();
+    },
+  );
+
+  it("checks straight away, asking for a check, with nothing to confirm", async () => {
+    const user = userEvent.setup();
+    renderSection(DELETE);
+
+    await user.click(pressed("Count Matches"));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockExecute).toHaveBeenCalledWith(asked(DELETE, "check")),
+    );
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it("still asks before the real run, and asks for the real run", async () => {
+    const user = userEvent.setup();
+    renderSection(DELETE);
+
+    await user.click(pressed("Delete Documents Now"));
+
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveTextContent(
+      `${CHECKED_WRITES_LINE} It uses the credential my-mongodb.`,
+    );
+    expect(dialog).not.toHaveTextContent(/no test mode/);
+    expect(mockExecute).not.toHaveBeenCalled();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete Documents" }),
+    );
+
+    await waitFor(() =>
+      expect(mockExecute).toHaveBeenCalledWith(asked(DELETE, "run")),
+    );
+  });
+
+  it("can't be pressed again, either way, while a check runs", async () => {
+    const user = userEvent.setup();
+    const { answer } = answerLater();
+    renderSection(EMAIL);
+
+    await user.click(pressed("Check Login"));
+    await waitFor(() => expect(pressed("Check Login")).toBeDisabled());
+    expect(pressed("Send Email Now")).toBeDisabled();
+    await user.click(pressed("Check Login"));
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answer({
+        success: true,
+        checked: true,
+        result: { host: "smtp.example.test", signedIn: true },
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(pressed("Check Login")).toBeEnabled());
+    expect(pressed("Send Email Now")).toBeEnabled();
+  });
+
+  it.each<[string, ToolActionConfig, string, unknown, string]>([
+    [
+      "a delete without Many",
+      DELETE,
+      "Count Matches",
+      { matchedCount: 3, many: false },
+      "3 documents match the filter, but without Many only the first would be deleted. Nothing was deleted, so this doesn't show that the delete would be allowed.",
+    ],
+    [
+      "an update with Upsert",
+      UPDATE,
+      "Count Matches",
+      { matchedCount: 0, many: false, upsert: true },
+      "No documents match the filter, so Upsert would add one. Nothing was changed, so this doesn't show that the update would be accepted.",
+    ],
+    [
+      "an email",
+      EMAIL,
+      "Check Login",
+      { host: "smtp.example.test", signedIn: true },
+      "smtp.example.test accepted the login. Nothing was sent, so this doesn't show that the email would be delivered.",
+    ],
+    [
+      "a Discord message",
+      DISCORD,
+      "Check Webhook",
+      { webhookName: "Cronium Alerts" },
+      "The webhook Cronium Alerts exists. Nothing was posted, so this doesn't show that Discord would accept the message.",
+    ],
+  ])(
+    "says what a check of %s showed, and what it didn't",
+    async (_, value, check, result, description) => {
+      const user = userEvent.setup();
+      mockExecute.mockResolvedValue({ success: true, checked: true, result });
+      renderSection(value);
+
+      await user.click(pressed(check));
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Checked",
+          description,
+        }),
+      );
+      expect(mockToast).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  // Only a server that doesn't know the check would do this, and then it really deleted.
+  it("says what really happened when a check came back as a real run", async () => {
+    const user = userEvent.setup();
+    mockExecute.mockResolvedValue({
+      success: true,
+      checked: false,
+      result: { deletedCount: 1 },
+    });
+    renderSection(DELETE);
+
+    await user.click(pressed("Count Matches"));
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Done",
+        description: "Deleted 1 document.",
+      }),
+    );
+  });
+
+  it.each<[string, () => void, string]>([
+    [
+      "the database said no",
+      () =>
+        mockExecute.mockResolvedValue({
+          success: false,
+          error: "not authorized on shop to execute command",
+        }),
+      "not authorized on shop to execute command",
+    ],
+    [
+      "no answer came back",
+      () => mockExecute.mockRejectedValue({ message: "Failed to fetch" }),
+      "Failed to fetch",
+    ],
+    [
+      "the server broke",
+      () =>
+        mockExecute.mockRejectedValue({
+          message: "An internal error occurred",
+          data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+        }),
+      "An internal error occurred",
+    ],
+  ])(
+    "says a check failed when %s, and never that it may have run",
+    async (_, answer, description) => {
+      const user = userEvent.setup();
+      answer();
+      renderSection(DELETE);
+
+      await user.click(pressed("Count Matches"));
+
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Count Matches failed",
+          description,
+          variant: "destructive",
+        }),
+      );
+    },
+  );
+
+  it("says a template value won't be filled in for the check either", () => {
+    renderSection(
+      config("MONGODB", "delete-documents", {
+        collection: "orders",
+        filter: '{"_id":"{{cronium.input.id}}"}',
+      }),
+    );
+
+    const note =
+      "Template values such as {{cronium.input.id}} aren't filled in here: they go as written.";
+    expect(pressed("Count Matches")).toHaveAccessibleDescription(
+      `${COUNT_DELETE_LINE} ${note}`,
+    );
+    expect(screen.getByText(note)).toBeVisible();
   });
 });
 
@@ -245,7 +501,7 @@ describe("it asks before a run that really does something", () => {
       `${NO_TEST_MODE} sends the prompt to the model, and your provider may charge for it.`,
     ],
     ["a SQL write", EXECUTE, "Execute Statement Now", WRITES_LINE],
-    ["a MongoDB delete", DELETE, "Delete Documents Now", WRITES_LINE],
+    ["a MongoDB delete", DELETE, "Delete Documents Now", CHECKED_WRITES_LINE],
   ])(
     "sends nothing for %s until it's confirmed",
     async (_, value, button, line) => {
@@ -268,12 +524,7 @@ describe("it asks before a run that really does something", () => {
       await user.click(within(dialog).getByRole("button", { name }));
 
       await waitFor(() => expect(mockExecute).toHaveBeenCalledTimes(1));
-      expect(mockExecute).toHaveBeenCalledWith({
-        toolId: 1,
-        actionId: value.actionId,
-        parameters: value.parameters,
-        isTest: true,
-      });
+      expect(mockExecute).toHaveBeenCalledWith(asked(value, "run"));
       await waitFor(() =>
         expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
       );
@@ -353,12 +604,12 @@ describe("it asks before a run that really does something", () => {
     expect(mockSubmit).not.toHaveBeenCalled();
   });
 
-  it.each<[string, ToolActionConfig, string]>([
-    ["a simulation", TRELLO, "Simulate"],
-    ["a read", RUN_QUERY, "Run Query Now"],
+  it.each<[string, ToolActionConfig, string, "simulate" | "run"]>([
+    ["a simulation", TRELLO, "Simulate", "simulate"],
+    ["a read", RUN_QUERY, "Run Query Now", "run"],
   ])(
     "runs %s straight away, with nothing to confirm",
-    async (_, value, button) => {
+    async (_, value, button, mode) => {
       const user = userEvent.setup();
       renderSection(value);
 
@@ -366,12 +617,7 @@ describe("it asks before a run that really does something", () => {
 
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
       await waitFor(() =>
-        expect(mockExecute).toHaveBeenCalledWith({
-          toolId: 1,
-          actionId: value.actionId,
-          parameters: value.parameters,
-          isTest: true,
-        }),
+        expect(mockExecute).toHaveBeenCalledWith(asked(value, mode)),
       );
       expect(mockSubmit).not.toHaveBeenCalled();
     },

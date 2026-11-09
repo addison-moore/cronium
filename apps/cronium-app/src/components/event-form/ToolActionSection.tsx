@@ -36,6 +36,7 @@ import {
   FileText,
   AlertCircle,
   Play,
+  SearchCheck,
   TestTube,
   Info,
   X,
@@ -123,6 +124,22 @@ const getActionTypeColor = (action: ToolAction): string => {
 const runButtonLabel = (action: ToolAction): string =>
   action.testRun.kind === "simulated" ? "Simulate" : `${action.name} Now`;
 
+/**
+ * What a press asks the server for. A simulation and a check reach the action as
+ * `isTest`, and the server refuses either for an action that doesn't declare it.
+ */
+type RunMode = "simulate" | "check" | "run";
+
+// The main button, beside any check.
+const mainRunMode = (action: ToolAction): RunMode =>
+  action.testRun.kind === "simulated" ? "simulate" : "run";
+
+/** The action and button pressed. Another action can be chosen while it runs. */
+interface Press {
+  action: ToolAction;
+  mode: RunMode;
+}
+
 // A run that changes nothing needs no question: a simulation contacts nothing, and a read
 // can't write.
 const asksBeforeRunning = ({ kind }: ActionTestRun): boolean =>
@@ -136,10 +153,12 @@ const RUN_SUCCEEDED_TITLE: Record<ActionTestRun["kind"], string> = {
   writes: "Done",
 };
 
-const runFailedTitle = (action: ToolAction): string =>
-  action.testRun.kind === "simulated"
-    ? "Simulation failed"
-    : `${action.name} failed`;
+const runFailedTitle = ({ action, mode }: Press): string => {
+  if (mode === "check") {
+    return `${action.testRun.check?.label ?? "Check"} failed`;
+  }
+  return mode === "simulate" ? "Simulation failed" : `${action.name} failed`;
+};
 
 const firstTemplateValue = (value: unknown): string | undefined => {
   if (typeof value === "string") return /\{\{[^{}]+\}\}/.exec(value)?.[0];
@@ -202,6 +221,8 @@ export default function ToolActionSection({
   const [parameters, setParameters] = useState<Record<string, unknown>>({});
   const [askingToRun, setAskingToRun] = useState(false);
   const runExplanationId = useId();
+  const checkExplanationId = useId();
+  const runNoteId = useId();
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
     null,
   );
@@ -431,64 +452,82 @@ export default function ToolActionSection({
     }
   };
 
-  // The answer is about the action that was pressed, and another can be chosen meanwhile.
-  const pressedAction = useRef<ToolAction | null>(null);
+  // The answer is about the action and button that were pressed, and another action can
+  // be chosen meanwhile.
+  const pressed = useRef<Press | null>(null);
 
   const runActionMutation = trpc.tools.executeAction.useMutation({
     onSuccess: (answer) => {
-      const action = pressedAction.current;
-      if (!action) return;
+      const press = pressed.current;
+      if (!press) return;
+      const { action } = press;
       if (!answer.success) {
         toast({
-          title: runFailedTitle(action),
+          title: runFailedTitle(press),
           description: answer.error,
           variant: "destructive",
         });
         return;
       }
-      toast({
-        title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
-        description: action.testRun.succeeded(answer.result),
-      });
+      // Go by what the server says ran. One that didn't know the check ran it for real.
+      const check = action.testRun.check;
+      toast(
+        answer.checked && check
+          ? { title: "Checked", description: check.succeeded(answer.result) }
+          : {
+              title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
+              description: action.testRun.succeeded(answer.result),
+            },
+      );
       console.log("Tool action result:", answer.result);
     },
     onError: (error) => {
-      const action = pressedAction.current;
-      if (!action) return;
+      const press = pressed.current;
+      if (!press) return;
       const message = trpcErrorMessage(error, "The server gave no reason.");
       // The server only says no before running anything. With no answer, or a broken one,
       // nobody here can tell, and a proxy can give up on a run that goes on without it.
+      // A simulation or a check changes nothing either way.
       const refused = (error.data?.httpStatus ?? 500) < 500;
+      const mayHaveRun =
+        !refused &&
+        press.mode === "run" &&
+        asksBeforeRunning(press.action.testRun);
       toast({
-        title: runFailedTitle(action),
-        description:
-          refused || !asksBeforeRunning(action.testRun)
-            ? message
-            : `${message} It may still have run.`,
+        title: runFailedTitle(press),
+        description: mayHaveRun ? `${message} It may still have run.` : message,
         variant: "destructive",
       });
     },
   });
 
-  const runAction = () => {
+  const runAction = (mode: RunMode) => {
     if (!selectedTool || !selectedAction) return;
 
-    pressedAction.current = selectedAction;
+    pressed.current = { action: selectedAction, mode };
     runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
       parameters,
-      isTest: true,
+      mode,
+      // A server from before `mode` goes by this alone.
+      isTest: mode !== "run",
     });
   };
 
   const handleRunPressed = () => {
-    if (selectedAction && asksBeforeRunning(selectedAction.testRun)) {
+    if (!selectedAction) return;
+    if (asksBeforeRunning(selectedAction.testRun)) {
       setAskingToRun(true);
     } else {
-      runAction();
+      runAction(mainRunMode(selectedAction));
     }
   };
+
+  // Which button's run is going, for its spinner.
+  const runningMode = runActionMutation.isPending
+    ? runActionMutation.variables?.mode
+    : undefined;
 
   const runNote = selectedAction
     ? templateValueNote(selectedAction, parameters)
@@ -999,39 +1038,81 @@ export default function ToolActionSection({
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    {/* The button names the action, which can be too long to fit beside this. */}
+                    {/* The buttons name the action, which can be too long to fit beside this. */}
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                       <Label>Configure Parameters</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRunPressed}
-                        disabled={runActionMutation.isPending}
-                        aria-describedby={runExplanationId}
-                        className="ml-auto flex items-center gap-2"
-                      >
-                        {runActionMutation.isPending ? (
-                          <Spinner size="sm" />
-                        ) : selectedAction.testRun.kind === "simulated" ? (
-                          <TestTube className="h-4 w-4" />
-                        ) : (
-                          <Play className="h-4 w-4" />
+                      <div className="ml-auto flex flex-wrap justify-end gap-2">
+                        {selectedAction.testRun.check && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => runAction("check")}
+                            disabled={runActionMutation.isPending}
+                            aria-describedby={
+                              runNote
+                                ? `${checkExplanationId} ${runNoteId}`
+                                : checkExplanationId
+                            }
+                            className="flex items-center gap-2"
+                          >
+                            {runningMode === "check" ? (
+                              <Spinner size="sm" />
+                            ) : (
+                              <SearchCheck className="h-4 w-4" />
+                            )}
+                            {selectedAction.testRun.check.label}
+                          </Button>
                         )}
-                        {runButtonLabel(selectedAction)}
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRunPressed}
+                          disabled={runActionMutation.isPending}
+                          aria-describedby={
+                            runNote
+                              ? `${runExplanationId} ${runNoteId}`
+                              : runExplanationId
+                          }
+                          className="flex items-center gap-2"
+                        >
+                          {runningMode !== undefined &&
+                          runningMode !== "check" ? (
+                            <Spinner size="sm" />
+                          ) : selectedAction.testRun.kind === "simulated" ? (
+                            <TestTube className="h-4 w-4" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                          {runButtonLabel(selectedAction)}
+                        </Button>
+                      </div>
                     </div>
-                    <div
-                      id={runExplanationId}
-                      className={cn(
-                        "text-right text-sm",
-                        asksBeforeRunning(selectedAction.testRun)
-                          ? "text-warning-text"
-                          : "text-muted-foreground",
+                    <div className="text-right text-sm">
+                      {selectedAction.testRun.check && (
+                        <p
+                          id={checkExplanationId}
+                          className="text-muted-foreground"
+                        >
+                          {selectedAction.testRun.check.explains}
+                        </p>
                       )}
-                    >
-                      <p>{selectedAction.testRun.explains}</p>
-                      {runNote && <p>{runNote}</p>}
+                      <div
+                        className={
+                          asksBeforeRunning(selectedAction.testRun)
+                            ? "text-warning-text"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {/* Beside a check, the line names the button it's about. */}
+                        <p id={runExplanationId}>
+                          {selectedAction.testRun.check
+                            ? `${runButtonLabel(selectedAction)} ${selectedAction.testRun.check.runDoes}.`
+                            : selectedAction.testRun.explains}
+                        </p>
+                        {runNote && <p id={runNoteId}>{runNote}</p>}
+                      </div>
                     </div>
                   </div>
 
@@ -1053,7 +1134,7 @@ export default function ToolActionSection({
                         ? "destructive"
                         : "default"
                     }
-                    onConfirm={runAction}
+                    onConfirm={() => runAction("run")}
                   />
 
                   <ActionParameterForm

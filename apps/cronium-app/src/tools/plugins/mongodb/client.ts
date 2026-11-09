@@ -231,6 +231,24 @@ export async function updateDocuments(
   });
 }
 
+/**
+ * How many documents a filter matches, for a check of an update or a delete. The filter is
+ * revived as theirs is, and nothing is written. `countDocuments` refuses `$where` and
+ * `$near`, which a write takes, so a check with one fails rather than counting.
+ */
+export async function countMatchingDocuments(
+  credentials: MongoCredentials,
+  input: { collection: string; filter: Record<string, unknown> },
+  opts: MongoWriteOptions,
+): Promise<number> {
+  const filter = await reviveExtendedJson(input.filter);
+  return withClient(credentials, opts.timeoutMs, (db) =>
+    db
+      .collection(input.collection)
+      .countDocuments(filter, { maxTimeMS: opts.timeoutMs }),
+  );
+}
+
 export async function deleteDocuments(
   credentials: MongoCredentials,
   input: { collection: string; filter: Record<string, unknown>; many: boolean },

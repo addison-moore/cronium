@@ -40,9 +40,31 @@ export interface ActionTestRun {
    * - `writes`: really changes data, for good.
    */
   kind: "simulated" | "reads" | "sends" | "spends" | "writes";
-  /** Said beside the button, and again when asking first. */
+  /**
+   * Said beside the button, and again when asking first. With a check, the lines beside
+   * the buttons come from it, and this is only said when asking.
+   */
   explains: string;
   /** What the toast says after a run that worked, from what the action returned. */
+  succeeded: (result: unknown) => string;
+  /**
+   * What the action does instead when `isTest` is set, for one whose real run does
+   * something: it reaches the same service with the same credential and parameters, and
+   * stops before anything changes or goes out. The form offers it beside the real run,
+   * and the server only asks for one from an action that declares it.
+   */
+  check?: ActionCheck;
+}
+
+/** A check of an action, offered beside its real run. Build it with `checkFirst`. */
+export interface ActionCheck {
+  /** Its button, which says what it checks, such as `Count Matches`. */
+  label: string;
+  /** Said beside the buttons, first, starting with `label`. */
+  explains: string;
+  /** What the real run does, finishing "<its button> ...", said after `explains`. */
+  runDoes: string;
+  /** What the toast says after a check that worked: what it showed, then what it didn't. */
   succeeded: (result: unknown) => string;
 }
 

@@ -1525,6 +1525,155 @@ describe("executeAction", () => {
     expect(JSON.stringify(logged)).not.toContain(PLAINTEXT_SECRET);
   });
 
+  /**
+   * The form asks for a check, a simulation or the real run, and a check or a simulation
+   * reaches the action as `isTest`. Only an action that declares one stops there, so the
+   * server has to refuse the rest rather than run them for real under a button that said
+   * nothing would change.
+   */
+  describe("what a press asks for", () => {
+    const CHECKS = {
+      kind: "writes",
+      explains: "",
+      succeeded: () => "",
+      check: {
+        label: "Count Matches",
+        explains: "",
+        runDoes: "",
+        succeeded: () => "",
+      },
+    };
+    const press = (extra: Record<string, unknown>) =>
+      userCaller().tools.executeAction({
+        toolId: 5,
+        actionId: "slack-send-message",
+        parameters: { channel: "#general" },
+        ...extra,
+      });
+
+    it("runs a check with isTest, says so, and records it as one", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "check" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: true }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        result: { delivered: true },
+        checked: true,
+        simulated: false,
+      });
+      expect(dbState.insertCalls).toHaveLength(1);
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "CHECKED" });
+    });
+
+    it("runs the real thing when that's asked for, on an action with a check", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "run" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: false }),
+      );
+      expect(result).toMatchObject({
+        success: true,
+        checked: false,
+        simulated: false,
+      });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+    });
+
+    it("records a check that failed as a failure", async () => {
+      dbState.toolRows = [toolRow()];
+      mockGetServerAction.mockReturnValue(
+        slackAction({
+          testRun: CHECKS,
+          execute: jest
+            .fn()
+            .mockResolvedValue({ success: false, error: "not authorized" }),
+        }),
+      );
+
+      const result = await press({ mode: "check" });
+
+      expect(result).toMatchObject({ success: false, error: "not authorized" });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "FAILURE" });
+    });
+
+    it.each<[string, Record<string, unknown>, string]>([
+      [
+        "a check of an action that has none",
+        { mode: "check" },
+        "Send Message can't be checked, so nothing was run.",
+      ],
+      [
+        "a simulation of an action that would really run",
+        { mode: "simulate" },
+        "Send Message can't be simulated, so nothing was run.",
+      ],
+    ])(
+      "refuses %s, before running or counting anything",
+      async (_, extra, message) => {
+        dbState.toolRows = [toolRow()];
+        const action = slackAction();
+        mockGetServerAction.mockReturnValue(action);
+
+        await expect(press(extra)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message,
+        });
+        expect(action.execute).not.toHaveBeenCalled();
+        expect(mockCheckRateLimit).not.toHaveBeenCalled();
+        expect(dbState.insertCalls).toHaveLength(0);
+      },
+    );
+
+    it("simulates when that's asked for, on an action that simulates", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: SIMULATES });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ mode: "simulate" });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: true }),
+      );
+      expect(result).toMatchObject({ simulated: true, checked: false });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SIMULATED" });
+    });
+
+    // A page loaded before checks existed sends `isTest` for every press, and its button
+    // said the real thing would happen. A server that read that as a check would delete
+    // nothing and say "Deleted undefined documents".
+    it("keeps what a page from before checks meant by isTest: the real run", async () => {
+      dbState.toolRows = [toolRow()];
+      const action = slackAction({ testRun: CHECKS });
+      mockGetServerAction.mockReturnValue(action);
+
+      const result = await press({ isTest: true });
+
+      expect(action.execute).toHaveBeenCalledWith(
+        expect.anything(),
+        { channel: "#general" },
+        expect.objectContaining({ isTest: false }),
+      );
+      expect(result).toMatchObject({ checked: false, simulated: false });
+      expect(dbState.insertCalls[0]).toMatchObject({ status: "SUCCESS" });
+    });
+  });
+
   it("writes no audit row when the run is refused before execution (rate limit)", async () => {
     dbState.toolRows = [toolRow()];
     const action = slackAction();

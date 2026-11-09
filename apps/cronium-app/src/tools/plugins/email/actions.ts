@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "../../utils/zod-to-parameters";
-import { counted, sendRun } from "@/tools/utils/test-run";
+import { checkFirst, counted, sendRun } from "@/tools/utils/test-run";
 import { emailCredentialsSchema, type EmailCredentials } from "./schemas";
 
 type SendEmailParams = {
@@ -72,6 +72,15 @@ export const emailActions: ToolAction[] = [
       }) =>
         `The mail server accepted it for ${counted(accepted.length, "recipient")}.` +
         (rejected.length > 0 ? ` It refused ${rejected.join(", ")}.` : ""),
+      checkFirst(
+        "Check Login",
+        "signs in to the mail server, and sends nothing",
+        ({ host, signedIn }: { host: string; signedIn: boolean }) =>
+          (signedIn
+            ? `${host} accepted the login.`
+            : `${host} answered, and didn't ask for a login.`) +
+          " Nothing was sent, so this doesn't show that the email would be delivered.",
+      ),
     ),
     inputSchema: sendEmailSchema,
     parameters: safeZodToParameters(sendEmailSchema),
@@ -96,9 +105,6 @@ export const emailActions: ToolAction[] = [
       params: SendEmailParams,
       context: ExecutionContext,
     ) {
-      context.logger.info(
-        `Sending email to: ${Array.isArray(params.to) ? params.to.join(", ") : String(params.to)}`,
-      );
       context.onProgress?.({ step: "Validating credentials", percentage: 10 });
 
       // Validate email credentials
@@ -110,6 +116,17 @@ export const emailActions: ToolAction[] = [
       }
 
       const emailCreds = validationResult.data;
+      // One set of settings for the send and for the form's Check Login, so a check
+      // can't sign in somewhere the send wouldn't.
+      const smtp = {
+        host: emailCreds.smtpHost,
+        port: emailCreds.smtpPort,
+        user: emailCreds.smtpUser,
+        password: emailCreds.smtpPassword,
+        fromEmail: emailCreds.fromEmail,
+        fromName: emailCreds.fromName ?? "Cronium",
+        secure: emailCreds.enableSSL,
+      };
       context.onProgress?.({
         step: "Connecting to SMTP server",
         percentage: 30,
@@ -117,7 +134,21 @@ export const emailActions: ToolAction[] = [
 
       // Dynamic import keeps nodemailer out of any client bundle that also
       // references this module for types.
-      const { sendEmailDetailed } = await import("@/lib/email");
+      const { checkSmtpLogin, sendEmailDetailed } = await import("@/lib/email");
+
+      // The form's Check Login: connect and sign in as the send would, then leave
+      // before naming a sender or a recipient.
+      if (context.isTest) {
+        const { signedIn } = await checkSmtpLogin(smtp);
+        context.logger.info(
+          `SMTP check: ${smtp.host} ${signedIn ? "accepted the login" : "didn't ask for a login"}, and nothing was sent`,
+        );
+        return { host: smtp.host, signedIn };
+      }
+
+      context.logger.info(
+        `Sending email to: ${Array.isArray(params.to) ? params.to.join(", ") : String(params.to)}`,
+      );
 
       const recipients = params.to
         .split(",")
@@ -136,15 +167,7 @@ export const emailActions: ToolAction[] = [
             ? params.body
             : `<p>${escapeHtml(params.body).replace(/\n/g, "<br>")}</p>`,
         },
-        {
-          host: emailCreds.smtpHost,
-          port: emailCreds.smtpPort,
-          user: emailCreds.smtpUser,
-          password: emailCreds.smtpPassword,
-          fromEmail: emailCreds.fromEmail,
-          fromName: emailCreds.fromName ?? "Cronium",
-          secure: emailCreds.enableSSL,
-        },
+        smtp,
       );
 
       context.onProgress?.({ step: "Email sent", percentage: 100 });

@@ -20,6 +20,8 @@ import {
   deleteDocuments,
 } from "../client";
 import { findDocumentsAction } from "../actions/find-documents";
+import { updateDocumentsAction } from "../actions/update-documents";
+import { deleteDocumentsAction } from "../actions/delete-documents";
 import type { MongoCredentials } from "../schemas";
 import type { ExecutionContext } from "@/tools/types/tool-plugin";
 
@@ -49,7 +51,7 @@ function credsFromUrl(raw: string): MongoCredentials {
   };
 }
 
-function ctx(): ExecutionContext {
+function ctx(isTest = false): ExecutionContext {
   return {
     variables: { get: jest.fn(), set: jest.fn() },
     logger: {
@@ -58,7 +60,21 @@ function ctx(): ExecutionContext {
       error: jest.fn(),
       debug: jest.fn(),
     },
+    isTest,
   };
+}
+
+async function dropCollection(database: string, collection: string) {
+  if (!url) return;
+  const { MongoClient } = await import("mongodb");
+  const client = new MongoClient(url);
+  try {
+    await client.db(database).collection(collection).drop();
+  } catch {
+    // Collection may not exist if the suite failed early.
+  } finally {
+    await client.close();
+  }
 }
 
 describeIf("mongodb client (integration)", () => {
@@ -214,5 +230,111 @@ describeIf("mongodb client (integration)", () => {
     )) as { documents?: Record<string, unknown>[]; documentCount?: number };
     expect(res.documentCount).toBe(1);
     expect(res.documents?.[0]?.name).toBe("a");
+  });
+});
+
+/**
+ * The event form's Count Matches, on a real server: the actions run with `isTest`, count
+ * what the real run would touch, and change nothing.
+ */
+describeIf("a check of an update or a delete (integration)", () => {
+  const creds = url ? credsFromUrl(url) : ({} as MongoCredentials);
+  const collection = `cronium_it_check_${Date.now()}`;
+  const everything = async () =>
+    (
+      await findDocuments(
+        creds,
+        { collection, sort: { _id: 1 } },
+        { maxDocuments: 100, maxBytes: 1024 * 1024, timeoutMs: 15_000 },
+      )
+    ).documents;
+
+  beforeEach(async () => {
+    await dropCollection(creds.database, collection);
+    await insertDocuments(
+      creds,
+      {
+        collection,
+        documents: [
+          { _id: 1, status: "open", at: { $date: "2026-01-01T00:00:00Z" } },
+          { _id: 2, status: "open", at: { $date: "2026-02-01T00:00:00Z" } },
+          { _id: 3, status: "shipped", at: { $date: "2026-03-01T00:00:00Z" } },
+        ],
+      },
+      { timeoutMs: 15_000 },
+    );
+  });
+
+  afterAll(() => dropCollection(creds.database, collection));
+
+  it("counts what a delete would take, deletes nothing, and matches the real run", async () => {
+    const parameters = { collection, filter: '{"status":"open"}', many: true };
+    const before = await everything();
+
+    const checked = await deleteDocumentsAction.execute(
+      creds,
+      parameters,
+      ctx(true),
+    );
+
+    expect(checked).toEqual({ matchedCount: 2, many: true });
+    expect(await everything()).toEqual(before);
+
+    const ran = await deleteDocumentsAction.execute(creds, parameters, ctx());
+    expect(ran).toEqual({ deletedCount: 2 });
+  });
+
+  it("counts what an update would match, and changes nothing", async () => {
+    const parameters = {
+      collection,
+      filter: '{"status":"open"}',
+      update: '{"$set":{"status":"done"}}',
+    };
+    const before = await everything();
+
+    const checked = await updateDocumentsAction.execute(
+      creds,
+      parameters,
+      ctx(true),
+    );
+
+    expect(checked).toEqual({ matchedCount: 2, many: false, upsert: false });
+    expect(await everything()).toEqual(before);
+  });
+
+  it("revives Extended JSON in the filter, as the real run does", async () => {
+    const parameters = {
+      collection,
+      filter: '{"at":{"$gte":{"$date":"2026-01-15T00:00:00Z"}}}',
+      many: true,
+    };
+
+    const checked = await deleteDocumentsAction.execute(
+      creds,
+      parameters,
+      ctx(true),
+    );
+    const ran = await deleteDocumentsAction.execute(creds, parameters, ctx());
+
+    expect(checked).toEqual({ matchedCount: 2, many: true });
+    expect(ran).toEqual({ deletedCount: 2 });
+  });
+
+  // countDocuments refuses $where, which a delete accepts. The check has to fail, saying
+  // why, rather than count something else.
+  it("fails, saying why, on a filter the count can't take", async () => {
+    const before = await everything();
+
+    const checked = await deleteDocumentsAction.execute(
+      creds,
+      { collection, filter: '{"$where":"this.status === \\"open\\""}' },
+      ctx(true),
+    );
+
+    expect(checked).toMatchObject({
+      success: false,
+      error: expect.stringContaining("$where"),
+    });
+    expect(await everything()).toEqual(before);
   });
 });

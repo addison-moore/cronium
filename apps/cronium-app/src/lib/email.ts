@@ -72,6 +72,12 @@ export async function getSmtpSettings() {
   };
 }
 
+/** What nodemailer reports to a logger: an entry, then a message. */
+type SmtpLogger = Record<
+  "trace" | "debug" | "info" | "warn" | "error" | "fatal",
+  (entry: { action?: unknown }, ...message: unknown[]) => void
+>;
+
 // Build a configured nodemailer transport. Single source of truth for SMTP
 // connection options (secure flag, timeouts, self-signed handling) shared by
 // the send paths and the connection tests.
@@ -82,6 +88,8 @@ export function buildSmtpTransport(opts: {
   password: string;
   secure?: boolean | undefined;
   allowSelfSigned?: boolean | undefined;
+  // Hears what nodemailer reports as it goes, which is how a check learns it signed in.
+  logger?: SmtpLogger | undefined;
 }) {
   return nodemailer.createTransport({
     host: opts.host,
@@ -95,26 +103,23 @@ export function buildSmtpTransport(opts: {
     greetingTimeout: 10_000,
     socketTimeout: 20_000,
     ...(opts.allowSelfSigned ? { tls: { rejectUnauthorized: false } } : {}),
+    ...(opts.logger ? { logger: opts.logger } : {}),
   });
 }
 
-// Send an email and return the SMTP server's delivery info. Throws on missing
-// config, a saved password that can't be decrypted, or send failure (callers that
-// need a boolean use sendEmail).
-export async function sendEmailDetailed(
-  message: EmailMessage,
-  customSmtp?: SmtpCredentials,
-): Promise<EmailSendResult> {
-  let smtp;
-
-  if (customSmtp) {
-    // Use provided custom SMTP credentials
-    smtp = customSmtp;
-  } else {
-    // Use system SMTP settings
-    smtp = await getSmtpSettings();
-  }
-
+// The settings a send uses, whether a tool's own or the system's. A check of the login
+// connects with the same transport, so it can't pass on settings the send then refuses.
+function sendingTransport(
+  smtp: {
+    host?: string | undefined;
+    port?: number | undefined;
+    user?: string | undefined;
+    password?: string | undefined;
+    fromEmail?: string | undefined;
+  },
+  customSmtp: SmtpCredentials | undefined,
+  logger?: SmtpLogger,
+) {
   // Ensure we have required SMTP settings
   if (
     !smtp.host ||
@@ -126,15 +131,54 @@ export async function sendEmailDetailed(
     throw new Error("SMTP_CONFIG_MISSING");
   }
 
-  // Create transport
-  const transporter = buildSmtpTransport({
+  return buildSmtpTransport({
     host: smtp.host,
     port: smtp.port,
     user: smtp.user,
     password: smtp.password,
     secure: customSmtp?.secure,
     allowSelfSigned: customSmtp?.allowSelfSigned,
+    logger,
   });
+}
+
+/**
+ * Connects and signs in as a send with these settings would, then quits before MAIL
+ * FROM, so nothing is sent. nodemailer signs in only when the server offers AUTH, for a
+ * send as for this, so `signedIn` says whether a password was accepted. Throws as the
+ * send would on a refused login, a certificate it won't take, or no answer.
+ */
+export async function checkSmtpLogin(
+  smtp: SmtpCredentials,
+): Promise<{ signedIn: boolean }> {
+  let signedIn = false;
+  const hear = (entry: { action?: unknown }) => {
+    if (entry.action === "authenticated") signedIn = true;
+  };
+  const transporter = sendingTransport(smtp, smtp, {
+    trace: hear,
+    debug: hear,
+    info: hear,
+    warn: hear,
+    error: hear,
+    fatal: hear,
+  });
+  await transporter.verify();
+  return { signedIn };
+}
+
+// Send an email and return the SMTP server's delivery info. Throws on missing
+// config, a saved password that can't be decrypted, or send failure (callers that
+// need a boolean use sendEmail).
+export async function sendEmailDetailed(
+  message: EmailMessage,
+  customSmtp?: SmtpCredentials,
+): Promise<EmailSendResult> {
+  // A tool's own settings, or the system's.
+  const smtp = customSmtp ?? (await getSmtpSettings());
+
+  // Create transport
+  const transporter = sendingTransport(smtp, customSmtp);
 
   // Send mail
   const info = await transporter.sendMail({
