@@ -129,6 +129,10 @@ revalidates connected principals.
 The bundled Valkey service uses the `noeviction` policy because consumed socket
 ticket markers are security state, not disposable cache entries. If Valkey
 reaches its configured memory limit, new security-sensitive writes fail closed.
+Sign-in, account registration, password resets, invitations, MFA changes and MCP
+client registration count attempts in Valkey, so while it's full or down they
+are refused with a 503 saying Cronium can't check its limit on attempts, never
+the 429 of a real limit.
 
 Remote SSH execution is disabled by default. Cronium's static SSH credential
 cannot create a new Unix identity on an arbitrary target, so a normal shared

@@ -11,7 +11,10 @@ import { describeFailure } from "@/lib/pg-errors";
  *   - increments atomically with a single `INCR` + first-hit `PEXPIRE`, so
  *     concurrent requests cannot race past the limit;
  *   - fails CLOSED (denies) when Valkey is unavailable, so brute-force
- *     protection cannot be removed by knocking out the cache.
+ *     protection cannot be removed by knocking out the cache. That denial says
+ *     it couldn't check, so a caller answers a 503 for an outage and keeps the
+ *     429 for a real limit: telling someone they made too many attempts when
+ *     Valkey is down or full is untrue and sends them looking in the wrong place.
  *
  * It uses its own ioredis client (mirroring socket-security-store) so its
  * availability is independent of the best-effort cache client.
@@ -95,17 +98,45 @@ export interface AtomicRateLimitConfig {
   windowMs: number;
 }
 
-export interface AtomicRateLimitResult {
-  allowed: boolean;
+/** Counted, and within the limit. */
+export interface AtomicRateLimitAllowed {
+  allowed: true;
   remaining: number;
   resetAt: Date;
 }
 
+/** Counted, and over the limit until `resetAt`. */
+export interface AtomicRateLimitExceeded {
+  allowed: false;
+  reason: "limited";
+  remaining: 0;
+  resetAt: Date;
+}
+
+/**
+ * Valkey couldn't be asked: it's down, or full and refusing writes, or never answered. Nothing
+ * was counted, so this says nothing about how many requests were made and has no time to
+ * retry after. It's still a refusal, because the limiter fails closed.
+ */
+export interface AtomicRateLimitUnavailable {
+  allowed: false;
+  reason: "unavailable";
+}
+
+export type AtomicRateLimitRefusal =
+  AtomicRateLimitExceeded | AtomicRateLimitUnavailable;
+
+export type AtomicRateLimitResult =
+  AtomicRateLimitAllowed | AtomicRateLimitRefusal;
+
 /**
  * Atomically consume one unit against `bucket` for `identifier`. Denies when
  * the limit is exceeded, and denies (fail closed) when Valkey is unreachable.
+ * A caller tells the two apart by `reason`: only `"limited"` means too many
+ * requests, and `"unavailable"` is an outage to answer with a 503.
  *
- * @throws never — availability failures resolve to `{ allowed: false }`.
+ * @throws never — availability failures resolve to
+ * `{ allowed: false, reason: "unavailable" }`.
  */
 export async function consumeAtomicRateLimit(
   identifier: string,
@@ -127,7 +158,7 @@ export async function consumeAtomicRateLimit(
     const ttl = Number(ttlRaw);
     const resetAt = new Date(Date.now() + (ttl > 0 ? ttl : windowMs));
     if (count > maxRequests) {
-      return { allowed: false, remaining: 0, resetAt };
+      return { allowed: false, reason: "limited", remaining: 0, resetAt };
     }
     return {
       allowed: true,
@@ -140,10 +171,15 @@ export async function consumeAtomicRateLimit(
       "Atomic rate limiter unavailable — denying request (fail closed):",
       describeFailure(error),
     );
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: new Date(Date.now() + windowMs),
-    };
+    return { allowed: false, reason: "unavailable" };
   }
+}
+
+/** Closes the limiter's connection. The next call opens a new one. */
+export async function closeAtomicRateLimiter(): Promise<void> {
+  const promise = commandClientPromise;
+  commandClientPromise = null;
+  if (!promise) return;
+  const client = await promise.catch(() => null);
+  client?.disconnect();
 }
