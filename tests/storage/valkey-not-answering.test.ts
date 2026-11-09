@@ -226,8 +226,10 @@ describe("a signed-in call while Valkey doesn't answer", () => {
     expect(first.ms).toBeLessThan(VALKEY_ANSWER_MS + 1_000);
 
     // The silent connection is closed by now, and the cache skips Valkey until a new one
-    // is ready.
+    // is ready. A second later ioredis has connected again, to a Valkey that still
+    // doesn't answer.
     await setStatus(userId, UserStatus.ACTIVE);
+    await sleep(1_000);
     for (let n = 0; n < 5; n += 1) {
       const next = await timed(caller.mfa.getStatus());
       expect(next.settled).toEqual({ value: expect.anything() });
@@ -411,9 +413,10 @@ describe("sign-in's limiter", () => {
     await app.limiter.consumeAtomicRateLimit(id, "sign-in", ONE_MINUTE);
 
     await relay.stop();
-    // ioredis waits longer between tries the longer Valkey is down, and a request waited
-    // for a try that ended its count: 10 seconds, four seconds into an outage.
-    await sleep(4_500);
+    // ioredis tries to connect again further apart the longer Valkey is down, and refuses
+    // what it has queued only on every other try. Those tries are about 6 and 16 seconds
+    // into an outage, so a sign-in 8 seconds in waited about 8 more.
+    await sleep(8_000);
     const refused = await timed(
       app.limiter.consumeAtomicRateLimit(id, "sign-in", ONE_MINUTE),
     );
