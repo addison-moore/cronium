@@ -147,7 +147,12 @@ interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
   poolKey: string;
+  /** When the pool last handed it out, or a shell over it ended. */
   lastUsed: number;
+  /** Its shells that are open or opening. The pool closes it only once it has none. */
+  shells: number;
+  /** Out of the pool for good: it closes as soon as it has no shells. */
+  retired: boolean;
 }
 
 interface SSHConnectionRequest {
@@ -173,41 +178,40 @@ export interface SSHServiceLimits {
   closeGraceMs?: number;
   /** How long a terminal's new connection may take to be ready. */
   terminalConnectMs?: number;
-  /** How long the pool keeps a terminal's connection after it last handed it out. */
+  /** How long a terminal's shell may take to open, once it has a connection. */
+  terminalShellMs?: number;
+  /**
+   * How long the pool keeps a terminal's connection with no shells open, from when it
+   * last handed it out or the last of its shells ended.
+   */
   terminalIdleMs?: number;
   /** How often the pool looks for connections it has kept that long. */
   terminalSweepMs?: number;
-  /**
-   * How long a terminal's connection that reached its channel limit keeps going once a
-   * new one has replaced it, so that its shells can finish, before it's closed.
-   */
-  replacedConnectionMs?: number;
 }
 
 export class SSHService {
   private connectionPool = new Map<string, SSHConnection>();
   private maxConnections = 3; // Further reduced to prevent overwhelming servers
   private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
-  private channelCounts = new Map<string, number>(); // Track open channels
   private readonly healthCheckCommandsMs: number;
   private readonly closeGraceMs: number;
   private readonly terminalConnectMs: number;
+  private readonly terminalShellMs: number;
   private readonly terminalIdleMs: number;
-  private readonly replacedConnectionMs: number;
 
   constructor({
     healthCheckCommandsMs = 30_000,
     closeGraceMs = 5_000,
     terminalConnectMs = 20_000,
+    terminalShellMs = 10_000,
     terminalIdleMs = 300_000, // 5 minutes - longer for terminal sessions
     terminalSweepMs = 120_000,
-    replacedConnectionMs = 5_000,
   }: SSHServiceLimits = {}) {
     this.healthCheckCommandsMs = healthCheckCommandsMs;
     this.closeGraceMs = closeGraceMs;
     this.terminalConnectMs = terminalConnectMs;
+    this.terminalShellMs = terminalShellMs;
     this.terminalIdleMs = terminalIdleMs;
-    this.replacedConnectionMs = replacedConnectionMs;
     // Clean up stale connections every 2 minutes
     setInterval(() => {
       this.cleanupStaleConnections();
@@ -220,6 +224,9 @@ export class SSHService {
 
     // Use Array.from to handle Map iteration
     Array.from(this.connectionPool.entries()).forEach(([key, connection]) => {
+      // A connection with a shell open is in use, however long ago it was handed out.
+      // Its idle time counts from when its last shell ended.
+      if (connection.shells > 0) return;
       if (now - connection.lastUsed > this.terminalIdleMs) {
         try {
           this.disconnect(connection.ssh);
@@ -235,6 +242,21 @@ export class SSHService {
     });
 
     keysToDelete.forEach((key) => this.connectionPool.delete(key));
+  }
+
+  /**
+   * Takes `connection` out of the pool for good, and closes it once its shells have
+   * ended: now, if it has none. A shell ends when it closes, or when the terminal calls
+   * the `cleanup` that `openShell` handed back with it.
+   */
+  private retire(connection: SSHConnection): void {
+    if (connection.retired) return;
+    connection.retired = true;
+    // This connection, and nothing else: one that replaced it can be in the pool.
+    if (this.connectionPool.get(connection.poolKey) === connection) {
+      this.connectionPool.delete(connection.poolKey);
+    }
+    if (connection.shells === 0) this.disconnect(connection.ssh);
   }
 
   private connectionLocks = new Map<string, Promise<SSHConnection>>();
@@ -291,9 +313,11 @@ export class SSHService {
           console.log(
             `Existing connection to ${connectionKey ?? ""} failed test: ${describeFailure(error)}`,
           );
-          // Connection is dead, remove it
+          // Out of the pool, it closes once its shells have ended. A dead connection's
+          // shells have ended with it, but a slow server, or one that allows only so
+          // many sessions, fails the check with its shells in use.
           try {
-            this.disconnect(connection.ssh);
+            this.retire(connection);
           } catch (error) {
             console.error(
               `Failed to dispose dead SSH connection for ${connectionKey}:`,
@@ -301,7 +325,6 @@ export class SSHService {
             );
             // Ignore disposal errors
           }
-          this.connectionPool.delete(connectionKey);
         }
       } else {
         // Remove stale connection
@@ -364,6 +387,8 @@ export class SSHService {
           isConnected: true,
           poolKey: connectionKey,
           lastUsed: Date.now(),
+          shells: 0,
+          retired: false,
         };
         this.connectionPool.set(connectionKey, connection);
         console.log(
@@ -727,7 +752,7 @@ export class SSHService {
     });
 
     // Check if we've hit the channel limit for this connection
-    const currentChannels = this.channelCounts.get(connectionKey) ?? 0;
+    const currentChannels = this.connectionPool.get(connectionKey)?.shells ?? 0;
 
     // Lower the threshold to prevent hitting server limits (use maxChannelsPerConnection)
     const shouldForceNew = currentChannels >= this.maxChannelsPerConnection;
@@ -740,20 +765,9 @@ export class SSHService {
       const oldConnection = this.connectionPool.get(connectionKey);
       if (oldConnection) {
         try {
-          // Don't end the connection immediately - let existing channels finish
-          this.connectionPool.delete(connectionKey);
-          // Schedule connection cleanup after a delay
-          setTimeout(() => {
-            try {
-              if (oldConnection.ssh) {
-                this.disconnect(oldConnection.ssh);
-              }
-            } catch (e) {
-              console.error(
-                `Error cleaning up old connection: ${describeFailure(e)}`,
-              );
-            }
-          }, this.replacedConnectionMs);
+          // Don't end the connection while its shells are in use: it closes once the
+          // last of them has ended.
+          this.retire(oldConnection);
         } catch (e) {
           console.error(`Error handling old connection: ${describeFailure(e)}`);
         }
@@ -786,8 +800,11 @@ export class SSHService {
         `SSH client socket is not connected or destroyed for ${host}`,
       );
       // Try to remove the bad connection and create a new one
-      this.connectionPool.delete(connection.poolKey);
-      this.channelCounts.delete(connection.poolKey);
+      try {
+        this.retire(connection);
+      } catch {
+        // Ignore cleanup errors
+      }
 
       // Get a fresh connection
       const freshConnection = await this.getPooledConnection({
@@ -800,188 +817,153 @@ export class SSHService {
         authType,
       });
 
-      const shell = await new Promise<ClientChannel>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(
-            new Error("Shell creation timeout - server may be overloaded"),
+      const { shell, cleanup } = await this.openCountedShell(
+        freshConnection,
+        cols,
+        rows,
+        () => {
+          // Clean up the fresh connection if it fails, once any other shell over it
+          // has ended too
+          try {
+            this.retire(freshConnection);
+          } catch {
+            // Ignore cleanup errors
+          }
+          return new Error(
+            "Unable to open shell - SSH server may have reached its limit",
           );
-        }, 10000);
-
-        freshConnection.ssh.shell(
-          {
-            term: "xterm",
-            cols,
-            rows,
-          },
-          (err, stream) => {
-            clearTimeout(timeoutId);
-
-            if (err) {
-              // Clean up the fresh connection if it fails
-              this.connectionPool.delete(freshConnection.poolKey);
-              this.channelCounts.delete(freshConnection.poolKey);
-              try {
-                this.disconnect(freshConnection.ssh);
-              } catch {
-                // Ignore cleanup errors
-              }
-              return reject(
-                new Error(
-                  "Unable to open shell - SSH server may have reached its limit",
-                ),
-              );
-            }
-
-            // Track channel count
-            const key = freshConnection.poolKey;
-            const newCount = (this.channelCounts.get(key) ?? 0) + 1;
-            this.channelCounts.set(key, newCount);
-            console.log(
-              `Channel opened for ${key}, total channels: ${newCount}`,
-            );
-
-            // Track if cleanup was already called
-            let cleanupCalled = false;
-
-            // Clean up channel count on close
-            const handleClose = () => {
-              if (!cleanupCalled) {
-                cleanupCalled = true;
-                const count = this.channelCounts.get(key) ?? 1;
-                if (count <= 1) {
-                  this.channelCounts.delete(key);
-                } else {
-                  this.channelCounts.set(key, count - 1);
-                }
-                console.log(
-                  `Channel closed for ${key}, remaining channels: ${count - 1}`,
-                );
-              }
-            };
-
-            stream.on("close", handleClose);
-            stream.on("end", handleClose);
-
-            resolve(stream);
-          },
-        );
-      });
+        },
+      );
 
       console.log(
         `Opened interactive shell for ${freshConnection.poolKey} (new connection)`,
       );
       freshConnection.lastUsed = Date.now();
 
-      // Create manual cleanup function
-      const cleanup = () => {
-        const key = freshConnection.poolKey;
-        const count = this.channelCounts.get(key) ?? 0;
-        if (count > 0) {
-          const newCount = count - 1;
-          if (newCount <= 0) {
-            this.channelCounts.delete(key);
-          } else {
-            this.channelCounts.set(key, newCount);
-          }
-          console.log(
-            `Manual cleanup: Channel closed for ${key}, remaining channels: ${newCount}`,
-          );
-        }
-      };
-
       return { shell, connectionKey: freshConnection.poolKey, cleanup };
     }
 
-    const shell = await new Promise<ClientChannel>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error("Shell creation timeout - server may be overloaded"));
-      }, 10000); // 10 second timeout for shell creation
-
-      connection.ssh.shell(
-        {
-          term: "xterm",
-          cols,
-          rows,
-        },
-        (err, stream) => {
-          clearTimeout(timeoutId);
-
-          if (err) {
-            // If shell creation fails, it might be due to channel limits
-            // Remove this connection from the pool to force a fresh one next time
-            if (err.message?.includes("Channel open failure")) {
-              console.error(
-                `Shell creation failed due to channel limits, removing connection from pool`,
-              );
-              this.connectionPool.delete(connection.poolKey);
-              this.channelCounts.delete(connection.poolKey);
-
-              // Try to gracefully close the connection
-              try {
-                this.disconnect(connection.ssh);
-              } catch {
-                // Ignore cleanup errors
-              }
-            }
-            return reject(err);
+    const { shell, cleanup } = await this.openCountedShell(
+      connection,
+      cols,
+      rows,
+      (err) => {
+        // If shell creation fails, it might be due to channel limits
+        // Remove this connection from the pool to force a fresh one next time
+        if (err.message?.includes("Channel open failure")) {
+          console.error(
+            `Shell creation failed due to channel limits, removing connection from pool`,
+          );
+          // It closes once its other shells have ended, if it has any
+          try {
+            this.retire(connection);
+          } catch {
+            // Ignore cleanup errors
           }
-
-          // Track channel count
-          const key = connection.poolKey;
-          const newCount = (this.channelCounts.get(key) ?? 0) + 1;
-          this.channelCounts.set(key, newCount);
-          console.log(`Channel opened for ${key}, total channels: ${newCount}`);
-
-          // Track if cleanup was already called to prevent double cleanup
-          let cleanupCalled = false;
-
-          // Clean up channel count on close
-          const handleClose = () => {
-            if (!cleanupCalled) {
-              cleanupCalled = true;
-              const count = this.channelCounts.get(key) ?? 1;
-              if (count <= 1) {
-                this.channelCounts.delete(key);
-              } else {
-                this.channelCounts.set(key, count - 1);
-              }
-              console.log(
-                `Channel closed for ${key}, remaining channels: ${count - 1}`,
-              );
-            }
-          };
-
-          stream.on("close", handleClose);
-          stream.on("end", handleClose); // Also listen for end event
-
-          resolve(stream);
-        },
-      );
-    });
+        }
+        return err;
+      },
+    );
 
     console.log(
-      `Opened interactive shell for ${connection.poolKey}, channels: ${this.channelCounts.get(connection.poolKey) ?? 1}`,
+      `Opened interactive shell for ${connection.poolKey}, channels: ${connection.shells}`,
     );
     connection.lastUsed = Date.now(); // Update last used time
 
-    // Create manual cleanup function
-    const cleanup = () => {
-      const key = connection.poolKey;
-      const count = this.channelCounts.get(key) ?? 0;
-      if (count > 0) {
-        const newCount = count - 1;
-        if (newCount <= 0) {
-          this.channelCounts.delete(key);
-        } else {
-          this.channelCounts.set(key, newCount);
+    return { shell, connectionKey: connection.poolKey, cleanup };
+  }
+
+  /**
+   * Opens a shell over `connection`, which counts it among its shells from now until it
+   * closes or the `cleanup` handed back with it runs, whichever comes first. The terminal
+   * ends a shell by calling `cleanup` and then ending it, and the shell's `close` follows:
+   * that's still one shell.
+   *
+   * `refused` gets the server's error when it won't open the shell, once the shell has
+   * stopped counting, and hands back the error to reject with.
+   */
+  private openCountedShell(
+    connection: SSHConnection,
+    cols: number,
+    rows: number,
+    refused: (err: Error) => Error,
+  ): Promise<{ shell: ClientChannel; cleanup: () => void }> {
+    const key = connection.poolKey;
+    // Counted while it opens too, so that nothing closes the connection under it.
+    connection.shells += 1;
+    let counted = true;
+    /** Stops counting the shell, the first time only, and says how many are left. */
+    const shellEnded = (): number | undefined => {
+      if (!counted) return undefined;
+      counted = false;
+      connection.shells -= 1;
+      connection.lastUsed = Date.now();
+      if (connection.retired && connection.shells === 0) {
+        try {
+          this.disconnect(connection.ssh);
+        } catch (e) {
+          console.error(
+            `Error cleaning up old connection: ${describeFailure(e)}`,
+          );
         }
-        console.log(
-          `Manual cleanup: Channel closed for ${key}, remaining channels: ${newCount}`,
-        );
       }
+      return connection.shells;
     };
 
-    return { shell, connectionKey: connection.poolKey, cleanup };
+    return new Promise((resolve, reject) => {
+      let waiting = true;
+      const timeoutId = setTimeout(() => {
+        waiting = false;
+        shellEnded();
+        reject(new Error("Shell creation timeout - server may be overloaded"));
+      }, this.terminalShellMs);
+
+      const opened = (err: Error | undefined, stream: ClientChannel) => {
+        clearTimeout(timeoutId);
+        if (!waiting) {
+          // Too late: nobody would ever read it or end it.
+          if (!err) stream.close();
+          return;
+        }
+        waiting = false;
+        if (err) {
+          shellEnded();
+          return reject(refused(err));
+        }
+
+        console.log(
+          `Channel opened for ${key}, total channels: ${connection.shells}`,
+        );
+        // Not on `end` too: the server can end a shell's output and still read its input.
+        stream.on("close", () => {
+          const left = shellEnded();
+          if (left !== undefined) {
+            console.log(
+              `Channel closed for ${key}, remaining channels: ${left}`,
+            );
+          }
+        });
+        const cleanup = () => {
+          const left = shellEnded();
+          if (left !== undefined) {
+            console.log(
+              `Manual cleanup: Channel closed for ${key}, remaining channels: ${left}`,
+            );
+          }
+        };
+        resolve({ shell: stream, cleanup });
+      };
+
+      try {
+        connection.ssh.shell({ term: "xterm", cols, rows }, opened);
+      } catch (error) {
+        // "Not connected": the socket has closed since the pool handed it out.
+        clearTimeout(timeoutId);
+        waiting = false;
+        shellEnded();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   }
 }
 
