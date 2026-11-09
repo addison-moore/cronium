@@ -87,7 +87,7 @@ function closeConnection(
   socket.once("close", () => clearTimeout(closeAnyway));
 }
 
-/** The socket under each connection `connect` made, for `disconnect`. */
+/** The socket under each connection `connect` or the terminal's pool made, for `disconnect`. */
 const socketOf = new WeakMap<Client, Socket>();
 
 /** `work`, unless `ms` pass first: then a rejection with `timedOut()`. */
@@ -171,27 +171,47 @@ export interface SSHServiceLimits {
    * closing the socket outright.
    */
   closeGraceMs?: number;
+  /** How long a terminal's new connection may take to be ready. */
+  terminalConnectMs?: number;
+  /** How long the pool keeps a terminal's connection after it last handed it out. */
+  terminalIdleMs?: number;
+  /** How often the pool looks for connections it has kept that long. */
+  terminalSweepMs?: number;
+  /**
+   * How long a terminal's connection that reached its channel limit keeps going once a
+   * new one has replaced it, so that its shells can finish, before it's closed.
+   */
+  replacedConnectionMs?: number;
 }
 
 export class SSHService {
   private connectionPool = new Map<string, SSHConnection>();
   private maxConnections = 3; // Further reduced to prevent overwhelming servers
   private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
-  private connectionTimeout = 300000; // 5 minutes - longer for terminal sessions
   private channelCounts = new Map<string, number>(); // Track open channels
   private readonly healthCheckCommandsMs: number;
   private readonly closeGraceMs: number;
+  private readonly terminalConnectMs: number;
+  private readonly terminalIdleMs: number;
+  private readonly replacedConnectionMs: number;
 
   constructor({
     healthCheckCommandsMs = 30_000,
     closeGraceMs = 5_000,
+    terminalConnectMs = 20_000,
+    terminalIdleMs = 300_000, // 5 minutes - longer for terminal sessions
+    terminalSweepMs = 120_000,
+    replacedConnectionMs = 5_000,
   }: SSHServiceLimits = {}) {
     this.healthCheckCommandsMs = healthCheckCommandsMs;
     this.closeGraceMs = closeGraceMs;
+    this.terminalConnectMs = terminalConnectMs;
+    this.terminalIdleMs = terminalIdleMs;
+    this.replacedConnectionMs = replacedConnectionMs;
     // Clean up stale connections every 2 minutes
     setInterval(() => {
       this.cleanupStaleConnections();
-    }, 120000).unref();
+    }, terminalSweepMs).unref();
   }
 
   private cleanupStaleConnections(): void {
@@ -200,9 +220,9 @@ export class SSHService {
 
     // Use Array.from to handle Map iteration
     Array.from(this.connectionPool.entries()).forEach(([key, connection]) => {
-      if (now - connection.lastUsed > this.connectionTimeout) {
+      if (now - connection.lastUsed > this.terminalIdleMs) {
         try {
-          connection.ssh.end();
+          this.disconnect(connection.ssh);
         } catch (error) {
           console.error(
             `Failed to close SSH connection for key ${key}:`,
@@ -254,20 +274,16 @@ export class SSHService {
       if (connection.isConnected) {
         // Test the connection is still alive with a timeout
         try {
-          await Promise.race([
+          await withinTime(
             new Promise<void>((resolve, reject) => {
               connection.ssh.exec('echo "test"', (err, stream) => {
                 if (err) return reject(err);
                 stream.on("close", () => resolve()).resume();
               });
             }),
-            new Promise<void>((_, reject) =>
-              setTimeout(
-                () => reject(new Error("Connection test timeout")),
-                5000,
-              ),
-            ),
-          ]);
+            5000,
+            () => new Error("Connection test timeout"),
+          );
           connection.lastUsed = Date.now();
           console.log(`Reusing existing connection to ${connectionKey ?? ""}`);
           return connection;
@@ -277,7 +293,7 @@ export class SSHService {
           );
           // Connection is dead, remove it
           try {
-            connection.ssh.end();
+            this.disconnect(connection.ssh);
           } catch (error) {
             console.error(
               `Failed to dispose dead SSH connection for ${connectionKey}:`,
@@ -334,12 +350,14 @@ export class SSHService {
     const ssh = new Client();
 
     return new Promise((resolve, reject) => {
+      let ready = false;
       const connectionTimeout = setTimeout(() => {
-        ssh.end();
+        this.disconnect(ssh);
         reject(new Error(`Connection to ${host ?? ""} timed out.`));
-      }, 20000).unref(); // Use readyTimeout from connect options
+      }, this.terminalConnectMs).unref(); // Use readyTimeout from connect options
 
       ssh.on("ready", () => {
+        ready = true;
         clearTimeout(connectionTimeout);
         const connection: SSHConnection = {
           ssh,
@@ -385,17 +403,29 @@ export class SSHService {
           }
         }
 
+        // Nothing else would close a connection that never got into the pool, and after
+        // a refused password ssh2 has already said goodbye and waits for the server.
+        if (!ready) this.disconnect(ssh);
         reject(new Error(errorMessage));
       });
+      // This connection, and nothing else: by the time it ends, one that replaced it can
+      // be in the pool under the same key.
+      const leavePool = () => {
+        if (this.connectionPool.get(connectionKey)?.ssh === ssh) {
+          this.connectionPool.delete(connectionKey);
+        }
+      };
       ssh.on("end", () => {
         console.log(`SSH connection to ${connectionKey ?? ""} ended.`);
-        this.connectionPool.delete(connectionKey);
+        leavePool();
       });
       ssh.on("close", () => {
         console.log(`SSH connection to ${connectionKey ?? ""} closed.`);
-        this.connectionPool.delete(connectionKey);
+        leavePool();
       });
-      connectOverOwnSocket(ssh, {
+      // The handlers above only ever run after this returns, so `disconnect` finds the
+      // socket recorded. If it throws, connectOverOwnSocket has closed the socket itself.
+      const socket = connectOverOwnSocket(ssh, {
         host,
         username,
         ...(authType === "password"
@@ -447,6 +477,7 @@ export class SSHService {
           hmac: ["hmac-sha2-256", "hmac-sha2-512", "hmac-sha1"],
         },
       });
+      socketOf.set(ssh, socket);
     });
   }
 
@@ -554,8 +585,8 @@ export class SSHService {
   }
 
   /**
-   * Closes a connection that `connect` made. The server gets `closeGraceMs` to close its
-   * side, and then the socket closes anyway.
+   * Closes a connection that `connect` or the terminal's pool made. The server gets
+   * `closeGraceMs` to close its side, and then the socket closes anyway.
    */
   public disconnect(connection: Client): void {
     const socket = socketOf.get(connection);
@@ -715,14 +746,14 @@ export class SSHService {
           setTimeout(() => {
             try {
               if (oldConnection.ssh) {
-                oldConnection.ssh.end();
+                this.disconnect(oldConnection.ssh);
               }
             } catch (e) {
               console.error(
                 `Error cleaning up old connection: ${describeFailure(e)}`,
               );
             }
-          }, 5000);
+          }, this.replacedConnectionMs);
         } catch (e) {
           console.error(`Error handling old connection: ${describeFailure(e)}`);
         }
@@ -790,7 +821,7 @@ export class SSHService {
               this.connectionPool.delete(freshConnection.poolKey);
               this.channelCounts.delete(freshConnection.poolKey);
               try {
-                freshConnection.ssh.end();
+                this.disconnect(freshConnection.ssh);
               } catch {
                 // Ignore cleanup errors
               }
@@ -887,7 +918,7 @@ export class SSHService {
 
               // Try to gracefully close the connection
               try {
-                connection.ssh.end();
+                this.disconnect(connection.ssh);
               } catch {
                 // Ignore cleanup errors
               }
