@@ -47,6 +47,11 @@ import { sessionFromOAuthToken } from "@/lib/mcp-oauth/resource";
 import { POST, GET } from "@/app/api/mcp/route";
 import { MCP_TOOLS } from "@/app/api/mcp/tools";
 import {
+  AccountCheckFailedError,
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+} from "@/server/security/credential-check";
+import {
   EVENT_TOO_LONG_MESSAGE,
   MAX_REQUEST_BODY_BYTES,
 } from "@/shared/request-limits";
@@ -168,6 +173,69 @@ describe("auth", () => {
   });
 });
 
+describe("a bad token, and one that couldn't be checked", () => {
+  it("keeps a bad token's 401 to the byte", async () => {
+    apiTokenMock.mockResolvedValue(null);
+    const res = await post(rpc("ping"), "bogus");
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toBe(
+      'Bearer resource_metadata="https://cronium.test/.well-known/oauth-protected-resource/api/mcp", ' +
+        'error="invalid_token", error_description="The access token is invalid or expired"',
+    );
+    expect(await res.text()).toBe(
+      '{"error":"unauthorized: authenticate with an OAuth access token or a Cronium API token"}',
+    );
+  });
+
+  describe("a token that couldn't be checked", () => {
+    it.each<[string, jest.Mock]>([
+      ["an API token", apiTokenMock],
+      ["an OAuth token", oauthMock],
+    ])("answers 503 in JSON-RPC for %s", async (_name, check) => {
+      check.mockRejectedValue(new CredentialCheckFailedError());
+
+      const res = await post(rpc("ping"), "t");
+
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32603, message: CREDENTIAL_CHECK_FAILED_MESSAGE },
+      });
+    });
+
+    it("doesn't challenge, or a client would throw the token away", async () => {
+      apiTokenMock.mockRejectedValue(new CredentialCheckFailedError());
+
+      const res = await post(rpc("ping"), "t");
+
+      expect(res.headers.get("www-authenticate")).toBeNull();
+    });
+
+    it("takes the check on an account too", async () => {
+      apiTokenMock.mockRejectedValue(new AccountCheckFailedError());
+
+      expect((await post(rpc("ping"), "t")).status).toBe(503);
+    });
+
+    it("runs nothing", async () => {
+      apiTokenMock.mockRejectedValue(new CredentialCheckFailedError());
+
+      await post(rpc("tools/call", { name: "create_event" }), "t");
+
+      expect(createCallerMock).not.toHaveBeenCalled();
+    });
+
+    it("fits whole in what the stdio bridge quotes of a failed response", async () => {
+      apiTokenMock.mockRejectedValue(new CredentialCheckFailedError());
+
+      const body = await (await post(rpc("ping"), "t")).text();
+
+      expect(body.length).toBeLessThanOrEqual(300);
+    });
+  });
+});
+
 describe("JSON-RPC protocol", () => {
   it("initialize echoes the protocol version and advertises tools", async () => {
     const res = await post(
@@ -274,6 +342,114 @@ describe("JSON-RPC protocol", () => {
       const res = await post(callOfSize(MAX_REQUEST_BODY_BYTES + 1));
 
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe("a handler that throws", () => {
+    const INTERNAL_ERROR = {
+      code: -32603,
+      message: "Internal error: the reason is in Cronium's server log",
+    };
+    // Each of these throws while its reply is written, and a client can send them.
+    const unprintable = { toString: 1 };
+
+    let consoleError: jest.SpyInstance;
+    beforeEach(() => {
+      consoleError = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+    });
+    afterEach(() => consoleError.mockRestore());
+
+    it("answers 500 in JSON-RPC, with the reason only in the log", async () => {
+      apiTokenMock.mockRejectedValue(new Error("the reason, with a secret"));
+
+      const res = await post(rpc("ping"), "t");
+
+      expect(res.status).toBe(500);
+      const text = await res.text();
+      expect(JSON.parse(text)).toEqual({
+        jsonrpc: "2.0",
+        id: null,
+        error: INTERNAL_ERROR,
+      });
+      expect(text).not.toContain("secret");
+      expect(consoleError.mock.calls.flat().join(" ")).toContain(
+        "MCP request failed",
+      );
+    });
+
+    it("answers a message that throws under its own id", async () => {
+      const res = await post(
+        rpc(unprintable as unknown as string, undefined, 9),
+        "t",
+      );
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        jsonrpc: "2.0",
+        id: 9,
+        error: INTERNAL_ERROR,
+      });
+    });
+
+    it("answers a tool name that throws under its own id", async () => {
+      const res = await post(rpc("tools/call", { name: unprintable }, 10), "t");
+
+      expect(await res.json()).toEqual({
+        jsonrpc: "2.0",
+        id: 10,
+        error: INTERNAL_ERROR,
+      });
+    });
+
+    it("keeps the answers to the rest of a batch, whose tools have run", async () => {
+      const create = jest.fn().mockResolvedValue({ id: 1, name: "made" });
+      createCallerMock.mockReturnValue(stubCaller({ events: { create } }));
+
+      const res = await post(
+        [
+          rpc(
+            "tools/call",
+            {
+              name: "create_event",
+              arguments: { name: "made", type: "BASH", content: "echo hi" },
+            },
+            1,
+          ),
+          rpc(unprintable as unknown as string, undefined, 2),
+          rpc("ping", undefined, 3),
+        ],
+        "t",
+      );
+
+      expect(res.status).toBe(200);
+      const answers = (await res.json()) as Array<{
+        id: number;
+        result?: { isError?: boolean };
+        error?: unknown;
+      }>;
+      expect(answers.map(({ id }) => id)).toEqual([1, 2, 3]);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(answers[0]?.result?.isError).toBe(false);
+      expect(answers[1]?.error).toEqual(INTERNAL_ERROR);
+      expect(answers[2]?.result).toEqual({});
+    });
+
+    it("still answers an id too deeply nested to send back", async () => {
+      const nested = `${"[".repeat(20_000)}${"]".repeat(20_000)}`;
+
+      const res = await post(
+        `{"jsonrpc":"2.0","id":${nested},"method":"ping"}`,
+        "t",
+      );
+
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({
+        jsonrpc: "2.0",
+        id: null,
+        error: INTERNAL_ERROR,
+      });
     });
   });
 

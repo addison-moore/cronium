@@ -51,6 +51,11 @@ import { authenticateApiToken } from "@/lib/api-auth";
 import { getAuthorizedPrincipal } from "@/server/security/authorization";
 import { storage } from "@/server/storage";
 import { mintAccessToken } from "@/lib/mcp-oauth/tokens";
+import {
+  AccountCheckFailedError,
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+} from "@/server/security/credential-check";
 
 const CLIENT = "mcp_client";
 const REDIRECT = "https://client.example/callback";
@@ -207,6 +212,71 @@ describe("resource owner", () => {
     const res = await get(authorizeUrl(), { authorization: "Bearer t" });
     expect(res.status).toBe(200);
   });
+});
+
+describe("credentials that couldn't be checked", () => {
+  const accessToken = () =>
+    mintAccessToken({
+      sub: "user-1",
+      cid: CLIENT,
+      scope: "mcp",
+      aud: "https://cronium.example.com/api/mcp",
+      sv: 3,
+    }).token;
+
+  beforeEach(() => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it("throws from the access token's check, rather than say it's bad", async () => {
+    getUserMock.mockRejectedValue(new Error("connect ECONNREFUSED"));
+
+    await expect(
+      sessionFromOAuthToken(
+        new Headers({ authorization: `Bearer ${accessToken()}` }),
+      ),
+    ).rejects.toBeInstanceOf(CredentialCheckFailedError);
+  });
+
+  it.each<[string, () => void]>([
+    [
+      "a session whose account can't be read",
+      () => principalMock.mockRejectedValue(new AccountCheckFailedError()),
+    ],
+    [
+      "an API token that can't be looked up",
+      () => {
+        sessionMock.mockResolvedValue(null);
+        apiTokenMock.mockRejectedValue(new CredentialCheckFailedError());
+      },
+    ],
+    [
+      "an API token whose account can't be read",
+      () => {
+        sessionMock.mockResolvedValue(null);
+        apiTokenMock.mockResolvedValue({
+          userId: "user-1",
+          tokenId: 1,
+          scopes: ["mcp"],
+        });
+        principalMock.mockRejectedValue(new AccountCheckFailedError());
+      },
+    ],
+  ])(
+    "answers 503 for %s, not a sign-in that can't work",
+    async (_name, arrange) => {
+      arrange();
+
+      const res = await get(authorizeUrl(), { authorization: "Bearer t" });
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("location")).toBeNull();
+      expect(await res.text()).toContain(
+        CREDENTIAL_CHECK_FAILED_MESSAGE.replaceAll("'", "&#39;"),
+      );
+    },
+  );
 });
 
 describe("revocation", () => {

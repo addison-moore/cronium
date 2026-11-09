@@ -2920,15 +2920,9 @@ class DatabaseStorage implements IStorage {
       );
 
     for (const apiToken of legacyTokens) {
+      let matches: boolean;
       try {
-        if (encryptionService.decrypt(apiToken.token) === token) {
-          const [migrated] = await db
-            .update(apiTokens)
-            .set({ token: tokenHash })
-            .where(eq(apiTokens.id, apiToken.id))
-            .returning();
-          return migrated ?? { ...apiToken, token: tokenHash };
-        }
+        matches = encryptionService.decrypt(apiToken.token) === token;
       } catch (error) {
         console.error(
           `Failed to decrypt legacy API token (ID: ${apiToken.id}):`,
@@ -2936,6 +2930,16 @@ class DatabaseStorage implements IStorage {
         );
         continue;
       }
+      if (!matches) continue;
+
+      // A failed write has to throw, not carry on: this one has been found, and going on
+      // to return undefined would report a good token as unknown.
+      const [migrated] = await db
+        .update(apiTokens)
+        .set({ token: tokenHash })
+        .where(eq(apiTokens.id, apiToken.id))
+        .returning();
+      return migrated ?? { ...apiToken, token: tokenHash };
     }
 
     return undefined;

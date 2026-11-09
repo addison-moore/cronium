@@ -76,6 +76,15 @@ registration — rate-limited and bounded, RFC 8414/9728 discovery served at
 `/.well-known/*` via `next.config.mjs` rewrites). Distinct from `/api/oauth/*`,
 which is **outbound** tool OAuth (Cronium as a client to Google/Slack).
 
+A 401 means the token was looked at and isn't good, and a client should act on it:
+the stdio bridge quits at startup on one. When Cronium can't look, usually because
+Postgres is down, `/api/mcp` answers a 503 with a JSON-RPC error instead, with no
+`www-authenticate`, and nothing says the token is bad. The bridge stays up, passes
+that on under each request's id, and works again once the database is back. REST
+routes answer the same 503 with `{"error": ...}`, and a token on tRPC gets
+`SERVICE_UNAVAILABLE`. A public tRPC procedure doesn't read the session, so it still
+answers. If the route's handler throws, it answers a 500 with a JSON-RPC error.
+
 ## Least privilege (token scopes)
 
 Scopes are **mandatory** (security plan Phase 1.5): every API/OAuth bearer
