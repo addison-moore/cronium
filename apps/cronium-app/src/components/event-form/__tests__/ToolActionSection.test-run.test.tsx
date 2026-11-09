@@ -104,7 +104,7 @@ const DELETE = config("MONGODB", "delete-documents", {
 const PROMPT = config("AI", "ai-prompt", { userPrompt: "hi" });
 
 /** The form the section sits in, which is why a plain button in it would submit. */
-function section(value: ToolActionConfig) {
+function section(value: ToolActionConfig, tools: Tool[]) {
   return (
     <form
       onSubmit={(event) => {
@@ -115,7 +115,7 @@ function section(value: ToolActionConfig) {
       <ToolActionSection
         value={value}
         onChange={jest.fn()}
-        availableTools={[credential(value.toolType)]}
+        availableTools={tools}
         isLoadingTools={false}
         toolsLoadFailed={false}
         onRetryTools={jest.fn()}
@@ -127,11 +127,14 @@ function section(value: ToolActionConfig) {
 const client = () =>
   new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 
-function renderSection(value: ToolActionConfig) {
+function renderSection(
+  value: ToolActionConfig,
+  tools = [credential(value.toolType)],
+) {
   const queries = client();
   const view = render(
     <QueryClientProvider client={queries}>
-      {section(value)}
+      {section(value, tools)}
     </QueryClientProvider>,
   );
   return {
@@ -139,7 +142,7 @@ function renderSection(value: ToolActionConfig) {
     show: (next: ToolActionConfig) =>
       view.rerender(
         <QueryClientProvider client={queries}>
-          {section(next)}
+          {section(next, tools)}
         </QueryClientProvider>,
       ),
   };
@@ -170,7 +173,16 @@ async function run(user: ReturnType<typeof userEvent.setup>, button: string) {
   }
 }
 
-beforeAll(() => initializePlugins());
+beforeAll(() => {
+  initializePlugins();
+  // Radix Select's needs, which jsdom doesn't have.
+  Object.assign(window.HTMLElement.prototype, {
+    scrollIntoView: jest.fn(),
+    hasPointerCapture: jest.fn(() => false),
+    setPointerCapture: jest.fn(),
+    releasePointerCapture: jest.fn(),
+  });
+});
 
 beforeEach(() => {
   mockExecute.mockReset();
@@ -654,5 +666,386 @@ describe("the toast says what happened", () => {
     expect(JSON.stringify(mockToast.mock.calls)).not.toMatch(
       /test mode|Test Successful/,
     );
+  });
+});
+
+/**
+ * A query's rows and a model's answer only reached the browser console, so someone who
+ * paid for a prompt couldn't read the answer. They show under the button now, for as long
+ * as they're about the credential and action on screen.
+ */
+describe("it shows what a read or a prompt returned", () => {
+  const FIND = config("MONGODB", "find-documents", { collection: "orders" });
+  const ROWS = {
+    columns: ["id", "email"],
+    rows: [
+      { id: 1, email: "a@example.test" },
+      { id: 2, email: null },
+    ],
+    rowCount: 2,
+  };
+  const QUERY_RESULT = "Result of Run Query on my-sql";
+  const anyResult = () => screen.queryByRole("region", { name: /^Result of/ });
+
+  /** A run of Run Query that returns ROWS, and what it shows. */
+  async function showRows(user: ReturnType<typeof userEvent.setup>) {
+    mockExecute.mockResolvedValue({ success: true, result: ROWS });
+    await run(user, "Run Query Now");
+    return screen.findByRole("region", { name: QUERY_RESULT });
+  }
+
+  const cells = (table: HTMLElement) =>
+    within(table)
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) =>
+        within(row)
+          .getAllByRole("cell")
+          .map((cell) => cell.textContent),
+      );
+
+  it("shows a query's rows under the button, with what the toast said", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+
+    const shown = await showRows(user);
+
+    expect(shown).toHaveTextContent(
+      "Returned 2 rows. It ran read-only, so no data changed.",
+    );
+    const table = within(shown).getByRole("table");
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual(["id", "email"]);
+    expect(cells(table)).toEqual([
+      ["1", "a@example.test"],
+      ["2", "NULL"],
+    ]);
+    expect(
+      pressed("Run Query Now").compareDocumentPosition(shown) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("shows each document a find returned", async () => {
+    const user = userEvent.setup();
+    mockExecute.mockResolvedValue({
+      success: true,
+      result: {
+        documents: [{ _id: "a1", tags: ["x"] }, { _id: "a2" }],
+        documentCount: 2,
+      },
+    });
+    renderSection(FIND);
+
+    await run(user, "Find Documents Now");
+
+    const shown = await screen.findByRole("region", {
+      name: "Result of Find Documents on my-mongodb",
+    });
+    expect(
+      within(shown).getByText(
+        JSON.stringify({ _id: "a1", tags: ["x"] }, null, 2),
+        { normalizer: (text) => text },
+      ),
+    ).toBeVisible();
+    expect(shown).toHaveTextContent('"_id": "a2"');
+  });
+
+  it("shows the model's answer as it was written, and what the prompt used", async () => {
+    const user = userEvent.setup();
+    const text = "Paris.\n\nIt's the capital.";
+    mockExecute.mockResolvedValue({
+      success: true,
+      result: {
+        text,
+        model: "m",
+        provider: "custom",
+        usage: { inputTokens: 3, outputTokens: 5 },
+        finishReason: "length",
+      },
+    });
+    renderSection(PROMPT);
+
+    await run(user, "Prompt LLM Now");
+
+    const shown = await screen.findByRole("region", {
+      name: "Result of Prompt LLM on my-ai",
+    });
+    expect(
+      within(shown).getByText(text, { normalizer: (value) => value }),
+    ).toBeVisible();
+    expect(shown).toHaveTextContent(
+      "Answered by m, using 3 tokens in and 5 tokens out.",
+    );
+    expect(shown).toHaveTextContent(
+      "It stopped at Max Tokens, so the answer may be cut short.",
+    );
+  });
+
+  it("says so when the model's answer is empty", async () => {
+    const user = userEvent.setup();
+    mockExecute.mockResolvedValue({
+      success: true,
+      result: { text: "", model: "m", provider: "custom", usage: {} },
+    });
+    renderSection(PROMPT);
+
+    await run(user, "Prompt LLM Now");
+
+    expect(
+      await screen.findByRole("region", {
+        name: "Result of Prompt LLM on my-ai",
+      }),
+    ).toHaveTextContent("The answer was empty.");
+  });
+
+  it.each<[string, ToolActionConfig, string, unknown, boolean]>([
+    [
+      "a simulated read, whose rows are made up",
+      config("GOOGLE-SHEETS", "read-data"),
+      "Simulate",
+      {
+        success: true,
+        values: [
+          ["Name", "Sales"],
+          ["Product A", "1500"],
+        ],
+      },
+      true,
+    ],
+    ["a post", SLACK, "Send Message Now", { ok: true }, false],
+    [
+      "a change to data",
+      DELETE,
+      "Delete Documents Now",
+      { deletedCount: 1 },
+      false,
+    ],
+  ])("shows nothing for %s", async (_, value, button, result, simulated) => {
+    const user = userEvent.setup();
+    mockExecute.mockResolvedValue({ success: true, result, simulated });
+    renderSection(value);
+
+    await run(user, button);
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    expect(anyResult()).not.toBeInTheDocument();
+    expect(screen.queryByText(/Product A/)).not.toBeInTheDocument();
+  });
+
+  it("goes when another action is chosen", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+    await showRows(user);
+
+    await user.click(screen.getByRole("combobox", { name: "Select Action" }));
+    await user.click(
+      await screen.findByRole("option", { name: /Execute Statement/ }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Execute Statement Now" }),
+    ).toBeInTheDocument();
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("goes when another credential is chosen, and doesn't come back with the first", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY, [
+      credential("SQL"),
+      { id: 2, name: "other-sql", type: "SQL" } as Tool,
+    ]);
+    await showRows(user);
+
+    const chooseCredential = async (name: string) => {
+      await user.click(
+        screen.getByRole("combobox", { name: "Select Credential" }),
+      );
+      await user.click(await screen.findByRole("option", { name }));
+    };
+    await chooseCredential("other-sql");
+    expect(anyResult()).not.toBeInTheDocument();
+
+    await chooseCredential("my-sql");
+    expect(
+      screen.getByRole("combobox", { name: "Select Credential" }),
+    ).toHaveTextContent("my-sql");
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("goes when the event's settings change under it, and doesn't come back", async () => {
+    const user = userEvent.setup();
+    const { show } = renderSection(RUN_QUERY);
+    await showRows(user);
+
+    show(EXECUTE);
+    await screen.findByRole("button", { name: "Execute Statement Now" });
+    expect(anyResult()).not.toBeInTheDocument();
+
+    show(RUN_QUERY);
+    await screen.findByRole("button", { name: "Run Query Now" });
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("goes when the selection is cleared", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+    await showRows(user);
+
+    await user.click(screen.getByRole("button", { name: /Clear Selection/ }));
+
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("stays when a parameter changes, and says it's from before", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+    const shown = await showRows(user);
+    expect(shown).not.toHaveTextContent(/parameters have changed/);
+
+    await user.type(screen.getByLabelText("Max Rows"), "5");
+
+    expect(shown).toBeInTheDocument();
+    expect(shown).toHaveTextContent(
+      "The parameters have changed since this ran.",
+    );
+  });
+
+  it("stops saying it's from before when the parameters are back to what ran", async () => {
+    const user = userEvent.setup();
+    const { show } = renderSection(RUN_QUERY);
+    const shown = await showRows(user);
+
+    show(config("SQL", "run-query", { query: "SELECT 2" }));
+    await waitFor(() =>
+      expect(shown).toHaveTextContent(
+        "The parameters have changed since this ran.",
+      ),
+    );
+
+    show(config("SQL", "run-query", { query: "SELECT 1" }));
+    await waitFor(() =>
+      expect(shown).not.toHaveTextContent(/parameters have changed/),
+    );
+  });
+
+  it("isn't shown when it comes back after another action was chosen", async () => {
+    const user = userEvent.setup();
+    const { answer } = answerLater();
+    const { show } = renderSection(RUN_QUERY);
+
+    await user.click(pressed("Run Query Now"));
+    await waitFor(() => expect(mockExecute).toHaveBeenCalled());
+    show(EXECUTE);
+    await screen.findByRole("button", { name: "Execute Statement Now" });
+    await act(async () => {
+      answer({ success: true, result: ROWS });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+
+    show(RUN_QUERY);
+    await screen.findByRole("button", { name: "Run Query Now" });
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("isn't shown when another credential was chosen and the first again before it came back", async () => {
+    const user = userEvent.setup();
+    const { answer } = answerLater();
+    renderSection(RUN_QUERY, [
+      credential("SQL"),
+      { id: 2, name: "other-sql", type: "SQL" } as Tool,
+    ]);
+
+    await user.click(pressed("Run Query Now"));
+    await waitFor(() => expect(mockExecute).toHaveBeenCalled());
+    for (const name of ["other-sql", "my-sql"]) {
+      await user.click(
+        screen.getByRole("combobox", { name: "Select Credential" }),
+      );
+      await user.click(await screen.findByRole("option", { name }));
+    }
+    await act(async () => {
+      answer({ success: true, result: ROWS });
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Done",
+        description: "Returned 2 rows. It ran read-only, so no data changed.",
+      }),
+    );
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("goes when it runs again, and a failure leaves none", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+    await showRows(user);
+
+    const { answer } = answerLater();
+    await user.click(pressed("Run Query Now"));
+    expect(anyResult()).not.toBeInTheDocument();
+
+    await act(async () => {
+      answer({ success: false, error: 'relation "t" does not exist' });
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenLastCalledWith({
+        title: "Run Query failed",
+        description: 'relation "t" does not exist',
+        variant: "destructive",
+      }),
+    );
+    expect(anyResult()).not.toBeInTheDocument();
+  });
+
+  it("cuts a long result short, and says so", async () => {
+    const user = userEvent.setup();
+    const rows = Array.from({ length: 150 }, (_, n) => ({ id: n + 1 }));
+    mockExecute.mockResolvedValue({
+      success: true,
+      result: { columns: ["id"], rows, rowCount: 150 },
+    });
+    renderSection(RUN_QUERY);
+
+    await run(user, "Run Query Now");
+
+    const shown = await screen.findByRole("region", { name: QUERY_RESULT });
+    expect(within(shown).getAllByRole("row")).toHaveLength(101);
+    expect(shown).toHaveTextContent("Showing the first 100 of 150 rows.");
+  });
+
+  it("can be put away without submitting the form", async () => {
+    const user = userEvent.setup();
+    renderSection(RUN_QUERY);
+    const shown = await showRows(user);
+
+    await user.click(
+      within(shown).getByRole("button", { name: "Dismiss the result" }),
+    );
+
+    expect(anyResult()).not.toBeInTheDocument();
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it("doesn't put the result in the browser console", async () => {
+    const user = userEvent.setup();
+    const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      mockExecute.mockResolvedValue({ success: true, result: ROWS });
+      renderSection(RUN_QUERY);
+      await run(user, "Run Query Now");
+      await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+
+      expect(log.mock.calls.flat()).not.toContainEqual(ROWS);
+    } finally {
+      log.mockRestore();
+    }
   });
 });

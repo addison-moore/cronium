@@ -106,16 +106,28 @@ jest.mock("@/lib/email", () => ({
   },
 }));
 
+/** What the model answers, as `generateText` gives it. */
+const mockModelAnswer = jest.fn<
+  {
+    text: string;
+    model: string;
+    provider: string;
+    usage: { inputTokens?: number; outputTokens?: number };
+    finishReason: string;
+  },
+  []
+>(() => ({
+  text: "hello",
+  model: "m",
+  provider: "custom",
+  usage: {},
+  finishReason: "stop",
+}));
+
 jest.mock("@/lib/ai", () => ({
   generateText: () => {
     mockOut("ai");
-    return Promise.resolve({
-      text: "hello",
-      model: "m",
-      provider: "custom",
-      usage: {},
-      finishReason: "stop",
-    });
+    return Promise.resolve(mockModelAnswer());
   },
 }));
 
@@ -494,4 +506,168 @@ describe("what the toast says about a result", () => {
       "The mail server accepted it for 2 recipients. It refused c@example.test.",
     );
   });
+});
+
+/**
+ * The form shows what a read or a prompt returned, under its button. A simulation's result
+ * is made up, such as Google Sheets' "Product A", and a send or a write comes back with
+ * little more than the count the toast gives, so those show nothing.
+ */
+describe("what the form shows of a result that worked", () => {
+  const shownAfter = async (
+    id: string,
+    credentials: unknown,
+    parameters: Record<string, unknown>,
+  ) => {
+    const action = lookUp(id);
+    action.inputSchema.parse(parameters);
+    const result: unknown = await action.execute(
+      credentials,
+      parameters,
+      context(true),
+    );
+    expect(isFailureResult(result)).toBe(false);
+    return action.testRun.shows?.(result);
+  };
+
+  const answer = (
+    overrides: Partial<ReturnType<typeof mockModelAnswer>>,
+  ): ReturnType<typeof mockModelAnswer> => ({
+    text: "hello",
+    model: "m",
+    provider: "custom",
+    usage: {},
+    finishReason: "stop",
+    ...overrides,
+  });
+
+  it("decides for every action, by what it does", () => {
+    for (const id of getAllServerActionIds()) {
+      const { testRun } = lookUp(id);
+      expect([id, typeof testRun.shows]).toEqual([
+        id,
+        testRun.kind === "reads" || testRun.kind === "spends"
+          ? "function"
+          : "undefined",
+      ]);
+    }
+  });
+
+  it("shows a query's rows under its columns", async () => {
+    expect(
+      await shownAfter("run-query", sql, { query: "SELECT id FROM t" }),
+    ).toEqual({
+      type: "rows",
+      columns: ["id"],
+      rows: [{ id: 1 }, { id: 2 }, { id: 3 }],
+    });
+  });
+
+  it.each<[string, Record<string, unknown>, unknown[]]>([
+    ["find-documents", { collection: "c" }, [{ _id: 1 }]],
+    [
+      "aggregate-documents",
+      { collection: "c", pipeline: [{ $match: {} }] },
+      [{ _id: 1 }, { _id: 2 }],
+    ],
+  ])("shows the documents %s returned", async (id, parameters, documents) => {
+    expect(await shownAfter(id, mongo, parameters)).toEqual({
+      type: "documents",
+      documents,
+    });
+  });
+
+  it("shows the model's answer, and which model gave it", async () => {
+    expect(await shownAfter("ai-prompt", ai, { userPrompt: "hi" })).toEqual({
+      type: "text",
+      format: "prose",
+      text: "hello",
+      about: "Answered by m.",
+    });
+  });
+
+  it("says how many tokens a prompt used, when the provider says", async () => {
+    mockModelAnswer.mockReturnValueOnce(
+      answer({ usage: { inputTokens: 12, outputTokens: 1 } }),
+    );
+    expect(
+      await shownAfter("ai-prompt", ai, { userPrompt: "hi" }),
+    ).toMatchObject({
+      about: "Answered by m, using 12 tokens in and 1 token out.",
+    });
+  });
+
+  // OpenAI and OpenAI-compatible endpoints, Anthropic, Gemini.
+  it.each(["length", "max_tokens", "MAX_TOKENS"])(
+    "says an answer that ended with %s may be cut short",
+    async (finishReason) => {
+      mockModelAnswer.mockReturnValueOnce(
+        answer({ text: "The first half", finishReason }),
+      );
+      expect(
+        await shownAfter("ai-prompt", ai, { userPrompt: "hi" }),
+      ).toMatchObject({
+        text: "The first half",
+        warning: "It stopped at Max Tokens, so the answer may be cut short.",
+      });
+    },
+  );
+
+  it("shows a JSON answer as the next step gets it, without the details Cronium adds", async () => {
+    mockModelAnswer.mockReturnValueOnce(
+      answer({ text: '```json\n{"city": "Paris", "rank": 1}\n```' }),
+    );
+    expect(
+      await shownAfter("ai-prompt", ai, {
+        userPrompt: "hi",
+        responseFormat: "json",
+      }),
+    ).toEqual({
+      type: "text",
+      format: "json",
+      text: JSON.stringify({ city: "Paris", rank: 1 }, null, 2),
+      about: "Answered by m.",
+    });
+  });
+
+  it("shows a JSON list under `result`, where the next step finds it", async () => {
+    mockModelAnswer.mockReturnValueOnce(answer({ text: "[1, 2]" }));
+    expect(
+      await shownAfter("ai-prompt", ai, {
+        userPrompt: "hi",
+        responseFormat: "json",
+      }),
+    ).toMatchObject({
+      format: "json",
+      text: JSON.stringify({ result: [1, 2] }, null, 2),
+    });
+  });
+
+  // The form calls `shows` in its success handler, where a throw would say the run failed.
+  it.each(["run-query", "find-documents", "aggregate-documents", "ai-prompt"])(
+    "%s takes a result it can't read without throwing",
+    (id) => {
+      for (const result of [null, undefined, {}, "text"]) {
+        expect(() => lookUp(id).testRun.shows?.(result)).not.toThrow();
+      }
+    },
+  );
+
+  it.each(
+    REAL.filter(({ kind }) => kind === "sends" || kind === "writes").map(
+      (c) => [c.id, c] as const,
+    ),
+  )(
+    "shows nothing of what %s returned, beyond what the toast says",
+    async (id, { credentials, parameters }) => {
+      expect(await shownAfter(id, credentials, parameters)).toBeUndefined();
+    },
+  );
+
+  it.each(SIMULATED.map((c) => [c.id, c] as const))(
+    "never shows what %s returned, which is made up",
+    async (id, { credentials, parameters }) => {
+      expect(await shownAfter(id, credentials, parameters)).toBeUndefined();
+    },
+  );
 });
