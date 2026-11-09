@@ -812,9 +812,11 @@ export default function WorkflowDetailsPage({
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="text-muted-foreground h-4 w-4" />
+                    <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
                     <span className="text-sm font-medium">Name:</span>
-                    <span className="text-sm font-semibold">
+                    {/* A name without spaces, such as nightly_db_backup_to_s3,
+                        breaks to fit rather than widening the page */}
+                    <span className="min-w-0 text-sm font-semibold break-words">
                       {workflow.name}
                     </span>
                   </div>
@@ -827,7 +829,7 @@ export default function WorkflowDetailsPage({
                     <div className="flex items-start gap-2">
                       <FileText className="text-muted-foreground mt-1 h-4 w-4" />
                       <span className="text-sm font-medium">Description:</span>
-                      <span className="text-muted-foreground text-sm">
+                      <span className="text-muted-foreground min-w-0 text-sm break-words">
                         {workflow.description}
                       </span>
                     </div>
@@ -900,7 +902,9 @@ export default function WorkflowDetailsPage({
                       <Activity className="h-4 w-4" />
                       Execution Statistics
                     </h4>
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* One per line on a phone: three columns there are narrower
+                        than "Successful: 3", which ran into "Failed:" */}
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="text-success h-4 w-4" />
                         <span className="text-sm font-medium">Successful:</span>
