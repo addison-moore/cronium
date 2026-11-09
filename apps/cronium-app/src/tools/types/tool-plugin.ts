@@ -25,26 +25,71 @@ export interface ActionFeatures {
 }
 
 /**
- * What the button on the event form does with an action. The form sends `isTest`, but
- * only an action whose code reads it stops short of the real thing, so each one has to
- * say which it is. The form goes by this to decide what the button says, whether to ask
- * first, and what the toast says. `src/tools/__tests__/test-run.test.ts` checks it against
- * what each action really does. Build one with the helpers in `@/tools/utils/test-run`.
+ * What the event form shows of a run that worked, under its button. The form draws as
+ * much as fits and says what it left out, since a read can return up to
+ * MAX_UNIFIED_IO_OUTPUT_BYTES.
  */
-export interface ActionTestRun {
-  /**
-   * - `simulated`: stops at `isTest`, before contacting anything.
-   * - `reads`: really runs, and can't change anything.
-   * - `sends`: really delivers something to someone.
-   * - `spends`: really calls a service that may charge for it.
-   * - `writes`: really changes data, for good.
-   */
-  kind: "simulated" | "reads" | "sends" | "spends" | "writes";
+export type ShownResult =
+  | {
+      /** Rows, under these columns. A value is drawn as text, an object as JSON. */
+      type: "rows";
+      columns: string[];
+      rows: Record<string, unknown>[];
+    }
+  | {
+      /** Documents, each drawn as JSON. */
+      type: "documents";
+      documents: unknown[];
+    }
+  | {
+      /** Text such as a model's answer, drawn as it was written. */
+      type: "text";
+      /** JSON goes in a fixed-width font. */
+      format: "prose" | "json";
+      text: string;
+      /** Said under the text, such as which model answered. */
+      about?: string;
+      /** Said under the text as a warning, such as that it may be cut short. */
+      warning?: string;
+    };
+
+interface ActionTestRunWords {
   /** Said beside the button, and again when asking first. */
   explains: string;
   /** What the toast says after a run that worked, from what the action returned. */
   succeeded: (result: unknown) => string;
 }
+
+/**
+ * What the button on the event form does with an action. The form sends `isTest`, but
+ * only an action whose code reads it stops short of the real thing, so each one has to
+ * say which it is. The form goes by this to decide what the button says, whether to ask
+ * first, what the toast says, and what it shows of the result.
+ * `src/tools/__tests__/test-run.test.ts` checks it against what each action really does.
+ * Build one with the helpers in `@/tools/utils/test-run`.
+ *
+ * - `simulated`: stops at `isTest`, before contacting anything.
+ * - `reads`: really runs, and can't change anything.
+ * - `sends`: really delivers something to someone.
+ * - `spends`: really calls a service that may charge for it.
+ * - `writes`: really changes data, for good.
+ *
+ * A read or a prompt comes back with something to look at, so it says in `shows` how.
+ * A simulation's result is made up, such as Google Sheets' "Product A", so it never
+ * shows. A send or a write comes back with little more than the count the toast gives.
+ */
+export type ActionTestRun = ActionTestRunWords &
+  (
+    | {
+        kind: "reads" | "spends";
+        /** What the form shows of what the action returned. */
+        shows: (result: unknown) => ShownResult;
+      }
+    | {
+        kind: "simulated" | "sends" | "writes";
+        shows?: never;
+      }
+  );
 
 // Tool Action Interface
 export interface ToolAction {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useEffect,
   useId,
   useState,
   useLayoutEffect,
@@ -44,12 +45,14 @@ import { useToast } from "@cronium/ui";
 import { type Tool } from "@/shared/schema";
 import {
   type ActionTestRun,
+  type ShownResult,
   type ToolAction,
   type ToolPlugin,
   ToolPluginRegistry,
 } from "@/tools/types/tool-plugin";
 import { useToolPlugins } from "@/tools/use-tool-plugins";
 import ActionParameterForm from "./ActionParameterForm";
+import RunResult from "./RunResult";
 import { cn } from "@/lib/utils";
 import { SlackMessagePreview, EmailPreview } from "@/tools/previews";
 import Link from "next/link";
@@ -164,6 +167,27 @@ const templateValueNote = (
     ? `Template values such as ${value} aren't filled in here: they go as written.`
     : undefined;
 };
+
+// A press of the run button. The answer is about this, and another credential or action
+// can be chosen while it runs.
+interface PressedRun {
+  action: ToolAction;
+  credential: Tool;
+  parameters: Record<string, unknown>;
+  /** False once another credential or action is chosen, so its result isn't shown. */
+  stillChosen: boolean;
+}
+
+// A run that came back with something to show, and what it ran with.
+interface ShownRun {
+  toolId: number;
+  actionId: string;
+  actionName: string;
+  credentialName: string;
+  parameters: Record<string, unknown>;
+  summary: string;
+  shown: ShownResult;
+}
 
 // What a stored config's tool and action are called. A row can name ones no plugin has
 // now, or leave the tool out: only the form writes whole ones, and the API takes any JSON.
@@ -431,13 +455,22 @@ export default function ToolActionSection({
     }
   };
 
-  // The answer is about the action that was pressed, and another can be chosen meanwhile.
-  const pressedAction = useRef<ToolAction | null>(null);
+  const pressedRun = useRef<PressedRun | null>(null);
+  const [lastRun, setLastRun] = useState<ShownRun | null>(null);
+
+  // A result is about the credential and action it ran with, so it goes when either
+  // changes, by a choice here or through the event's settings, and one still on its way
+  // won't show.
+  useEffect(() => {
+    setLastRun(null);
+    if (pressedRun.current) pressedRun.current.stillChosen = false;
+  }, [selectedTool?.id, selectedAction?.id]);
 
   const runActionMutation = trpc.tools.executeAction.useMutation({
     onSuccess: (answer) => {
-      const action = pressedAction.current;
-      if (!action) return;
+      const run = pressedRun.current;
+      if (!run) return;
+      const { action } = run;
       if (!answer.success) {
         toast({
           title: runFailedTitle(action),
@@ -446,14 +479,28 @@ export default function ToolActionSection({
         });
         return;
       }
+      const summary = action.testRun.succeeded(answer.result);
       toast({
         title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
-        description: action.testRun.succeeded(answer.result),
+        description: summary,
       });
-      console.log("Tool action result:", answer.result);
+      // Only a read or a prompt has something to show: a simulation's result is made up,
+      // and a send or a write comes back with little more than the count the toast gave.
+      const { shows } = action.testRun;
+      if (shows && !answer.simulated && run.stillChosen) {
+        setLastRun({
+          toolId: run.credential.id,
+          actionId: action.id,
+          actionName: action.name,
+          credentialName: run.credential.name,
+          parameters: run.parameters,
+          summary,
+          shown: shows(answer.result),
+        });
+      }
     },
     onError: (error) => {
-      const action = pressedAction.current;
+      const action = pressedRun.current?.action;
       if (!action) return;
       const message = trpcErrorMessage(error, "The server gave no reason.");
       // The server only says no before running anything. With no answer, or a broken one,
@@ -473,7 +520,14 @@ export default function ToolActionSection({
   const runAction = () => {
     if (!selectedTool || !selectedAction) return;
 
-    pressedAction.current = selectedAction;
+    pressedRun.current = {
+      action: selectedAction,
+      credential: selectedTool,
+      parameters,
+      stillChosen: true,
+    };
+    // Whatever this run comes back with, the last one's result isn't it.
+    setLastRun(null);
     runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
@@ -493,6 +547,21 @@ export default function ToolActionSection({
   const runNote = selectedAction
     ? templateValueNote(selectedAction, parameters)
     : undefined;
+
+  // Never one about another credential or action, even in the render before the effect
+  // above clears it.
+  const shownRun =
+    lastRun &&
+    lastRun.toolId === selectedTool?.id &&
+    lastRun.actionId === selectedAction?.id
+      ? lastRun
+      : null;
+  const shownRunIsStale = useMemo(
+    () =>
+      !!shownRun &&
+      JSON.stringify(shownRun.parameters) !== JSON.stringify(parameters),
+    [shownRun, parameters],
+  );
 
   // Clear selection
   const handleClearSelection = () => {
@@ -1034,6 +1103,17 @@ export default function ToolActionSection({
                       {runNote && <p>{runNote}</p>}
                     </div>
                   </div>
+
+                  {shownRun && (
+                    <RunResult
+                      actionName={shownRun.actionName}
+                      credentialName={shownRun.credentialName}
+                      summary={shownRun.summary}
+                      shown={shownRun.shown}
+                      stale={shownRunIsStale}
+                      onDismiss={() => setLastRun(null)}
+                    />
+                  )}
 
                   {/* Portaled out of the form, so its buttons can't submit it. */}
                   <ConfirmationDialog
