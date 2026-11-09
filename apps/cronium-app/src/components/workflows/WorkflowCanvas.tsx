@@ -1,5 +1,11 @@
 "use client";
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+} from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -72,6 +78,7 @@ import {
   ensureEdgeConnectionType,
   filterAvailableEvents,
   normalizeEdges,
+  withCurrentEventDetails,
 } from "./lib/canvas-transforms";
 
 // Event type icon mapping - now using consistent icons
@@ -86,7 +93,6 @@ export interface WorkflowCanvasProps {
   initialEdges?: Edge[];
   onChange?: (nodes: Node[], edges: Edge[]) => void;
   onRefresh?: () => void;
-  updateEvents?: () => void;
   readOnly?: boolean;
   isLoading?: boolean;
   onSave?: () => void;
@@ -106,7 +112,6 @@ export default function WorkflowCanvas({
   initialEdges = [],
   onChange,
   onRefresh: _onRefresh,
-  updateEvents,
   readOnly = false,
   isLoading = false,
   onSave,
@@ -116,6 +121,10 @@ export default function WorkflowCanvas({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const nodesToShow = useMemo(
+    () => withCurrentEventDetails(nodes, availableEvents),
+    [nodes, availableEvents],
+  );
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -669,7 +678,7 @@ export default function WorkflowCanvas({
         ref={reactFlowWrapper}
       >
         <ReactFlow
-          nodes={nodes}
+          nodes={nodesToShow}
           edges={edges}
           onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
@@ -947,12 +956,6 @@ export default function WorkflowCanvas({
                                 {...(event.updatedAt != null && {
                                   updatedAt: event.updatedAt,
                                 })}
-                                onEventUpdated={() => {
-                                  // Use the same updateEvents function as canvas nodes for consistent refresh
-                                  if (updateEvents) {
-                                    updateEvents();
-                                  }
-                                }}
                               >
                                 <Button
                                   variant="ghost"

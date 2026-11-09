@@ -1,6 +1,6 @@
 /**
- * Disconnect has to say when it fails. react-query is real, and errors are real
- * TRPCClientErrors.
+ * Connect and Disconnect have to say when they fail. react-query is real, and errors
+ * are real TRPCClientErrors.
  */
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -12,14 +12,23 @@ import type { ToolWithParsedCredentials } from "@/tools/types/tool-plugin";
 const mockToast = jest.fn();
 const mockRevoke = jest.fn();
 const mockRefetch = jest.fn();
+const mockHealthCheck = jest.fn();
+let mockHasTokens = true;
 
 jest.mock("@cronium/ui", () => ({
   ...jest.requireActual<Record<string, unknown>>("@cronium/ui"),
   useToast: () => ({ toast: mockToast }),
 }));
 
+// The real badge tests the connection when it mounts, and only then.
 jest.mock("@/tools/ToolHealthIndicator", () => ({
-  ToolHealthBadge: () => null,
+  ToolHealthBadge: () => {
+    const { useEffect } = jest.requireActual<typeof import("react")>("react");
+    useEffect(() => {
+      mockHealthCheck();
+    }, []);
+    return null;
+  },
 }));
 
 jest.mock("@/lib/trpc", () => {
@@ -31,7 +40,7 @@ jest.mock("@/lib/trpc", () => {
       tools: {
         checkOAuthStatus: {
           useQuery: () => ({
-            data: { configured: true, hasTokens: true },
+            data: { configured: true, hasTokens: mockHasTokens },
             refetch: mockRefetch,
           }),
         },
@@ -65,16 +74,20 @@ const tool: ToolWithParsedCredentials = {
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
-function renderDisplay() {
-  render(
+function display() {
+  return (
     <QueryClientProvider client={new QueryClient()}>
       <CredentialDisplay
         tools={[tool]}
         onEdit={jest.fn()}
         onDelete={jest.fn()}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+function renderDisplay() {
+  render(display());
   return userEvent.setup();
 }
 
@@ -92,6 +105,137 @@ function refusal(message: string): TRPCClientError<never> {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockHasTokens = true;
+});
+
+describe("Connect", () => {
+  const connect = () =>
+    screen.getByRole("button", { name: "Connect Google Account" });
+  const realFetch = global.fetch;
+
+  beforeEach(() => {
+    mockHasTokens = false;
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    global.fetch = realFetch;
+    jest.restoreAllMocks();
+  });
+
+  function authorizeAnswers(status: number, body: string) {
+    global.fetch = jest.fn().mockResolvedValue(
+      // jsdom has no Response, and the handler only reads these.
+      {
+        ok: status >= 200 && status < 300,
+        status,
+        json: () => Promise.resolve(JSON.parse(body) as unknown),
+      },
+    );
+  }
+
+  it("asks to authorize this tool with the Google provider", async () => {
+    authorizeAnswers(400, JSON.stringify({ error: "refused" }));
+    const user = renderDisplay();
+
+    await user.click(connect());
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    const [url, init] = jest.mocked(global.fetch).mock.calls[0]!;
+    expect(url).toBe("/api/oauth/authorize");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      toolId: 4,
+      providerId: "google",
+    });
+  });
+
+  it("gives the route's reason when it refuses, and can be pressed again", async () => {
+    authorizeAnswers(
+      400,
+      JSON.stringify({ error: "OAuth not configured for google" }),
+    );
+    const user = renderDisplay();
+
+    await user.click(connect());
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Connect Failed",
+      description: "OAuth not configured for google",
+      variant: "destructive",
+    });
+    expect(connect()).toBeEnabled();
+  });
+
+  it("says so when the answer has no way onward", async () => {
+    authorizeAnswers(200, JSON.stringify({}));
+    const user = renderDisplay();
+
+    await user.click(connect());
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Connect Failed",
+        description: "Failed to start Google authorization",
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("says so when the route can't be reached", async () => {
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = renderDisplay();
+
+    await user.click(connect());
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Connect Failed",
+        description: "Failed to start Google authorization",
+        variant: "destructive",
+      }),
+    );
+    expect(connect()).toBeEnabled();
+  });
+
+  it("says so when a proxy answers with something that isn't JSON", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new SyntaxError("Unexpected token <")),
+    });
+    const user = renderDisplay();
+
+    await user.click(connect());
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Connect Failed",
+        description: "Failed to start Google authorization",
+        variant: "destructive",
+      }),
+    );
+  });
+});
+
+describe("the health badge", () => {
+  it("tests the connection once when the page shows it", () => {
+    renderDisplay();
+
+    expect(mockHealthCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("tests again when the connection changes, so it can't contradict it", () => {
+    const { rerender } = render(display());
+    expect(mockHealthCheck).toHaveBeenCalledTimes(1);
+
+    mockHasTokens = false;
+    rerender(display());
+
+    expect(mockHealthCheck).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("Disconnect", () => {

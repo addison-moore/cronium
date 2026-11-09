@@ -4,6 +4,7 @@ import {
   createHash,
   randomBytes,
 } from "crypto";
+import { parseRetiredKeys } from "../../../scripts/retired-keys.cjs";
 
 /**
  * One versioned, record-bound secret encryption boundary (security plan Phase
@@ -197,7 +198,9 @@ let vault: SecretVault | null = null;
 
 /**
  * The process-wide secret vault. Fails closed: throws if ENCRYPTION_KEY is
- * absent or invalid (no ephemeral development fallback — Phase 2.1).
+ * absent or invalid (no ephemeral development fallback — Phase 2.1), or if
+ * ENCRYPTION_KEYS_RETIRED is malformed. A process refuses to start on either, so this
+ * is for one that got past that, such as with SKIP_ENV_VALIDATION set.
  */
 export function getSecretVault(): SecretVault {
   if (vault) return vault;
@@ -207,11 +210,13 @@ export function getSecretVault(): SecretVault {
       "ENCRYPTION_KEY is required — refusing to start the secret vault without it",
     );
   }
-  const retired = process.env.ENCRYPTION_KEYS_RETIRED;
-  const retiredKeysHex = retired
-    ? (JSON.parse(retired) as string[])
-    : undefined;
-  vault = new SecretVault({ activeKeyHex, retiredKeysHex });
+  const { keys, problem } = parseRetiredKeys(
+    process.env.ENCRYPTION_KEYS_RETIRED,
+  );
+  if (problem) {
+    throw new SecretVaultUnavailableError(`ENCRYPTION_KEYS_RETIRED ${problem}`);
+  }
+  vault = new SecretVault({ activeKeyHex, retiredKeysHex: keys });
   return vault;
 }
 

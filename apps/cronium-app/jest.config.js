@@ -26,6 +26,9 @@ const customJestConfig = {
     "^superjson$": "<rootDir>/../../tests/superjson-stub.ts",
   },
   transformIgnorePatterns: ["/node_modules/(?!@hookform|next-auth|superjson)"],
+  // Shared by tests rather than tests themselves, though Jest takes anything under
+  // __tests__ for one.
+  testPathIgnorePatterns: ["/__tests__/helpers/"],
   // Coverage is opt-in (`--coverage`); CI enforces a no-regression ratchet on
   // the totals via infra/scripts/check-coverage-ratchet.mjs. The excludes keep
   // the denominator honest: deprecated/migration scripts and type decls are

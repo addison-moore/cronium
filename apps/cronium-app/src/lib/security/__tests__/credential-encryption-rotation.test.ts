@@ -1,6 +1,7 @@
 import {
   CredentialEncryption,
   parseEncryptedData,
+  type EncryptedData,
 } from "../credential-encryption";
 
 /**
@@ -71,6 +72,82 @@ describe("CredentialEncryption key rotation", () => {
     expect(() => svc.decrypt(underA)).toThrow(
       /failed authenticated decryption/,
     );
+  });
+
+  it("derives a retired key with whitespace around it as the key it is", () => {
+    delete process.env.ENCRYPTION_KEYS_RETIRED;
+    svc.initialize(KEY_A);
+    const underA = svc.encrypt(secret);
+
+    process.env.ENCRYPTION_KEYS_RETIRED = JSON.stringify([` ${KEY_A}\n`]);
+    svc.initialize(KEY_B);
+
+    expect(svc.decrypt(underA)).toEqual(secret);
+  });
+
+  // A process refuses to start on these, so this is for one that got past that.
+  describe("a malformed list", () => {
+    let warn: jest.SpyInstance;
+
+    beforeEach(() => {
+      warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    function underAWith(retired: string): EncryptedData {
+      delete process.env.ENCRYPTION_KEYS_RETIRED;
+      svc.initialize(KEY_A);
+      const underA = svc.encrypt(secret);
+
+      process.env.ENCRYPTION_KEYS_RETIRED = retired;
+      svc.initialize(KEY_B);
+      return underA;
+    }
+
+    it.each([
+      ["the inner quotes left out", `[${KEY_A}]`],
+      ["a JSON string, which used to say nothing", JSON.stringify(KEY_A)],
+      ["a key cut short", JSON.stringify([KEY_A.slice(0, 63)])],
+    ])(
+      "%s: warns without quoting it, and uses the active key",
+      (_, retired) => {
+        const underA = underAWith(retired);
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]?.[0]).toContain("ENCRYPTION_KEYS_RETIRED");
+        expect(warn.mock.calls[0]?.[0]).not.toContain(KEY_A.slice(0, 8));
+        expect(() => svc.decrypt(underA)).toThrow(
+          /failed authenticated decryption/,
+        );
+        expect(svc.decrypt(svc.encrypt(secret))).toEqual(secret);
+      },
+    );
+
+    it("keeps the good keys in a list with a bad one", () => {
+      const underA = underAWith(JSON.stringify(["nope", KEY_A]));
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(svc.decrypt(underA)).toEqual(secret);
+    });
+
+    it("doesn't derive a key from a string that isn't one", () => {
+      // Long enough for the old rule, and varied enough not to set off the entropy warning.
+      const notAKey = "not-a-hex-key-but-32-or-more-characters-long";
+      delete process.env.ENCRYPTION_KEYS_RETIRED;
+      svc.initialize(notAKey);
+      const underIt = svc.encrypt(secret);
+      expect(warn).not.toHaveBeenCalled();
+
+      process.env.ENCRYPTION_KEYS_RETIRED = JSON.stringify([notAKey]);
+      svc.initialize(KEY_B);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(() => svc.decrypt(underIt)).toThrow(
+        /failed authenticated decryption/,
+      );
+    });
   });
 });
 

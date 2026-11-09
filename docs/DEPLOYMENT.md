@@ -107,7 +107,9 @@ Anything else in front of the app can also answer in its place. When that happen
 the app names the status and says it isn't Cronium's answer, as in `Got HTTP 502,
 not Cronium's answer` while Cronium restarts behind a proxy. A sign-in proxy's
 redirect reads `Got a redirect, not Cronium's answer`, and signing in again in a
-new tab keeps what's in the form. A web application firewall needs an exception for
+new tab keeps what's in the form. The MCP stdio bridge tells an MCP client the same,
+and reports a redirect rather than following it, so its `CRONIUM_BASE_URL` has to be
+the address that answers. A web application firewall needs an exception for
 `/api/trpc/` and the event routes of the REST API: at its default settings,
 ModSecurity with the OWASP Core Rule Set refuses ordinary scripts, such as one with
 `rm -rf /tmp/build` or `curl ... | bash` in it, with a 403, and any request over
@@ -149,6 +151,10 @@ jobs with `SSH_ISOLATION_REQUIRED`.
   to run without an explicit `ADMIN_PASSWORD`.
 - **Email**: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and
   `SMTP_FROM_EMAIL` to `.env` to enable outbound email.
+- **Google Sheets**: add `OAUTH_GOOGLE_CLIENT_ID` and
+  `OAUTH_GOOGLE_CLIENT_SECRET` to `.env`, and register
+  `{AUTH_URL}/api/oauth/callback` as the redirect URI with Google. See
+  [OAuth Tool Integrations](./ENVIRONMENT_VARIABLES.md#oauth-tool-integrations-optional).
 
 ## Building From Source
 

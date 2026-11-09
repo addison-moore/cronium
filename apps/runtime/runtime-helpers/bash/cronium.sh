@@ -63,7 +63,8 @@ _cronium_ready() {
 _cronium_request() {
     local method="$1"
     local path="$2"
-    local data="$3"
+    # A script's `set -u` applies in here too, and most callers have no body to send.
+    local data="${3:-}"
     local max_retries=3
     local retry_delay=1
     local attempt=1
@@ -93,8 +94,9 @@ _cronium_request() {
         # propagated out of the substitution explicitly — the pipeline runs
         # in a subshell, so a bare `$?` afterwards only ever saw tail's
         # (always zero) exit status and network failures were never retried.
-        status_code=$(curl "${curl_args[@]}" "${CRONIUM_RUNTIME_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}")
-        curl_exit=$?
+        # The `||` is for a script's `set -e`, which otherwise ends it right here.
+        curl_exit=0
+        status_code=$(curl "${curl_args[@]}" "${CRONIUM_RUNTIME_API}${path}" | tail -n1; exit "${PIPESTATUS[0]}") || curl_exit=$?
 
         # Retry on network failures (connection refused/reset, timeout, DNS):
         # curl exits non-zero and/or reports an http_code of 000.
@@ -118,12 +120,17 @@ _cronium_request() {
         response=$(cat "$temp_file")
         rm -f "$temp_file"
         
-        # Check status code
-        if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ]; then
+        # Check status code. The body has a say as well: a 200 that's empty, isn't JSON or
+        # says {"success":false} didn't do what was asked, and as a read it would look like
+        # a variable with no value. -s is what makes an empty body fail on every jq: with
+        # no input, 1.6 exits 0 under -e where 1.7 exits 4.
+        if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ] &&
+            echo "$response" | jq -se 'length == 1 and .[0].success != false' >/dev/null 2>&1; then
             echo "$response"
             return 0
-        elif [ "$status_code" -eq 404 ] && [ "$method" = "GET" ]; then
-            # Special case for variable not found
+        elif [ "$status_code" -eq 404 ] && [ "$method" = "GET" ] && [[ "$path" == */variables/* ]]; then
+            # Special case for variable not found. Input and context always exist, so a 404
+            # for those is a failure like any other.
             echo '{"data":{"value":null}}'
             return 0
         elif [ "$status_code" -ge 500 ] && [ "$status_code" -ne 501 ] && [ $attempt -lt $max_retries ]; then
@@ -139,7 +146,7 @@ _cronium_request() {
             # {"message": "..."}. Always include the status code so failures
             # are diagnosable from job logs.
             local error_msg=$(echo "$response" | jq -r '.message // .error // "Unknown error"' 2>/dev/null || echo "no body")
-            echo "Error: API request failed - HTTP $status_code - $error_msg" >&2
+            echo "Error: API request failed - HTTP $status_code - ${error_msg:-no body}" >&2
             return 1
         fi
     done
@@ -245,8 +252,10 @@ cronium_event() {
 cronium_event_field() {
     _cronium_ready || return 1
     local field="$1"
+    local event
+    event=$(cronium_event) || return 1
     # `== null` (not `//`): a field whose value is `false` must print.
-    cronium_event | jq -r "if .$field == null then empty else .$field end"
+    echo "$event" | jq -r "if .$field == null then empty else .$field end"
 }
 
 # Execute a tool action
@@ -369,11 +378,16 @@ cronium_send_discord_message() {
     cronium_execute_tool_action "discord" "send_message" "$config"
 }
 
-# Utility function to check if a variable exists
+# Utility function to check if a variable exists. Returns 0 if it has a value, 1 if it
+# doesn't, and 2 if the read failed, which says nothing either way.
 cronium_variable_exists() {
     _cronium_ready || return 1
     local key="$1"
-    local value=$(cronium_get_variable "$key" 2>/dev/null)
+    local value
+    value=$(cronium_get_variable "$key") || {
+        echo "Error: Could not tell whether variable '$key' exists" >&2
+        return 2
+    }
     [ -n "$value" ]
 }
 
@@ -389,7 +403,13 @@ cronium_increment_variable() {
     _cronium_ready || return 1
     local key="$1"
     local increment="${2:-1}"
-    local current=$(cronium_get_variable "$key" 2>/dev/null || echo "0")
+    local current
+    # Only a variable with no value starts from 0. One that couldn't be read still holds
+    # its value, and anything written here would replace it.
+    current=$(cronium_get_variable "$key") || {
+        echo "Error: Could not read variable '$key', so it was not changed" >&2
+        return 1
+    }
     current="${current:-0}"
     
     # Check if current value is numeric
@@ -399,7 +419,7 @@ cronium_increment_variable() {
     fi
     
     local new_value=$((current + increment))
-    cronium_set_variable "$key" "$new_value"
+    cronium_set_variable "$key" "$new_value" || return 1
     echo "$new_value"
 }
 
@@ -409,7 +429,12 @@ cronium_append_variable() {
     local key="$1"
     local append="$2"
     local separator="${3:-}"
-    local current=$(cronium_get_variable "$key" 2>/dev/null || echo "")
+    local current
+    # See cronium_increment_variable.
+    current=$(cronium_get_variable "$key") || {
+        echo "Error: Could not read variable '$key', so it was not changed" >&2
+        return 1
+    }
     
     if [ -z "$current" ]; then
         cronium_set_variable "$key" "$append"
@@ -422,8 +447,8 @@ cronium_append_variable() {
 cronium_info() {
     local token="${CRONIUM_EXECUTION_TOKEN:-${_cronium_token:-}}"
     echo "Cronium Bash SDK v2.0.0"
-    echo "API URL: $CRONIUM_RUNTIME_API"
-    echo "Execution ID: $CRONIUM_EXECUTION_ID"
+    echo "API URL: ${CRONIUM_RUNTIME_API:-}"
+    echo "Execution ID: ${CRONIUM_EXECUTION_ID:-}"
     echo "Token: ${token:0:10}..." 
 }
 

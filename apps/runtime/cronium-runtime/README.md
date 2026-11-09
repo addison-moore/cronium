@@ -25,7 +25,7 @@ Authorization: Bearer <token>
 
 - `GET /executions/{id}/input` - Get execution input data
 - `POST /executions/{id}/output` - Set execution output data
-- `GET /executions/{id}/variables/{key}` - Get variable value
+- `GET /executions/{id}/variables/{key}` - Get variable value, which is `null` if no variable has that key. A 500 means the read failed and says nothing about whether it exists
 - `PUT /executions/{id}/variables/{key}` - Set variable value
 - `POST /executions/{id}/condition` - Set workflow condition
 - `GET /executions/{id}/context` - Get execution context

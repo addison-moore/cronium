@@ -182,11 +182,8 @@ fi
 # Set/update variables
 cronium_set_variable "LAST_PROCESSED" "2025-06-17T10:30:00Z"
 
-# Increment counter
-counter=$(cronium_get_variable "COUNTER")
-counter=\${counter:-0}
-new_counter=$((counter + 1))
-cronium_set_variable "COUNTER" "$new_counter"
+# Increment counter. With no value it starts from 0. If it can't be read, it isn't changed
+new_counter=$(cronium_increment_variable "COUNTER") || exit 1
 
 # Variables persist across all script executions for the user
 echo "Processing count: $(cronium_get_variable 'COUNTER')"`,
@@ -433,10 +430,7 @@ main() {
     done <<< "$items"
     
     # Update processing stats
-    total_processed=$(cronium_get_variable "TOTAL_PROCESSED")
-    total_processed=\${total_processed:-0}
-    new_total=$((total_processed + processed_count))
-    cronium_set_variable "TOTAL_PROCESSED" "$new_total"
+    cronium_increment_variable "TOTAL_PROCESSED" "$processed_count" > /dev/null || exit 1
     
     # Calculate success rate
     total_items=$((processed_count + error_count))

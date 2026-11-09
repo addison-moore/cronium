@@ -6,10 +6,10 @@
  */
 import http from "http";
 import type { AddressInfo } from "net";
-import { lookup as dnsLookup } from "dns/promises";
+import { resolveHost } from "../resolve-host";
 import { guardedLookup, ssrfHttpAgent } from "../ssrf-guard";
 
-jest.mock("dns/promises", () => ({ lookup: jest.fn() }));
+jest.mock("../resolve-host", () => ({ resolveHost: jest.fn() }));
 jest.mock("../tools/safe-fetch", () => {
   const actual = jest.requireActual<typeof import("../tools/safe-fetch")>(
     "../tools/safe-fetch",
@@ -23,7 +23,7 @@ jest.mock("../tools/safe-fetch", () => {
   };
 });
 
-const mockedLookup = dnsLookup as unknown as jest.Mock;
+const mockedLookup = resolveHost as unknown as jest.Mock;
 
 function get(port: number): Promise<string> {
   return new Promise((resolve, reject) => {

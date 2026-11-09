@@ -24,6 +24,10 @@ import WorkflowExecutionHistory from "@/components/workflows/WorkflowExecutionHi
 import WorkflowExecutionGraph from "@/components/workflows/WorkflowExecutionGraph";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
 import WorkflowDetailsForm from "@/components/workflows/WorkflowDetailsForm";
+import {
+  type AvailableEvent,
+  withCurrentEventDetails,
+} from "@/components/workflows/lib/canvas-transforms";
 import { formatDate } from "@/lib/utils";
 import {
   Share2,
@@ -47,7 +51,6 @@ import {
   type Workflow,
   type Event,
   EventStatus,
-  type EventType,
   WorkflowTriggerType,
   type ConnectionType,
   LogStatus,
@@ -55,18 +58,6 @@ import {
 import type { Node, Edge } from "@xyflow/react";
 
 // Type definitions for WorkflowCanvas integration
-interface AvailableEvent {
-  id: number;
-  name: string;
-  type: EventType;
-  description?: string;
-  tags?: string[];
-  serverId?: number;
-  serverName?: string;
-  createdAt?: Date | string;
-  updatedAt?: Date | string;
-}
-
 interface WorkflowNodeData {
   eventId?: number;
   label?: string;
@@ -78,13 +69,38 @@ interface WorkflowNodeData {
   serverName?: string;
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  updateEvents?: () => Promise<void>;
 }
 
 // Type guard for WorkflowNodeData
 function isWorkflowNodeData(data: unknown): data is WorkflowNodeData {
   return typeof data === "object" && data !== null;
 }
+
+function toAvailableEvent(event: Event): AvailableEvent {
+  const mappedEvent: AvailableEvent = {
+    id: event.id,
+    name: event.name,
+    type: event.type,
+  };
+
+  if (event.description) {
+    mappedEvent.description = event.description;
+  }
+
+  if (Array.isArray(event.tags) && event.tags.length > 0) {
+    mappedEvent.tags = event.tags as string[];
+  }
+
+  if (event.serverId) {
+    mappedEvent.serverId = event.serverId;
+  }
+
+  mappedEvent.createdAt = event.createdAt;
+  mappedEvent.updatedAt = event.updatedAt;
+
+  return mappedEvent;
+}
+
 import { WorkflowDetailsHeader } from "@/components/workflow-details/WorkflowDetailsHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -113,7 +129,6 @@ export default function WorkflowDetailsPage({
       serverName?: string;
       createdAt?: Date | string | undefined;
       updatedAt?: Date | string | undefined;
-      updateEvents?: () => Promise<void>;
     };
   }
 
@@ -371,27 +386,6 @@ export default function WorkflowDetailsPage({
     setLoadingEvents(isLoadingEvents);
   }, [isLoadingEvents]);
 
-  const fetchEvents = useCallback(async () => {
-    // This is now handled by the tRPC query
-    // Keeping the function for compatibility with components that expect it
-    return Promise.resolve();
-  }, []);
-
-  // Update events function to refresh workflow nodes when events change
-  const updateEvents = useCallback(async () => {
-    try {
-      console.log("Updating events...");
-      await fetchEvents();
-    } catch (error) {
-      console.error("Error fetching events:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load events. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [fetchEvents, toast]);
-
   const handleCanvasChange = useCallback(
     (nodes: LocalWorkflowNode[], edges: WorkflowEdge[]) => {
       if (!hasInitialData) return;
@@ -488,56 +482,16 @@ export default function WorkflowDetailsPage({
     void utils.workflows.getById.invalidate({ id: workflowId });
   };
 
+  const canvasEvents = useMemo(
+    () => availableEvents.map(toAvailableEvent),
+    [availableEvents],
+  );
+
   // Memoize enriched nodes to prevent infinite re-renders and update when events change
-  const enrichedWorkflowNodes = useMemo(() => {
-    return workflowNodes.map((node) => {
-      // Find the corresponding event for this node
-      const event = availableEvents.find((e) => e.id === node.data.eventId);
-
-      if (event) {
-        // Check if the event data has changed
-        const eventDataChanged =
-          node.data.label !== event.name ||
-          node.data.type !== event.type ||
-          node.data.eventTypeIcon !== event.type;
-
-        if (!eventDataChanged && node.data.updateEvents === updateEvents) {
-          return node; // Return existing node if nothing changed
-        }
-
-        // Update node with latest event data including all properties for EventDetailsPopover
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            label: event.name,
-            type: event.type,
-            eventTypeIcon: event.type,
-            description: event.description ?? "",
-            tags: event.tags ?? [],
-            serverId: event.serverId,
-            serverName: undefined, // serverName not available on Event type
-            createdAt: event.createdAt,
-            updatedAt: event.updatedAt,
-            updateEvents: updateEvents,
-          },
-        };
-      }
-
-      // For nodes without matching events, just add updateEvents function
-      if (node.data.updateEvents === updateEvents) {
-        return node;
-      }
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          updateEvents: updateEvents,
-        },
-      };
-    });
-  }, [workflowNodes, availableEvents, updateEvents]);
+  const enrichedWorkflowNodes = useMemo(
+    () => withCurrentEventDetails(workflowNodes, canvasEvents),
+    [workflowNodes, canvasEvents],
+  );
 
   const handleExecutionUpdate = (execution: WorkflowExecutionDetailed) => {
     setCurrentExecution(execution);
@@ -844,7 +798,6 @@ export default function WorkflowDetailsPage({
             executionId={currentExecution?.id}
             isExecuting={isExecuting}
             onExecutionUpdate={handleWorkflowExecutionUpdate}
-            updateEvents={updateEvents}
           />
 
           {/* Workflow Information */}
@@ -1087,32 +1040,7 @@ export default function WorkflowDetailsPage({
           <div className="bg-secondary-bg relative h-full w-full overflow-hidden p-0">
             {hasInitialData ? (
               <WorkflowCanvas
-                availableEvents={availableEvents.map(
-                  (event): AvailableEvent => {
-                    const mappedEvent: AvailableEvent = {
-                      id: event.id,
-                      name: event.name,
-                      type: event.type,
-                    };
-
-                    if (event.description) {
-                      mappedEvent.description = event.description;
-                    }
-
-                    if (Array.isArray(event.tags) && event.tags.length > 0) {
-                      mappedEvent.tags = event.tags as string[];
-                    }
-
-                    if (event.serverId) {
-                      mappedEvent.serverId = event.serverId;
-                    }
-
-                    mappedEvent.createdAt = event.createdAt;
-                    mappedEvent.updatedAt = event.updatedAt;
-
-                    return mappedEvent;
-                  },
-                )}
+                availableEvents={canvasEvents}
                 initialNodes={enrichedWorkflowNodes.map((node): Node => ({
                   id: node.id,
                   type: node.type,
@@ -1128,7 +1056,6 @@ export default function WorkflowDetailsPage({
                     serverName: node.data.serverName,
                     createdAt: node.data.createdAt,
                     updatedAt: node.data.updatedAt,
-                    updateEvents: node.data.updateEvents,
                   },
                 }))}
                 initialEdges={workflowEdges.map((edge): Edge => {
@@ -1176,7 +1103,6 @@ export default function WorkflowDetailsPage({
                         serverName: nodeData.serverName,
                         createdAt: nodeData.createdAt,
                         updatedAt: nodeData.updatedAt,
-                        updateEvents: nodeData.updateEvents,
                       },
                     };
                   });
@@ -1211,7 +1137,6 @@ export default function WorkflowDetailsPage({
                   handleCanvasChange(localNodes, localEdges);
                 }}
                 onRefresh={handleCanvasRefresh}
-                updateEvents={updateEvents}
                 isLoading={loadingEvents}
                 onSave={handleManualSave}
                 isSaving={isSaving}
