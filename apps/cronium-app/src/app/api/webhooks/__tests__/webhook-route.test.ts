@@ -25,17 +25,24 @@ jest.mock("@/server/db", () => {
     table: unknown;
     values: Record<string, unknown>;
   }> = [];
+  const insert = jest.fn((table: unknown) => ({
+    values: jest.fn((values: Record<string, unknown>) => {
+      insertCalls.push({ table, values });
+      return {
+        returning: jest.fn(() => Promise.resolve([{ id: 101, ...values }])),
+      };
+    }),
+  }));
+  // A transaction writes through the same insert, so the calls show up alongside.
+  const tx = { insert };
   return {
     __insertCalls: insertCalls,
+    __tx: tx,
     db: {
-      insert: jest.fn((table: unknown) => ({
-        values: jest.fn((values: Record<string, unknown>) => {
-          insertCalls.push({ table, values });
-          return {
-            returning: jest.fn(() => Promise.resolve([{ id: 101, ...values }])),
-          };
-        }),
-      })),
+      insert,
+      transaction: jest.fn((callback: (t: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
     },
   };
 });
@@ -77,6 +84,8 @@ const managerMock = jest.requireMock("@/lib/webhooks/WebhookManager") as {
 };
 const dbMock = jest.requireMock("@/server/db") as {
   __insertCalls: Array<{ table: unknown; values: Record<string, unknown> }>;
+  __tx: unknown;
+  db: { insert: jest.Mock; transaction: jest.Mock };
 };
 const rateLimitMock = jest.requireMock("@/lib/rate-limit-service") as {
   RateLimitService: { tryCheckLimit: jest.Mock };
@@ -165,6 +174,7 @@ function logInserts() {
   return dbMock.__insertCalls.filter((c) => c.table === webhookLogs);
 }
 
+const storePrepared = jest.fn();
 const sendPrepared = jest.fn();
 const cancelPrepared = jest.fn();
 
@@ -174,6 +184,7 @@ beforeEach(() => {
   dbMock.__insertCalls.length = 0;
   managerMock.__manager.getWebhookByKey.mockResolvedValue(undefined);
   managerMock.__manager.prepareEvent.mockResolvedValue({
+    store: storePrepared,
     send: sendPrepared,
     cancel: cancelPrepared,
   });
@@ -439,6 +450,105 @@ describe("POST /api/webhooks/[key] — a full delivery queue", () => {
     expect(res.status).toBe(500);
     expect(cancelPrepared).toHaveBeenCalledTimes(1);
     expect(sendPrepared).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/webhooks/[key] — the event's rows", () => {
+  beforeEach(() => {
+    managerMock.__manager.getWebhookByKey.mockResolvedValue(webhookRow());
+  });
+
+  const body = '{"event":"order.created"}';
+  const sameId = (raw = body) =>
+    signedHeaders(raw, { "x-webhook-delivery-id": "d-rows" });
+
+  /** A transaction that runs its callback, and then has its COMMIT fail like this. */
+  function commitFails(error: Error) {
+    dbMock.db.transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        await callback(dbMock.__tx);
+        throw error;
+      },
+    );
+  }
+
+  it("stores both in one transaction, and queues deliveries once it's committed", async () => {
+    const steps: string[] = [];
+    dbMock.db.transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        const row = await callback(dbMock.__tx);
+        steps.push("commit");
+        return row;
+      },
+    );
+    storePrepared.mockImplementationOnce(async () => steps.push("store"));
+    sendPrepared.mockImplementationOnce(async () => steps.push("send"));
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(200);
+
+    expect(storePrepared).toHaveBeenCalledWith(dbMock.__tx);
+    expect(eventInserts()).toHaveLength(1);
+    expect(steps).toEqual(["store", "commit", "send"]);
+    expect(cancelPrepared).not.toHaveBeenCalled();
+  });
+
+  it("frees the id and gives the room back when the second row won't go in", async () => {
+    storePrepared.mockRejectedValueOnce(new Error("no database"));
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(500);
+    expect(cancelPrepared).toHaveBeenCalledTimes(1);
+    expect(sendPrepared).not.toHaveBeenCalled();
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(200);
+  });
+
+  it("frees the id when Postgres refuses the COMMIT", async () => {
+    commitFails(
+      Object.assign(new Error("Failed query: commit"), {
+        cause: Object.assign(new Error("refused"), {
+          code: "40001",
+          severity: "ERROR",
+        }),
+      }),
+    );
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(500);
+    expect(cancelPrepared).toHaveBeenCalledTimes(1);
+    expect(sendPrepared).not.toHaveBeenCalled();
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(200);
+  });
+
+  it("keeps the id used, and queues nothing, when the COMMIT gets no answer", async () => {
+    commitFails(new Error("Connection terminated unexpectedly"));
+
+    expect((await post("whk_valid", body, sameId())).status).toBe(500);
+    expect(cancelPrepared).toHaveBeenCalledTimes(1);
+    expect(sendPrepared).not.toHaveBeenCalled();
+
+    const replay = await post("whk_valid", body, sameId());
+    expect(replay.status).toBe(401);
+    expect(((await replay.json()) as { error: string }).error).toMatch(
+      /replay|duplicate/i,
+    );
+  });
+
+  it("refuses what Postgres couldn't store with a 400, before claiming room or writing", async () => {
+    const unstorable = '{"event":"order.created","note":"\\u0000"}';
+
+    const res = await post("whk_valid", unstorable, sameId(unstorable));
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(
+      /NUL character/,
+    );
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
+    expect(dbMock.db.transaction).not.toHaveBeenCalled();
+    expect(logInserts()).toHaveLength(1);
+    expect(logInserts()[0]!.values).toMatchObject({ success: false });
+
+    // Nothing was done, so the corrected request can use the same id.
+    expect((await post("whk_valid", body, sameId())).status).toBe(200);
   });
 });
 
