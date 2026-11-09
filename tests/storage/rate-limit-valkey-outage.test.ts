@@ -288,11 +288,14 @@ async function withTotp(): Promise<string> {
   return app.totp.generateTotp(secret, Math.floor(Date.now() / 1000));
 }
 
-async function limitKeys(): Promise<string[]> {
-  const keys: string[] = [];
+/**
+ * Every count the limiter keeps. resetDatabase leaves Valkey alone, so a count left behind
+ * would carry into the next test, or into the next suite that signs in from the same address.
+ */
+async function clearLimits(): Promise<void> {
   let cursor = "0";
   do {
-    const [next, batch] = await admin.scan(
+    const [next, keys] = await admin.scan(
       cursor,
       "MATCH",
       LIMIT_KEYS,
@@ -300,9 +303,8 @@ async function limitKeys(): Promise<string[]> {
       1000,
     );
     cursor = next;
-    keys.push(...batch);
+    if (keys.length > 0) await admin.del(...keys);
   } while (cursor !== "0");
-  return keys.filter((key) => !key.includes("storage-test-probe"));
 }
 
 /** Puts a bucket at its limit, as that many requests would have. */
@@ -337,8 +339,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await app.reset.resetDatabase();
-  const keys = await limitKeys();
-  if (keys.length > 0) await admin.del(...keys);
+  await clearLimits();
   userId = await seedUser();
   consoleError = jest
     .spyOn(console, "error")
@@ -358,6 +359,7 @@ afterAll(async () => {
   quietConnectionLog();
   await app.limiter.closeAtomicRateLimiter();
   await app.cache.cacheService.disconnect();
+  await clearLimits();
   admin.disconnect();
   await relay.stop();
   await app.reset.closePool();
