@@ -20,6 +20,7 @@ import { credentialCache } from "@/lib/tools/credential-cache";
 import { auditLog } from "@/lib/security/audit-logger";
 import { clientIpFromHeaders } from "@/lib/security/client-ip";
 import { rateLimiter } from "@/lib/security/rate-limiter";
+import { withConnectionCheckLimit } from "@/lib/security/connection-check-limit";
 import {
   redactCredentialValues,
   mergeCredentials,
@@ -445,10 +446,12 @@ export const toolsRouter = createTRPCRouter({
           toolType: tool.type,
         });
 
-        // Real provider check (SMTP verify, API auth call, webhook POST, ...)
-        const connectionResult = await testToolConnection(
-          tool.type,
-          credentials,
+        // Real provider check (SMTP verify, API auth call, webhook POST, ...). The
+        // Tools page runs this for every tool it lists when it opens, so the limit
+        // lets them wait their turn, and the badge shows a refusal as unchecked.
+        const connectionResult = await withConnectionCheckLimit(
+          ctx.session.user.id,
+          () => testToolConnection(tool.type, credentials),
         );
 
         const testResult = {
@@ -537,7 +540,9 @@ export const toolsRouter = createTRPCRouter({
         }
 
         const startTime = Date.now();
-        const result = await testToolConnection(input.type, credentials);
+        const result = await withConnectionCheckLimit(ctx.session.user.id, () =>
+          testToolConnection(input.type, credentials),
+        );
         return {
           success: result.success,
           message: result.message,

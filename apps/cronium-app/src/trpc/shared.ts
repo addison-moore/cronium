@@ -54,6 +54,16 @@ export function trpcErrorMessage(error: unknown, fallback: string): string {
   return sentences.join("; ") || message || fallback;
 }
 
+/**
+ * Whether a call was refused for being one too many, as the limit on connection
+ * checks does. Nothing was checked, so it says nothing about the server or tool.
+ */
+export function wasRefusedAsTooMany(error: unknown): boolean {
+  return (
+    (error as Partial<TRPCError> | null)?.data?.code === "TOO_MANY_REQUESTS"
+  );
+}
+
 // Common query options for different data types
 export const QUERY_OPTIONS = {
   // Fast-changing data (real-time updates)
