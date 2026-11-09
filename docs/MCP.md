@@ -24,10 +24,12 @@ response back, probing the endpoint at startup so a bad URL/token fails at
 connect time. There is deliberately no second tool implementation.
 
 It tells Cronium's answers by the body. Anything that isn't JSON-RPC, at any
-status but a 401, reads `Got HTTP 502, not Cronium's answer` under the request's
-id, with possible causes and without the body, which only goes to its log. It
-doesn't follow redirects. Something in front of Cronium that answers in JSON-RPC
-can't be told apart, and is passed on as Cronium's.
+status, reads `Got HTTP 502, not Cronium's answer` under the request's id, with
+possible causes and without the body, which only goes to its log. The exception
+is the route's own 401, `{"error":"unauthorized: ..."}`, which says to check the
+token and stops the bridge at startup, so a rewording has to keep that start. It
+doesn't follow redirects. Something in front of Cronium that answers in JSON-RPC,
+or with that 401, can't be told apart, and is passed on as Cronium's.
 
 ## The tools
 
