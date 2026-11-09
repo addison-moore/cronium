@@ -13,6 +13,10 @@
  * Then servers that misbehave: one that never answers a command, and one that never
  * closes its side after the service says goodbye. Neither may hold a call or a socket
  * for good. The service gets small limits there, so nothing waits for its real ones.
+ *
+ * Last, the terminal's pool, which keeps connections for the shells it opens and closes
+ * them itself: each way it does that, at the server that never closes its side, and what
+ * it keeps in the pool when a connection it replaced closes.
  */
 // For the host key verifier. With no key on file, it records the one it's shown.
 let mockStoredHostKey: string | null = null;
@@ -29,6 +33,7 @@ import net from "net";
 import { Server as SshServer, utils as sshUtils } from "ssh2";
 import type { Connection } from "ssh2";
 import { SSHService } from "../ssh";
+import { createServerSSHConnectionScope } from "../ssh/pool-key";
 
 jest.setTimeout(30_000);
 
@@ -86,6 +91,8 @@ interface FakeServer {
   port: number;
   /** Every command it was asked to run, in the order they came, over any connection. */
   commands: string[];
+  /** Every connection it has had, closed or not. */
+  connections: () => number;
   /** Connections to it that haven't closed. */
   open: () => number;
   close: () => Promise<void>;
@@ -97,9 +104,10 @@ afterEach(async () => {
 });
 
 /**
- * An SSH server that takes `PASSWORD` and answers each command from `answers`.
- * `holdFirst` keeps the first command it gets waiting until it resolves, and `delayMs`
- * spaces every answer out, so calls overlap.
+ * An SSH server that takes `PASSWORD`, answers each command from `answers`, and opens a
+ * shell for a terminal. `holdFirst` keeps the first command it gets waiting until it
+ * resolves, and `delayMs` spaces every answer out, so calls overlap. `holdSignIn` never
+ * answers a sign-in, and `refuseChannels` refuses every channel, so every shell.
  */
 async function startServer(
   answers: Record<string, string>,
@@ -107,15 +115,20 @@ async function startServer(
     holdFirst?: Promise<void>;
     delayMs?: number;
     refuseCommands?: boolean;
+    holdSignIn?: boolean;
+    refuseChannels?: boolean;
   } = {},
 ): Promise<FakeServer> {
   const commands: string[] = [];
   const open = new Set<Connection>();
+  let connections = 0;
   const server = new SshServer({ hostKeys: [hostKey] }, (client) => {
+    connections += 1;
     open.add(client);
     client.on("close", () => open.delete(client));
     client.on("error", () => undefined);
     client.on("authentication", (context) => {
+      if (options.holdSignIn) return;
       if (context.method === "password" && context.password === PASSWORD) {
         context.accept();
       } else {
@@ -123,28 +136,39 @@ async function startServer(
       }
     });
     client.on("ready", () => {
-      client.on("session", (acceptSession) => {
-        acceptSession().on("exec", (acceptExec, rejectExec, info) => {
-          const first = commands.length === 0;
-          commands.push(info.command);
-          if (options.refuseCommands) {
-            rejectExec();
-            return;
-          }
-          const stream = acceptExec();
-          stream.on("error", () => undefined);
-          void ((first && options.holdFirst) || Promise.resolve())
-            .then(() => wait(options.delayMs))
-            .then(() => {
-              try {
-                stream.write(answers[info.command] ?? "");
-                stream.exit(0);
-                stream.end();
-              } catch {
-                // The connection closed while this one waited.
-              }
-            });
-        });
+      client.on("session", (acceptSession, rejectSession) => {
+        if (options.refuseChannels) {
+          rejectSession();
+          return;
+        }
+        acceptSession()
+          .on("exec", (acceptExec, rejectExec, info) => {
+            const first = commands.length === 0;
+            commands.push(info.command);
+            if (options.refuseCommands) {
+              rejectExec();
+              return;
+            }
+            const stream = acceptExec();
+            stream.on("error", () => undefined);
+            void ((first && options.holdFirst) || Promise.resolve())
+              .then(() => wait(options.delayMs))
+              .then(() => {
+                try {
+                  stream.write(answers[info.command] ?? "");
+                  stream.exit(0);
+                  stream.end();
+                } catch {
+                  // The connection closed while this one waited.
+                }
+              });
+          })
+          .on("pty", (acceptPty) => acceptPty())
+          .on("shell", (acceptShell) => {
+            const shell = acceptShell();
+            shell.on("error", () => undefined);
+            shell.write("a shell\n");
+          });
       });
     });
   });
@@ -152,6 +176,7 @@ async function startServer(
   const fake = {
     port: (server.address() as net.AddressInfo).port,
     commands,
+    connections: () => connections,
     open: () => open.size,
     close: () =>
       new Promise<void>((resolve) => {
@@ -226,19 +251,25 @@ const tcpSocketsHere = () =>
  * server behind it has closed, the only TCP socket left in this process is the one that
  * server still holds. It saw the client close its side first, so the service said
  * goodbye before it stopped waiting.
+ *
+ * `inUse` other connections through `server` may still be open, as a terminal's pool
+ * keeps them. Each of those is four sockets here: the service's, both of the
+ * pass-through's, and the SSH server's.
  */
 async function closedThoughServerNeverDid(
   server: ServerThatNeverCloses,
   behind: FakeServer,
+  inUse = 0,
 ) {
   await until(
     "the service's socket to close",
     () =>
-      behind.open() === 0 &&
-      server.open() === 1 &&
+      behind.open() === inUse &&
+      server.open() === inUse + 1 &&
       server.closedByClient() === 1 &&
-      tcpSocketsHere() === 1,
+      tcpSocketsHere() === 1 + 4 * inUse,
   );
+  if (inUse > 0) return;
   await server.close();
   await nothingStaysOpen(behind);
 }
@@ -629,5 +660,143 @@ describe("SSHService, with a server that never answers or never closes", () => {
       message: "All configured authentication methods failed",
     });
     await closedThoughServerNeverDid(neverCloses, a);
+  });
+});
+
+describe("SSHService's terminal pool", () => {
+  const GRACE = { closeGraceMs: 300 };
+  const SCOPE = createServerSSHConnectionScope("user-1", 1);
+
+  /**
+   * A shell, as the terminal's websocket opens one and reads it. The pool counts a shell
+   * as open until it has been read to its end.
+   */
+  async function openShell(port: number, password = PASSWORD) {
+    const opened = await sshService.openShell(
+      SCOPE,
+      LOOPBACK,
+      password,
+      USERNAME,
+      port,
+      80,
+      24,
+      "password",
+    );
+    opened.shell.resume();
+    return opened;
+  }
+
+  /** An SSH server that answers as server A, behind one that never closes its side. */
+  async function startServers(options?: Parameters<typeof startServer>[1]) {
+    const a = await startServer(SERVER_A.answers, options);
+    return { a, neverCloses: await startServerThatNeverCloses(a) };
+  }
+
+  beforeEach(() => {
+    sshService = new SSHService(GRACE);
+  });
+
+  // What the pool still keeps closes with the servers, before the next test starts. The
+  // SSH servers go first: once the pass-through has gone, nothing reads their goodbye.
+  afterEach(async () => {
+    await Promise.all(started.splice(0).map((server) => server.close()));
+    await Promise.all(neverClosing.splice(0).map((server) => server.close()));
+    await until("every socket to close", () => tcpSocketsHere() === 0);
+  });
+
+  it("closes a connection it has kept too long, though the server never closes its side", async () => {
+    sshService = new SSHService({
+      ...GRACE,
+      terminalIdleMs: 100,
+      terminalSweepMs: 50,
+    });
+    const { a, neverCloses } = await startServers();
+
+    const { shell, cleanup } = await openShell(neverCloses.port);
+    shell.close();
+    cleanup();
+
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes a kept connection that fails its check, though the server never closes its side", async () => {
+    // Before the pool hands a connection out again, it runs a command over it, which
+    // this server refuses.
+    const { a, neverCloses } = await startServers({ refuseCommands: true });
+
+    const first = await openShell(neverCloses.port);
+    first.shell.close();
+    first.cleanup();
+    await openShell(neverCloses.port);
+
+    expect(a.commands).toEqual(['echo "test"']);
+    expect(a.connections()).toBe(2);
+    await closedThoughServerNeverDid(neverCloses, a, 1);
+  });
+
+  it("closes a connection that isn't ready in time, though the server never closes its side", async () => {
+    sshService = new SSHService({ ...GRACE, terminalConnectMs: 400 });
+    const { a, neverCloses } = await startServers({ holdSignIn: true });
+
+    await expect(openShell(neverCloses.port)).rejects.toThrow(
+      "Connection to 127.0.0.1 timed out.",
+    );
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes a connection after a refused password, though the server never closes its side", async () => {
+    const { a, neverCloses } = await startServers();
+
+    await expect(
+      openShell(neverCloses.port, "not the password"),
+    ).rejects.toThrow(
+      "Authentication failed for u@127.0.0.1. Please verify your password is correct.",
+    );
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes a connection whose shell was refused, though the server never closes its side", async () => {
+    const { a, neverCloses } = await startServers({ refuseChannels: true });
+
+    await expect(openShell(neverCloses.port)).rejects.toThrow(
+      "(SSH) Channel open failure",
+    );
+    await closedThoughServerNeverDid(neverCloses, a);
+  });
+
+  it("closes a connection with too many shells once it's replaced, though the server never closes its side", async () => {
+    sshService = new SSHService({ ...GRACE, replacedConnectionMs: 100 });
+    const { a, neverCloses } = await startServers();
+
+    // Five shells share a connection, and the sixth gets a new one.
+    for (let shells = 0; shells < 5; shells += 1) {
+      await openShell(neverCloses.port);
+    }
+    expect(a.connections()).toBe(1);
+    await openShell(neverCloses.port);
+    expect(a.connections()).toBe(2);
+
+    await closedThoughServerNeverDid(neverCloses, a, 1);
+    // The first one closing left the second in the pool, for the next shell.
+    await openShell(neverCloses.port);
+    expect(a.connections()).toBe(2);
+  });
+
+  it("keeps the connection that replaced one with too many shells", async () => {
+    // Here the first one closes as soon as it's told to, with the second in the pool.
+    sshService = new SSHService({ ...GRACE, replacedConnectionMs: 300 });
+    const a = await startServer(SERVER_A.answers);
+
+    for (let shells = 0; shells < 6; shells += 1) {
+      await openShell(a.port);
+    }
+    expect(a.connections()).toBe(2);
+    await until(
+      "the first connection to close",
+      () => a.open() === 1 && tcpSocketsHere() === 2,
+    );
+    await openShell(a.port);
+
+    expect(a.connections()).toBe(2);
   });
 });
