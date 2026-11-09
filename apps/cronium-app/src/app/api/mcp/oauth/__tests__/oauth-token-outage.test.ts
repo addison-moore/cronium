@@ -1,10 +1,10 @@
 /**
  * @jest-environment node
  *
- * What the token endpoint does when it can't read a grant's owner, without loosening single
- * use to get there. This runs the real route and store on a stand-in for Valkey. The same
- * things on real Postgres and Valkey, and GETDEL under real concurrency, are in
- * tests/storage/oauth-token-outage.test.ts.
+ * What the token endpoint does when it can't read a grant's owner, or can't ask Valkey,
+ * without loosening single use to get there. This runs the real route and store on a stand-in
+ * for Valkey. The same things on real Postgres and Valkey, and GETDEL under real concurrency,
+ * are in tests/storage/oauth-token-outage.test.ts and oauth-token-valkey-outage.test.ts.
  */
 process.env.AUTH_SECRET = "test-auth-secret-for-mcp-oauth";
 
@@ -13,33 +13,52 @@ jest.mock("@/lib/cache/cache-service", () => {
   return {
     __entries: entries,
     cacheService: {
-      get: jest.fn((key: string) => Promise.resolve(entries.get(key) ?? null)),
-      set: jest.fn((key: string, value: unknown) => {
+      getStrict: jest.fn((key: string) =>
+        Promise.resolve(entries.get(key) ?? null),
+      ),
+      setStrict: jest.fn((key: string, value: unknown) => {
         entries.set(key, value);
-        return Promise.resolve(true);
+        return Promise.resolve();
       }),
-      getdel: jest.fn((key: string) => {
+      getdelStrict: jest.fn((key: string) => {
         const value = entries.get(key) ?? null;
         entries.delete(key);
         return Promise.resolve(value);
       }),
+      delete: jest.fn((key: string) => Promise.resolve(entries.delete(key))),
     },
   };
 });
 jest.mock("@/server/storage", () => ({ storage: { getUser: jest.fn() } }));
+jest.mock("@/lib/mcp-oauth/tokens", () => {
+  const actual = jest.requireActual<typeof import("@/lib/mcp-oauth/tokens")>(
+    "@/lib/mcp-oauth/tokens",
+  );
+  return { ...actual, mintAccessToken: jest.fn(actual.mintAccessToken) };
+});
 
 import { createHash } from "node:crypto";
 import { format } from "node:util";
 import { DrizzleQueryError } from "drizzle-orm/errors";
+import { CacheUnavailableError } from "@/lib/cache/cache-unavailable";
 import { allowRefresh, putAuthCode } from "@/lib/mcp-oauth/store";
-import { mintRefreshToken, randomId } from "@/lib/mcp-oauth/tokens";
+import {
+  mintAccessToken,
+  mintRefreshToken,
+  randomId,
+} from "@/lib/mcp-oauth/tokens";
 import { CREDENTIAL_CHECK_FAILED_MESSAGE } from "@/server/security/credential-check";
 import { storage } from "@/server/storage";
 import { POST } from "../token/route";
 
 const cache = jest.requireMock("@/lib/cache/cache-service") as {
   __entries: Map<string, unknown>;
-  cacheService: { getdel: jest.Mock };
+  cacheService: {
+    getStrict: jest.Mock;
+    setStrict: jest.Mock;
+    getdelStrict: jest.Mock;
+    delete: jest.Mock;
+  };
 };
 const getUser = storage.getUser as jest.Mock;
 
@@ -133,6 +152,10 @@ const CREDENTIALS: [string, () => Promise<Credential>][] = [
   ["an authorization code", authorizationCode],
 ];
 
+/** Keys stored since `before`, such as a new refresh token's that should have gone again. */
+const keysAddedSince = (before: Set<string>) =>
+  [...cache.__entries.keys()].filter((key) => !before.has(key));
+
 let consoleError: jest.SpyInstance;
 const logged = () =>
   consoleError.mock.calls
@@ -174,7 +197,7 @@ describe.each(CREDENTIALS)("%s when its owner can't be read", (_, issue) => {
     expect((await present()).status).toBe(503);
     expect((await present()).status).toBe(503);
     expect(cache.__entries.has(key)).toBe(true);
-    expect(cache.cacheService.getdel).not.toHaveBeenCalled();
+    expect(cache.cacheService.getdelStrict).not.toHaveBeenCalled();
 
     getUser.mockResolvedValue(LIVE_USER);
     const first = await present();
@@ -212,7 +235,7 @@ describe.each(CREDENTIALS)("%s when the read works", (_, issue) => {
 
     expect(getUser).toHaveBeenCalledTimes(1);
     expect(getUser.mock.invocationCallOrder[0]).toBeLessThan(
-      cache.cacheService.getdel.mock.invocationCallOrder[0]!,
+      cache.cacheService.getdelStrict.mock.invocationCallOrder[0]!,
     );
   });
 
@@ -251,11 +274,16 @@ describe.each(CREDENTIALS)("%s when the read works", (_, issue) => {
     expect((await present()).status).toBe(400);
   });
 
+  // And as it comes before the take, it leaves the token as it was.
   it("doesn't call any other error a failed check", async () => {
-    const { present } = await issue();
-    cache.cacheService.getdel.mockRejectedValueOnce(new Error("not a lookup"));
+    const { key, present } = await issue();
+    (mintAccessToken as jest.Mock).mockImplementationOnce(() => {
+      throw new Error("not a lookup");
+    });
 
     await expect(present()).rejects.toThrow("not a lookup");
+    expect(cache.__entries.has(key)).toBe(true);
+    expect((await present()).status).toBe(200);
   });
 });
 
@@ -270,11 +298,100 @@ describe.each(CREDENTIALS)("%s when the client gives up", (_, issue) => {
       return Promise.resolve(LIVE_USER);
     });
 
+    const before = new Set(cache.__entries.keys());
+
     await present(undefined, client.signal);
 
     expect(cache.__entries.has(key)).toBe(true);
-    expect(cache.cacheService.getdel).not.toHaveBeenCalled();
+    expect(cache.cacheService.getdelStrict).not.toHaveBeenCalled();
+    expect(keysAddedSince(before)).toEqual([]);
     expect((await present()).status).toBe(200);
+  });
+});
+
+const notConnected = () => new CacheUnavailableError("Valkey isn't connected");
+
+describe.each(CREDENTIALS)("%s when Valkey can't be asked", (name, issue) => {
+  const kind = name.replace(/^an? /, "");
+
+  it("answers a 503 in OAuth's shape that doesn't call the token bad", async () => {
+    const { key, present } = await issue();
+    cache.cacheService.getStrict.mockRejectedValueOnce(notConnected());
+
+    const res = await present();
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      error: "temporarily_unavailable",
+      error_description: CREDENTIAL_CHECK_FAILED_MESSAGE,
+    });
+    expect(getUser).not.toHaveBeenCalled();
+    expect(cache.__entries.has(key)).toBe(true);
+    expect((await present()).status).toBe(200);
+  });
+
+  it("logs which step failed", async () => {
+    const { present } = await issue();
+    cache.cacheService.getStrict.mockRejectedValueOnce(notConnected());
+
+    await present();
+
+    expect(logged()).toContain(`Error reading an OAuth ${kind}`);
+    expect(logged()).toContain("CacheUnavailableError: Valkey isn't connected");
+  });
+
+  // At maxmemory under noeviction, Valkey refuses writes and still answers GETDEL. Taking
+  // the old token first would leave the client with neither.
+  it("isn't taken when Valkey won't store the new refresh token", async () => {
+    const { key, present } = await issue();
+    cache.cacheService.setStrict.mockRejectedValueOnce(
+      new CacheUnavailableError("Valkey couldn't answer SET"),
+    );
+
+    const res = await present();
+
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "temporarily_unavailable",
+    );
+    expect(cache.__entries.has(key)).toBe(true);
+    expect(cache.cacheService.getdelStrict).not.toHaveBeenCalled();
+    expect(logged()).toContain("Error storing an OAuth refresh token");
+    expect((await present()).status).toBe(200);
+  });
+
+  it("leaves no new refresh token behind when the take fails", async () => {
+    const { present } = await issue();
+    const before = new Set(cache.__entries.keys());
+    cache.cacheService.setStrict.mockClear();
+    cache.cacheService.getdelStrict.mockRejectedValueOnce(notConnected());
+
+    expect((await present()).status).toBe(503);
+
+    expect(cache.cacheService.setStrict).toHaveBeenCalledTimes(1);
+    expect(keysAddedSince(before)).toEqual([]);
+    expect(logged()).toContain(`Error taking an OAuth ${kind}`);
+  });
+});
+
+describe.each(CREDENTIALS)("%s another request takes first", (_, issue) => {
+  it("gets invalid_grant, and leaves no new refresh token behind", async () => {
+    const { key, present } = await issue();
+    const before = new Set(cache.__entries.keys());
+    // As if the other request's GETDEL ran between this one's read and its own.
+    cache.cacheService.getdelStrict.mockImplementationOnce((taken: string) => {
+      cache.__entries.delete(taken);
+      return Promise.resolve(null);
+    });
+
+    const res = await present();
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "invalid_grant",
+    );
+    expect(cache.__entries.has(key)).toBe(false);
+    expect(keysAddedSince(before)).toEqual([]);
   });
 });
 
