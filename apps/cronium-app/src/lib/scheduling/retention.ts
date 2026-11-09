@@ -4,7 +4,8 @@
  * jobService.cleanupOldJobs (review D4). The worker runs it on an interval.
  *
  * Each table has its own window from a CRONIUM_*_RETENTION_DAYS variable, and a
- * window of 0 keeps that table forever. Rows go in small batches, one
+ * window of 0 keeps that table forever. A table whose rows say themselves when they
+ * expire has no window and goes on every pass. Rows go in small batches, one
  * transaction each, dependents before their parent because many FKs have no
  * cascade. Purging a `jobs` row detaches its `logs` instead of deleting them:
  * `logs` is the user-visible run history and ages out on its own longer window.
@@ -17,6 +18,7 @@ import {
   jobs,
   jobTransitions,
   logs,
+  oauthStates,
   scheduleIncidents,
   toolActionLogs,
   toolAuditLogs,
@@ -397,9 +399,21 @@ const PURGES = [
       ),
     ),
   },
+  {
+    table: "oauth_states",
+    // No window: a row says itself when it stops being usable, nobody can finish an
+    // attempt after that, and it isn't history anyone would choose to keep. Only a
+    // return from the provider in time removes one otherwise, so an attempt abandoned
+    // at the consent screen stays for good. The cutoff here is now, and `lt` matches
+    // handleCallback's `gte`: a row expiring this instant is still good.
+    window: null,
+    batch: flatBatch(oauthStates, oauthStates.id, (cutoff) =>
+      lt(oauthStates.expiresAt, cutoff),
+    ),
+  },
 ] as const satisfies ReadonlyArray<{
   table: string;
-  window: RetentionWindow;
+  window: RetentionWindow | null;
   batch: BatchPurge;
 }>;
 
@@ -437,8 +451,9 @@ export async function runRetention(
   for (const { table, window: windowName, batch } of PURGES) {
     deleted[table] = 0;
 
-    const days = windows[windowName];
-    if (!(days > 0)) continue;
+    // With no window, the row's own expiry decides, so the cutoff is now.
+    const days = windowName === null ? 0 : windows[windowName];
+    if (windowName !== null && !(days > 0)) continue;
     const cutoff = new Date(now.getTime() - days * DAY_MS);
 
     try {

@@ -370,6 +370,11 @@ of data has its own window, set in `.env`; restart the worker to apply a change.
 - **Keep the log and tool action windows at 31 days or more if you use quotas.**
   Monthly quotas count rows in those two tables, so a shorter window makes usage
   read low.
+- **OAuth connection attempts have no window.** Pressing Connect on a tool writes a
+  row to `oauth_states` that's good for 10 minutes, and coming back from the provider
+  in time removes it. Each pass deletes rows past that time, even with every variable
+  at `0`: nobody can finish an expired attempt, and it isn't history. A connected
+  tool's tokens are in another table, which this doesn't touch.
 
 The worker logs the windows in effect when it starts, and what it deleted on each
 pass. It deletes in small batches, and when a pass stops at its per-table cap it

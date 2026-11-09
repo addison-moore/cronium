@@ -952,6 +952,14 @@ docker build -t cronium-runtime:latest apps/runtime/cronium-runtime`}
                 Monthly quotas count run logs and tool action logs, so keep
                 those two windows at 31 days or more if you use quotas.
               </li>
+              <li>
+                OAuth connection attempts have no window. Pressing Connect on a
+                tool writes a row that&apos;s good for 10 minutes, and coming
+                back from the provider in time removes it. Each pass deletes
+                rows past that time, even with every variable at <code>0</code>:
+                nobody can finish an expired attempt, and it isn&apos;t history.
+                A connected tool&apos;s tokens aren&apos;t affected.
+              </li>
             </ul>
             <Alert className="bg-card text-card-foreground">
               <AlertTitle>Upgrading an existing instance</AlertTitle>
