@@ -6,6 +6,8 @@
  */
 import {
   MAX_INBOUND_EVENT_NAME_CHARS,
+  MAX_INBOUND_JSON_DEPTH,
+  tooDeeplyNested,
   unstorableEvent,
 } from "../storable-event";
 
@@ -89,5 +91,71 @@ describe("unstorableEvent", () => {
 
       expect(unstorableEvent("order.created", { deep })).toMatch(NUL);
     });
+  });
+});
+
+describe("tooDeeplyNested", () => {
+  /** `value` inside `depth` arrays, one inside the next. */
+  const inArrays = (depth: number, value: unknown = 1) => {
+    let nested = value;
+    for (let level = 0; level < depth; level++) nested = [nested];
+    return nested;
+  };
+  /** `value` inside `depth` objects, one inside the next. */
+  const inObjects = (depth: number, value: unknown = 1) => {
+    let nested = value;
+    for (let level = 0; level < depth; level++) nested = { a: nested };
+    return nested;
+  };
+  const tooDeep = (depth: string) =>
+    `This event is nested too deeply: it has arrays and objects ${depth} levels deep, and the limit is 256.`;
+
+  it("takes arrays and objects 256 levels deep", () => {
+    expect(MAX_INBOUND_JSON_DEPTH).toBe(256);
+    expect(tooDeeplyNested(inArrays(256))).toBeUndefined();
+    expect(tooDeeplyNested(inObjects(256))).toBeUndefined();
+    expect(tooDeeplyNested(inObjects(128, inArrays(128)))).toBeUndefined();
+  });
+
+  it("refuses one level more, and says how deep it went", () => {
+    expect(tooDeeplyNested(inArrays(257))).toBe(tooDeep("257"));
+    expect(tooDeeplyNested(inObjects(257))).toBe(tooDeep("257"));
+    expect(tooDeeplyNested(inArrays(128, inObjects(129)))).toBe(tooDeep("257"));
+  });
+
+  it("counts an empty array or object as a level, and anything else as none", () => {
+    expect(tooDeeplyNested(inArrays(256, []))).toBe(tooDeep("257"));
+    expect(tooDeeplyNested(inArrays(256, {}))).toBe(tooDeep("257"));
+    for (const leaf of ["text", "", 0, true, null]) {
+      expect(tooDeeplyNested(inArrays(256, leaf))).toBeUndefined();
+    }
+    expect(tooDeeplyNested("text")).toBeUndefined();
+    expect(tooDeeplyNested({ note: "a form's fields" })).toBeUndefined();
+  });
+
+  it("goes by the deepest branch, wherever it is", () => {
+    const deep = inArrays(256);
+    expect(tooDeeplyNested({ first: 1, deep, last: [1, 2] })).toBe(
+      tooDeep("257"),
+    );
+    expect(tooDeeplyNested([[1], [[1]], 1, deep])).toBe(tooDeep("257"));
+    expect(tooDeeplyNested([inArrays(255), inObjects(10)])).toBeUndefined();
+  });
+
+  it("doesn't count how wide it is", () => {
+    const wide = Array.from({ length: 100_000 }, (_, n) => ({ [n]: [n] }));
+    expect(tooDeeplyNested({ wide })).toBeUndefined();
+  });
+
+  it("looks inside a key JSON.parse makes an own property, such as __proto__", () => {
+    const parsed: unknown = JSON.parse(
+      `{"__proto__":${"[".repeat(256)}1${"]".repeat(256)}}`,
+    );
+    expect(tooDeeplyNested(parsed)).toBe(tooDeep("257"));
+  });
+
+  it("can't be made to fail by how deep it goes", () => {
+    expect(tooDeeplyNested(inArrays(1_000_000))).toBe(tooDeep("1,000,000"));
+    expect(tooDeeplyNested(inObjects(1_000_000))).toBe(tooDeep("1,000,000"));
   });
 });

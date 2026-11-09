@@ -23,7 +23,10 @@ import { Client, type QueryConfig } from "pg";
 import { POST as postToInboundRoute } from "@/app/api/webhooks/[key]/route";
 import { cacheService } from "@/lib/cache/cache-service";
 import { RateLimitService } from "@/lib/rate-limit-service";
-import { MAX_INBOUND_EVENT_NAME_CHARS } from "@/lib/webhooks/storable-event";
+import {
+  MAX_INBOUND_EVENT_NAME_CHARS,
+  MAX_INBOUND_JSON_DEPTH,
+} from "@/lib/webhooks/storable-event";
 import { WebhookManager } from "@/lib/webhooks/WebhookManager";
 import { WebhookQueue } from "@/lib/webhooks/WebhookQueue";
 import { WebhookSecurity } from "@/lib/webhooks/WebhookSecurity";
@@ -78,13 +81,14 @@ type Webhook = Awaited<ReturnType<typeof webhookAt>>;
 
 const openReceivers: Array<() => Promise<void>> = [];
 
-/** A real HTTP server that takes everything and counts what arrives. */
+/** A real HTTP server that takes everything and keeps what arrives. */
 async function startReceiver() {
-  let requests = 0;
+  const bodies: string[] = [];
   const server = http.createServer((req, res) => {
-    req.resume();
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => {
-      requests++;
+      bodies.push(Buffer.concat(chunks).toString("utf8"));
       res.writeHead(200).end("ok");
     });
   });
@@ -102,8 +106,9 @@ async function startReceiver() {
   return {
     url: `http://127.0.0.1:${port}/hook`,
     get requests() {
-      return requests;
+      return bodies.length;
     },
+    bodies,
   };
 }
 
@@ -161,6 +166,19 @@ const storedEvents = async () =>
       .from(webhookEvents)
       .orderBy(asc(webhookEvents.id))
   ).map(({ event }) => event);
+
+/** What the endpoint's log says about each request to this webhook, in order. */
+const loggedRequests = async (webhookId: number) =>
+  db
+    .select({ success: webhookLogs.success, error: webhookLogs.error })
+    .from(webhookLogs)
+    .where(eq(webhookLogs.webhookId, webhookId))
+    .orderBy(asc(webhookLogs.id));
+
+const json = (body: string): SentEvent => ({
+  contentType: "application/json",
+  body,
+});
 
 const tenant = () =>
   seedUser({ role: UserRole.USER, status: UserStatus.ACTIVE });
@@ -703,14 +721,6 @@ describe("a 500 once the request may have had an effect", () => {
 });
 
 describe("a request Postgres could never store", () => {
-  /** What the endpoint's log says about each request to this webhook, in order. */
-  const loggedRequests = async (webhookId: number) =>
-    db
-      .select({ success: webhookLogs.success, error: webhookLogs.error })
-      .from(webhookLogs)
-      .where(eq(webhookLogs.webhookId, webhookId))
-      .orderBy(asc(webhookLogs.id));
-
   /** One character, though it's two of a string's `length`. */
   const EMOJI = "\u{1F600}";
   const NUL = /it has a NUL character \(U\+0000\)/;
@@ -718,10 +728,6 @@ describe("a request Postgres could never store", () => {
     new RegExp(
       `half of a UTF-16 surrogate pair \\(U\\+${codeUnit}\\) on its own`,
     );
-  const json = (body: string): SentEvent => ({
-    contentType: "application/json",
-    body,
-  });
 
   it.each<{ name: string; refused: SentEvent; error: RegExp }>([
     {
@@ -914,6 +920,135 @@ describe("a request Postgres could never store", () => {
       expect(receiver.requests).toBe(1);
     });
   });
+});
+
+describe("a request nested too deep to process", () => {
+  /** `depth` arrays, one inside the next. */
+  const arrays = (depth: number) => `${"[".repeat(depth)}1${"]".repeat(depth)}`;
+  /** `depth` objects, one inside the next. */
+  const objects = (depth: number) =>
+    `${'{"a":'.repeat(depth)}1${"}".repeat(depth)}`;
+  const tooDeep = (depth: number) =>
+    `This event is nested too deeply: it has arrays and objects ${depth.toLocaleString("en-US")} levels deep, and the limit is ${MAX_INBOUND_JSON_DEPTH}.`;
+
+  /** Each as deep as it's told, and what the endpoint's own row keeps of it. */
+  const shapes: Array<{
+    name: string;
+    body: (depth: number) => string;
+    stored: (body: string) => object;
+  }> = [
+    {
+      // Anything but an object goes under `data`.
+      name: "in arrays",
+      body: arrays,
+      stored: (body) => ({ data: JSON.parse(body) as unknown }),
+    },
+    {
+      // An object's fields are merged into the event's.
+      name: "in objects",
+      body: objects,
+      stored: (body) => JSON.parse(body) as object,
+    },
+    {
+      name: "in arrays in a field",
+      body: (depth) => `{"a":${arrays(depth - 1)}}`,
+      stored: (body) => JSON.parse(body) as object,
+    },
+  ];
+
+  it.each(shapes)(
+    "is taken as deep as the limit, $name, and delivered whole",
+    async ({ body: nested, stored }) => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url);
+      const body = nested(MAX_INBOUND_JSON_DEPTH);
+
+      expect(MAX_INBOUND_JSON_DEPTH).toBe(256);
+      expect((await send(webhook, json(body))).status).toBe(200);
+      await expectOneEventSent(webhook, receiver);
+
+      const [row] = await db
+        .select({ payload: webhookEvents.payload })
+        .from(webhookEvents)
+        .where(eq(webhookEvents.event, EVENT));
+      expect(row!.payload).toMatchObject(stored(body));
+      const delivered = JSON.parse(receiver.bodies[0]!) as { data: unknown };
+      expect(delivered.data).toMatchObject(stored(body));
+    },
+  );
+
+  it.each(shapes)(
+    "is refused with a 400 one level deeper, $name, before anything is claimed or written, and its id stays free",
+    async ({ body: nested }) => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url);
+      const deliveryId = randomUUID();
+      const refused = json(nested(MAX_INBOUND_JSON_DEPTH + 1));
+
+      expect(await send(webhook, refused, deliveryId)).toMatchObject({
+        status: 400,
+        answer: { error: tooDeep(MAX_INBOUND_JSON_DEPTH + 1) },
+      });
+      // The same bytes are the same mistake, not a replay.
+      expect((await send(webhook, refused, deliveryId)).status).toBe(400);
+      expect(await storedEvents()).toEqual([]);
+      expectNoRoomHeld();
+      // Said where the webhook's owner can see it, as the other 400s are.
+      expect(await loggedRequests(webhook.id)).toEqual([
+        { success: false, error: tooDeep(MAX_INBOUND_JSON_DEPTH + 1) },
+        { success: false, error: tooDeep(MAX_INBOUND_JSON_DEPTH + 1) },
+      ]);
+
+      // Corrected under the same id, it's taken once.
+      await expectTakenOnce(
+        webhook,
+        deliveryId,
+        json(nested(MAX_INBOUND_JSON_DEPTH)),
+      );
+      await expectOneEventSent(webhook, receiver);
+    },
+  );
+
+  /** The most arrays a request can nest: a `[` and a `]` each, around a `1`. */
+  const DEEPEST_A_REQUEST_HOLDS = (INBOUND_CAP_BYTES - 2) / 2;
+
+  // Each of these was a 500 on every attempt, when the endpoint's own walk through the
+  // event ran out of stack.
+  it.each<{ name: string; refused: SentEvent; depth: number }>([
+    {
+      name: "3,000 levels deep",
+      refused: json(arrays(3_000)),
+      depth: 3_000,
+    },
+    {
+      name: "as deep as a request can hold",
+      refused: json(arrays(DEEPEST_A_REQUEST_HOLDS)),
+      depth: DEEPEST_A_REQUEST_HOLDS,
+    },
+    {
+      // `String` gives out on this too, and the name is read with it.
+      name: "deep in the field its name is read from",
+      refused: { ...json(`{"event":${arrays(3_000)}}`), event: null },
+      depth: 3_001,
+    },
+  ])(
+    "is refused the same way $name, and its id stays free",
+    async ({ refused, depth }) => {
+      const receiver = await startReceiver();
+      const webhook = await webhookAt(await tenant(), receiver.url);
+      const deliveryId = randomUUID();
+
+      expect(await send(webhook, refused, deliveryId)).toMatchObject({
+        status: 400,
+        answer: { error: tooDeep(depth) },
+      });
+      expect(await storedEvents()).toEqual([]);
+      expectNoRoomHeld();
+
+      await expectTakenOnce(webhook, deliveryId);
+      await expectOneEventSent(webhook, receiver);
+    },
+  );
 });
 
 describe("freeing an id", () => {

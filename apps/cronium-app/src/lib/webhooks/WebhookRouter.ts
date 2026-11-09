@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { WebhookManager } from "./WebhookManager";
 import { WebhookSecurity } from "./WebhookSecurity";
 import { eventTooLong } from "./delivery-body";
-import { INBOUND_EVENT_PREFIX, unstorableEvent } from "./storable-event";
+import {
+  INBOUND_EVENT_PREFIX,
+  tooDeeplyNested,
+  unstorableEvent,
+} from "./storable-event";
 import { queueFullMessage } from "./webhook-errors";
 import { db } from "@/server/db";
 import { webhookEvents, webhookLogs } from "@/shared/schema";
@@ -171,6 +175,20 @@ export class WebhookRouter {
           { error: "Invalid request body" },
           { status: 400 },
         );
+      }
+
+      // Reading the event's name and processing it walk the body recursively, so past
+      // some depth they'd throw on every attempt, and a 500 would only have its sender
+      // try again. Refused before anything walks it, or claims or writes anything.
+      const tooDeep = tooDeeplyNested(body);
+      if (tooDeep !== undefined) {
+        await this.logWebhookRequest(webhook.id, {
+          success: false,
+          error: tooDeep,
+          duration: Date.now() - startTime,
+        });
+
+        return NextResponse.json({ error: tooDeep }, { status: 400 });
       }
 
       // Process webhook based on event type

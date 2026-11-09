@@ -542,6 +542,29 @@ describe("POST /api/webhooks/[key] — body handling", () => {
     expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
     expect(eventInserts()).toHaveLength(0);
   });
+
+  it("refuses JSON nested too deep with a 400 before reading the event's name from it", async () => {
+    // No X-Webhook-Event, so the name is read from the body, with `String`, which
+    // runs out of stack on arrays this deep.
+    const deep = `{"event":${"[".repeat(10_000)}1${"]".repeat(10_000)}}`;
+    const sameId = (raw: string) =>
+      signedHeaders(raw, { "x-webhook-delivery-id": "d-deep" });
+    const error =
+      "This event is nested too deeply: it has arrays and objects 10,001 levels deep, and the limit is 256.";
+
+    const res = await post("whk_valid", deep, sameId(deep));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error });
+    expect(managerMock.__manager.prepareEvent).not.toHaveBeenCalled();
+    expect(dbMock.db.transaction).not.toHaveBeenCalled();
+    expect(logInserts()).toHaveLength(1);
+    expect(logInserts()[0]!.values).toMatchObject({ success: false, error });
+
+    // Nothing was done, so the corrected request can use the same id.
+    const fixed = '{"event":"order.created"}';
+    expect((await post("whk_valid", fixed, sameId(fixed))).status).toBe(200);
+  });
 });
 
 describe("POST /api/webhooks/[key] — dispatch contract and tenant scoping", () => {
