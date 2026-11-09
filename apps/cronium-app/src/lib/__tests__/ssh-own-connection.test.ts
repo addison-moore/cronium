@@ -111,11 +111,12 @@ afterEach(async () => {
 /**
  * An SSH server that takes `PASSWORD`, answers each command from `answers`, and opens a
  * shell for a terminal. `holdFirst` keeps the first command it gets waiting until it
- * resolves, and `delayMs` spaces every answer out, so calls overlap. `holdSignIn` never
- * answers a sign-in, and `refuseChannels` refuses every channel, so every shell.
- * `maxSessions` refuses a channel to a connection with that many open, as OpenSSH's
- * `MaxSessions` does, where a command and a shell are a session each. `holdFirstShell`
- * keeps the first shell it's asked for waiting until it resolves.
+ * resolves, and `delayMs` spaces every answer out, so calls overlap. `shellDelayMs` takes
+ * that long to open each shell, as a busy machine can. `holdSignIn` never answers a
+ * sign-in, and `refuseChannels` refuses every channel, so every shell. `maxSessions`
+ * refuses a channel to a connection with that many open, as OpenSSH's `MaxSessions`
+ * does, where a command and a shell are a session each. `holdFirstShell` keeps the first
+ * shell it's asked for waiting until it resolves.
  *
  * A shell echoes what it's sent, and exits once its input ends, as a shell at its prompt
  * does when the terminal's websocket ends it.
@@ -126,6 +127,7 @@ async function startServer(
     holdFirst?: Promise<void>;
     delayMs?: number;
     refuseCommands?: boolean;
+    shellDelayMs?: number;
     holdSignIn?: boolean;
     refuseChannels?: boolean;
     maxSessions?: number;
@@ -192,9 +194,14 @@ async function startServer(
           .on("shell", (acceptShell) => {
             const startShell = () => {
               // Nothing to accept once the connection or the channel has gone.
-              const shell = gone
-                ? undefined
-                : (acceptShell() as ServerChannel | undefined);
+              let shell: ServerChannel | undefined;
+              try {
+                shell = gone
+                  ? undefined
+                  : (acceptShell() as ServerChannel | undefined);
+              } catch {
+                // The connection closed while this one waited.
+              }
               if (!shell) return;
               shellsOpened += 1;
               shells.add(shell);
@@ -221,6 +228,8 @@ async function startServer(
             shellsAsked += 1;
             if (shellsAsked === 1 && options.holdFirstShell) {
               void options.holdFirstShell.then(startShell);
+            } else if (options.shellDelayMs) {
+              setTimeout(startShell, options.shellDelayMs);
             } else {
               startShell();
             }
@@ -792,18 +801,29 @@ describe("SSHService's terminal pool", () => {
   });
 
   it("closes a connection it has kept too long, though the server never closes its side", async () => {
-    sshService = new SSHService({
-      ...GRACE,
-      terminalIdleMs: 100,
-      terminalSweepMs: 50,
-    });
-    const { a, neverCloses } = await startServers();
+    // The pool measures how long it has kept a connection with Date.now(), which stands
+    // still here until the shell has opened and closed. Opening it takes longer than the
+    // limit, as it can on a busy machine. Then the clock moves past the limit, and the
+    // next sweep closes the connection.
+    let now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      sshService = new SSHService({
+        ...GRACE,
+        terminalIdleMs: 100,
+        terminalSweepMs: 50,
+      });
+      const { a, neverCloses } = await startServers({ shellDelayMs: 250 });
 
-    const { shell, cleanup } = await openShell(neverCloses.port);
-    shell.close();
-    cleanup();
+      const { shell, cleanup } = await openShell(neverCloses.port);
+      shell.close();
+      cleanup();
+      now += 1_000;
 
-    await closedThoughServerNeverDid(neverCloses, a);
+      await closedThoughServerNeverDid(neverCloses, a);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("closes a kept connection that fails its check, though the server never closes its side", async () => {
