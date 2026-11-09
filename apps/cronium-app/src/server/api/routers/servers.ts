@@ -29,6 +29,10 @@ import {
   isQueryFailure,
   messageForCaller,
 } from "@/lib/pg-errors";
+import {
+  ConnectionCheckLimitError,
+  withConnectionCheckLimit,
+} from "@/lib/security/connection-check-limit";
 
 /**
  * NOTE: Several methods in this router use direct database queries instead of
@@ -114,12 +118,16 @@ export const serversRouter = createTRPCRouter({
         const authCredential = input.sshKey ?? input.password ?? "";
         const authType = input.sshKey ? "privateKey" : "password";
 
-        const connectionResult = await sshService.testConnection(
-          input.address,
-          authCredential,
-          input.username,
-          input.port,
-          authType,
+        const connectionResult = await withConnectionCheckLimit(
+          ctx.session.user.id,
+          () =>
+            sshService.testConnection(
+              input.address,
+              authCredential,
+              input.username,
+              input.port,
+              authType,
+            ),
         );
 
         if (!connectionResult.success) {
@@ -200,18 +208,23 @@ export const serversRouter = createTRPCRouter({
 
           const address = updateData.address ?? existingServer.address;
           const port = updateData.port ?? existingServer.port;
-          const connectionResult = await sshService.testConnection(
-            address,
-            authCredential,
-            updateData.username ?? existingServer.username,
-            port,
-            authType,
-            // Same host, so its pinned key applies: without this, a new password
-            // or key was handed to whoever answered, pinned or not. A new address
-            // is a new host, and updateServer clears the pin when it changes.
-            address === existingServer.address && port === existingServer.port
-              ? existingServer.id
-              : undefined,
+          const connectionResult = await withConnectionCheckLimit(
+            ctx.session.user.id,
+            () =>
+              sshService.testConnection(
+                address,
+                authCredential,
+                updateData.username ?? existingServer.username,
+                port,
+                authType,
+                // Same host, so its pinned key applies: without this, a new password
+                // or key was handed to whoever answered, pinned or not. A new address
+                // is a new host, and updateServer clears the pin when it changes.
+                address === existingServer.address &&
+                  port === existingServer.port
+                  ? existingServer.id
+                  : undefined,
+              ),
           );
 
           if (!connectionResult.success) {
@@ -637,7 +650,12 @@ export const serversRouter = createTRPCRouter({
           `Checking health for server: ${server.name} at ${server.address}:${server.port}`,
         );
 
-        const healthCheck = await sshService.checkServerHealth(server);
+        // A refusal throws before anything is written, so it can't mark the server
+        // offline. The server's page runs this when it opens.
+        const healthCheck = await withConnectionCheckLimit(
+          ctx.session.user.id,
+          () => sshService.checkServerHealth(server),
+        );
 
         // Update server status in database
         const lastChecked = new Date();
@@ -666,7 +684,7 @@ export const serversRouter = createTRPCRouter({
   // Test server connection (without saving)
   testConnection: protectedProcedure
     .input(testServerConnectionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         const { sshService } = await import("@/lib/ssh");
 
@@ -678,12 +696,16 @@ export const serversRouter = createTRPCRouter({
         const authCredential = input.sshKey ?? input.password ?? "";
         const authType = input.sshKey ? "privateKey" : "password";
 
-        const connectionResult = await sshService.testConnection(
-          input.address,
-          authCredential,
-          input.username,
-          input.port,
-          authType,
+        const connectionResult = await withConnectionCheckLimit(
+          ctx.session.user.id,
+          () =>
+            sshService.testConnection(
+              input.address,
+              authCredential,
+              input.username,
+              input.port,
+              authType,
+            ),
         );
 
         return {
@@ -694,6 +716,8 @@ export const serversRouter = createTRPCRouter({
             : `Failed to connect to ${input.address}`,
         };
       } catch (error: unknown) {
+        // Refused before connecting, so it says nothing about the server.
+        if (error instanceof ConnectionCheckLimitError) throw error;
         console.error("Connection test error:", failureWithStack(error));
         return {
           success: false,
@@ -797,8 +821,12 @@ export const serversRouter = createTRPCRouter({
                     message: "Access denied",
                   });
                 }
-                const healthCheck =
-                  await sshService.checkServerHealth(credentialServer);
+                // Each server is a connection of its own. A refusal throws before
+                // the status is written, and is reported for that server.
+                const healthCheck = await withConnectionCheckLimit(
+                  ctx.session.user.id,
+                  () => sshService.checkServerHealth(credentialServer),
+                );
                 await storage.updateServerStatus(
                   serverId,
                   healthCheck.online,

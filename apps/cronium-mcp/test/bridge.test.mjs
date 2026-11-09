@@ -3,12 +3,13 @@
  * binary against a local mock /api/mcp endpoint and assert the newline-
  * delimited JSON-RPC behavior an MCP client observes — request forwarding,
  * notification (202) silence, HTTP-failure → JSON-RPC error mapping, answers
- * that aren't Cronium's, and parse-error handling. Zero test dependencies
- * (node:test).
+ * that aren't Cronium's, requests with no whole answer, and parse-error
+ * handling. Zero test dependencies (node:test).
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { createServer as createTcpServer } from "node:net";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import path from "node:path";
@@ -20,6 +21,10 @@ const DIST = path.join(
   "dist",
   "index.js",
 );
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SHORT_TIMEOUT = path.join(here, "short-timeout.cjs");
+const FAILING_FETCH = path.join(here, "failing-fetch.cjs");
 
 const GOOD_TOKEN = "good-token";
 // Accepted for the startup probe (ping) but rejected afterwards — simulates a
@@ -75,6 +80,57 @@ const NOT_CRONIUM = {
     status: 404,
     type: "text/html",
     body: nginxPage("404 Not Found"),
+  },
+  nginx_basic_401: {
+    status: 401,
+    type: "text/html",
+    wwwAuthenticate: 'Basic realm="Cronium"',
+    body: nginxPage("401 Authorization Required"),
+  },
+  kong_key_401: {
+    status: 401,
+    type: "application/json; charset=utf-8",
+    wwwAuthenticate: "Key",
+    body: '{\n  "message":"No API key found in request",\n  "request_id":"a934917eed2885379300d1444fbf6313"\n}',
+  },
+  kong_basic_401: {
+    status: 401,
+    type: "application/json; charset=utf-8",
+    wwwAuthenticate: 'Basic realm="service"',
+    body: '{\n  "message":"Unauthorized",\n  "request_id":"1b224c0212b8730db4547f1f76195d30"\n}',
+  },
+  caddy_401: {
+    status: 401,
+    wwwAuthenticate: 'Basic realm="restricted"',
+    body: "",
+  },
+  traefik_401: {
+    status: 401,
+    type: "text/plain",
+    wwwAuthenticate: 'Basic realm="traefik"',
+    body: "401 Unauthorized\n",
+  },
+  // Not seen from a real product, but near enough to Cronium's own to get wrong.
+  plain_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":"unauthorized"}',
+  },
+  capital_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":"Unauthorized: bad key"}',
+  },
+  object_error_401: {
+    status: 401,
+    type: "application/json",
+    body: '{"error":{"message":"unauthorized: bad key"}}',
+  },
+  null_401: { status: 401, type: "application/json", body: "null" },
+  cronium_words_403: {
+    status: 403,
+    type: "application/json",
+    body: '{"error":"unauthorized: not at this status"}',
   },
   sign_in_200: { status: 200, type: "text/html", body: SIGN_IN_PAGE },
   empty_200: { status: 200, type: "text/plain", body: "" },
@@ -143,15 +199,183 @@ const REDIRECTS = {
   },
 };
 
-/** Two more that need tests of their own. */
+/** Others that need tests of their own. */
 const OTHER_ANSWERS = {
-  gateway_401: {
+  // What the route said from when it was written until its OAuth support.
+  older_cronium_401: {
     status: 401,
-    type: "application/json; charset=utf-8",
-    body: '{\n  "message":"No API key found in request",\n  "request_id":"1f0beb32429e5a1dba54bc0292d51a01"\n}',
+    type: "application/json",
+    body: '{"error":"unauthorized: provide a valid Cronium API token as a Bearer token"}',
   },
   long_page_200: { status: 200, type: "text/html", body: "x".repeat(1000) },
 };
+
+/** Sends part of an answer, then does `end` to the connection once that's had time to arrive. */
+const partOfAnAnswer =
+  (status, end, headers = {}) =>
+  (res) => {
+    res.writeHead(status, { "content-type": "application/json", ...headers });
+    res.write('{"jsonrpc":"2.0","id":1,"resu', () => {
+      setTimeout(() => end(res.socket), 100);
+    });
+  };
+const close = (socket) => socket.destroy();
+const reset = (socket) => socket.resetAndDestroy();
+const held = () => {};
+
+/**
+ * Connections that give no whole answer, once the whole request has come in. Using one of these
+ * names as the API token gets that to everything, the startup ping included.
+ */
+const NO_WHOLE_ANSWER = {
+  // No answer at all.
+  closed: (res) => close(res.socket),
+  reset: (res) => reset(res.socket),
+  not_http: (res) => res.socket.end("SSH-2.0-OpenSSH_9.6\r\n"),
+  no_answer_in_time: held,
+  // Headers, and then not all of the body.
+  cut_by_length: partOfAnAnswer(200, close, { "content-length": 100 }),
+  cut_chunked: partOfAnAnswer(200, close),
+  cut_then_reset: partOfAnAnswer(200, reset, { "content-length": 100 }),
+  cut_502: partOfAnAnswer(502, close, { "content-length": 100 }),
+  cut_403: partOfAnAnswer(403, close, { "content-length": 100 }),
+  cut_401: partOfAnAnswer(401, close, { "content-length": 100 }),
+  cut_302: partOfAnAnswer(302, close, { "content-length": 100 }),
+  corrupt_gzip_200: (res) => {
+    res.writeHead(200, {
+      "content-encoding": "gzip",
+      "content-type": "text/plain",
+    });
+    res.end("this was never gzip");
+  },
+  bad_chunk_200: (res) => {
+    res.socket.write(
+      "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\nhello\r\n",
+    );
+  },
+  rest_not_in_time: partOfAnAnswer(200, held),
+};
+// Looked up in a Map, so that a token can only pick one of these, and never anything an object
+// inherits.
+const NO_WHOLE_ANSWER_BY_TOKEN = new Map(Object.entries(NO_WHOLE_ANSWER));
+
+/**
+ * Causes that mean nothing was sent, as fetch really reported them, on Node 18, 22 and 24 on macOS
+ * and Linux. Node 22 and 24 report a name with several addresses as a list of attempts.
+ */
+const NEVER_SENT = {
+  "a refused connection": {
+    code: "ECONNREFUSED",
+    syscall: "connect",
+    message: "connect ECONNREFUSED 127.0.0.1:1",
+  },
+  "a refused connection to a name with two addresses": {
+    code: "ECONNREFUSED",
+    message: "",
+    errors: [
+      {
+        code: "ECONNREFUSED",
+        syscall: "connect",
+        message: "connect ECONNREFUSED ::1:1",
+      },
+      {
+        code: "ECONNREFUSED",
+        syscall: "connect",
+        message: "connect ECONNREFUSED 127.0.0.1:1",
+      },
+    ],
+  },
+  "a name that doesn't exist": { code: "ENOTFOUND", syscall: "getaddrinfo" },
+  "a lookup with no network": { code: "EAI_AGAIN", syscall: "getaddrinfo" },
+  "no route, on Linux": { code: "ENETUNREACH", syscall: "connect" },
+  "no route, on macOS": { code: "EHOSTUNREACH", syscall: "connect" },
+  "an address that can't be used": { code: "EAFNOSUPPORT", syscall: "connect" },
+  "a connection the system gave up on": {
+    code: "ETIMEDOUT",
+    syscall: "connect",
+  },
+  "a connection the system gave up on, to a name with two addresses": {
+    code: "ETIMEDOUT",
+    message: "",
+    errors: [
+      { code: "ETIMEDOUT", syscall: "connect" },
+      { code: "ETIMEDOUT", syscall: "connect" },
+    ],
+  },
+  "undici's limit on connecting": {
+    code: "UND_ERR_CONNECT_TIMEOUT",
+    message:
+      "Connect Timeout Error (attempted address: 240.0.0.1:81, timeout: 10000ms)",
+  },
+  "a self-signed certificate": { code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
+  "a self-signed root in the chain": { code: "SELF_SIGNED_CERT_IN_CHAIN" },
+  "a missing issuer": { code: "UNABLE_TO_GET_ISSUER_CERT_LOCALLY" },
+  "a private CA nothing trusts": { code: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" },
+  "an expired certificate": { code: "CERT_HAS_EXPIRED" },
+  "a certificate not valid yet": { code: "CERT_NOT_YET_VALID" },
+  "a certificate for another name": { code: "ERR_TLS_CERT_ALTNAME_INVALID" },
+  "a port that doesn't speak TLS": { code: "ERR_SSL_WRONG_VERSION_NUMBER" },
+  "an address that doesn't parse": {
+    code: "ERR_INVALID_URL",
+    message: "Invalid URL",
+  },
+};
+
+/** Causes from a connection already made, as measured too, and ones nothing knows about yet. */
+const MAY_HAVE_BEEN_SENT = {
+  "the other side closing": {
+    code: "UND_ERR_SOCKET",
+    message: "other side closed",
+  },
+  "a reset while reading": { code: "ECONNRESET", syscall: "read" },
+  "a reset while writing": { code: "ECONNRESET", syscall: "write" },
+  "a broken pipe": { code: "EPIPE", syscall: "write" },
+  "a connection the system gave up on after it was made": {
+    code: "ETIMEDOUT",
+    syscall: "read",
+    message: "read ETIMEDOUT",
+  },
+  "an answer that isn't HTTP, on Node 18 and 22": {
+    code: "HPE_INVALID_CONSTANT",
+  },
+  "an answer that isn't HTTP, on Node 24": {
+    message: "Response does not match the HTTP/1.1 protocol",
+  },
+  "a TLS connection closed during the handshake, which can't be told apart": {
+    code: "ECONNRESET",
+    message:
+      "Client network socket disconnected before secure TLS connection was established",
+  },
+  "a code nothing knows about": {
+    code: "E_SOMETHING_NEW",
+    syscall: "somethingnew",
+  },
+  "attempts that aren't all failures to connect": {
+    code: "E_SOMETHING_NEW",
+    errors: [
+      { code: "ECONNREFUSED", syscall: "connect" },
+      { code: "E_SOMETHING_NEW", syscall: "read" },
+    ],
+  },
+};
+
+const GONE_THROUGH =
+  ", so this call may still have gone through: check before repeating it. ";
+
+const CLOSED = "The connection to Cronium closed with no answer";
+const CLOSED_CAUSES =
+  "Cronium may be restarting, a reverse proxy in front of it can't reach it, or CRONIUM_BASE_URL may be wrong.";
+
+const IN_TIME = "Got no answer from Cronium in 120 seconds";
+const IN_TIME_CAUSES =
+  "Cronium may still be working on it, or a reverse proxy in front of it may be holding it up.";
+
+const cutOff = (status) => `Got HTTP ${status}, but not the whole answer`;
+const CUT_OFF_CAUSES =
+  "Cronium may be restarting, or a reverse proxy in front of it can't reach it.";
+
+const couldNotReach = (base, reason = "fetch failed") =>
+  `Could not reach Cronium at ${base}/api/mcp: ${reason}. Check CRONIUM_BASE_URL and that the instance is running.`;
 
 const TOKEN_REJECTED =
   "Cronium rejected the API token (HTTP 401). Check CRONIUM_API_TOKEN — " +
@@ -162,6 +386,8 @@ let server;
 let baseUrl;
 // How many requests a followed redirect brought back. Should stay at 0.
 let followed = 0;
+// A port with nothing listening on it.
+let closedPort;
 
 before(async () => {
   server = createServer((req, res) => {
@@ -176,12 +402,20 @@ before(async () => {
       }
       const auth = req.headers.authorization ?? "";
       const token = auth.replace("Bearer ", "");
+      const noWholeAnswer = NO_WHOLE_ANSWER_BY_TOKEN.get(token);
+      if (typeof noWholeAnswer === "function") {
+        noWholeAnswer(res);
+        return;
+      }
       const canned =
         NOT_CRONIUM[token] ?? REDIRECTS[token] ?? OTHER_ANSWERS[token];
       if (canned) {
         const headers = {};
         if (canned.type) headers["content-type"] = canned.type;
         if (canned.location) headers.location = canned.location;
+        if (canned.wwwAuthenticate) {
+          headers["www-authenticate"] = canned.wwwAuthenticate;
+        }
         res.writeHead(canned.status, headers);
         res.end(canned.body);
         return;
@@ -189,11 +423,24 @@ before(async () => {
       const probeOnly =
         auth === `Bearer ${EXPIRING_TOKEN}` && body.includes('"ping"');
       if (auth !== `Bearer ${GOOD_TOKEN}` && !probeOnly) {
-        res.writeHead(401, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "unauthorized" }));
+        res.writeHead(401, {
+          "content-type": "application/json",
+          "www-authenticate": `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/api/mcp", error="invalid_token", error_description="The access token is invalid or expired"`,
+        });
+        res.end(
+          JSON.stringify({
+            error:
+              "unauthorized: authenticate with an OAuth access token or a Cronium API token",
+          }),
+        );
         return;
       }
       const msg = JSON.parse(body);
+      // A call that gets no answer, among others that do.
+      if (msg.params?.name === "dropped") {
+        close(res.socket);
+        return;
+      }
       // A save that a reverse proxy refused, in the bytes real nginx sends.
       if (msg.params?.name === "refused_by_proxy") {
         res.writeHead(413, { "content-type": "text/html" });
@@ -286,6 +533,13 @@ before(async () => {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  const closed = createTcpServer();
+  closed.listen(0, "127.0.0.1");
+  await once(closed, "listening");
+  closedPort = closed.address().port;
+  closed.close();
+  await once(closed, "close");
 });
 
 after(() => server.close());
@@ -294,16 +548,24 @@ after(() => server.close());
  * Spawn the bridge, write `lines` to stdin, and collect stdout lines until
  * `expected` responses arrived (or a timeout).
  */
-function runBridge(lines, { token = GOOD_TOKEN, expected = 1 } = {}) {
+function runBridge(
+  lines,
+  { token = GOOD_TOKEN, expected = 1, base = baseUrl, preload, env = {} } = {},
+) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [DIST], {
-      env: {
-        ...process.env,
-        CRONIUM_BASE_URL: baseUrl,
-        CRONIUM_API_TOKEN: token,
+    const child = spawn(
+      process.execPath,
+      preload ? ["--require", preload, DIST] : [DIST],
+      {
+        env: {
+          ...process.env,
+          CRONIUM_BASE_URL: base,
+          CRONIUM_API_TOKEN: token,
+          ...env,
+        },
+        stdio: ["pipe", "pipe", "pipe"],
       },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    );
     const out = [];
     let buffer = "";
     let settled = false;
@@ -337,35 +599,52 @@ function runBridge(lines, { token = GOOD_TOKEN, expected = 1 } = {}) {
 }
 
 /**
- * Spawn the bridge and collect what it logs until `until` matches, it exits, or a timeout.
- * Resolves with the log and the exit code, if there was one.
+ * Spawn the bridge, write `lines` to stdin, and collect what it logs until `until` matches, it
+ * exits, or a timeout. Resolves with the log, the exit code if there was one, and stdout, a moment
+ * after the log line, for anything written after it.
  */
-function bridgeLog(token, until) {
+function bridgeLog(token, until, { lines = [], preload, env = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [DIST], {
-      env: {
-        ...process.env,
-        CRONIUM_BASE_URL: baseUrl,
-        CRONIUM_API_TOKEN: token,
+    const child = spawn(
+      process.execPath,
+      preload ? ["--require", preload, DIST] : [DIST],
+      {
+        env: {
+          ...process.env,
+          CRONIUM_BASE_URL: baseUrl,
+          CRONIUM_API_TOKEN: token,
+          ...env,
+        },
       },
-    });
+    );
     let log = "";
+    let stdout = "";
+    let matched = false;
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`timeout; log was ${log}`));
     }, 5000);
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
     child.stderr.on("data", (chunk) => {
       log += chunk.toString();
-      if (until.test(log)) {
+      if (!matched && until.test(log)) {
+        matched = true;
         clearTimeout(timer);
-        child.kill();
-        resolve({ log, code: null });
+        setTimeout(() => {
+          child.kill();
+          resolve({ log, code: null, stdout });
+        }, 50);
       }
     });
     child.on("exit", (code) => {
       clearTimeout(timer);
-      resolve({ log, code });
+      resolve({ log, code, stdout });
     });
+    for (const line of lines) {
+      child.stdin.write(`${JSON.stringify(line)}\n`);
+    }
   });
 }
 
@@ -612,8 +891,43 @@ test("says where a redirect was going, without its query", async () => {
   }
 });
 
-test("keeps the 401 message for a gateway's 401 too, and exits at startup as it did", async () => {
-  const { log, code } = await bridgeLog("gateway_401", /no-such-line/);
+test("doesn't blame the token for a gateway's 401, or quit over it at startup", async () => {
+  for (const token of [
+    "nginx_basic_401",
+    "kong_key_401",
+    "kong_basic_401",
+    "caddy_401",
+    "traefik_401",
+    "plain_error_401",
+  ]) {
+    const { log, code } = await bridgeLog(token, /the answer began/);
+    assert.equal(code, null, token);
+    assert.doesNotMatch(log, /rejected|CRONIUM_API_TOKEN/, token);
+    assert.match(
+      log,
+      /warning — Got HTTP 401, not Cronium's answer\. .* Will retry per request\./,
+      token,
+    );
+  }
+});
+
+test("leaves going through out of a tool call a gateway refused with a 401", async () => {
+  const [res] = await runBridge([call(5)], { token: "kong_key_401" });
+  assert.equal(res.id, 5);
+  assert.equal(res.error.code, -32001);
+  assert.equal(
+    res.error.message,
+    "Got HTTP 401, not Cronium's answer. It may be from a reverse proxy, firewall or sign-in page, or CRONIUM_BASE_URL may be wrong.",
+  );
+});
+
+test("logs what a gateway said in its 401, for whoever reads the log", async () => {
+  const { log } = await bridgeLog("kong_key_401", /the answer began/);
+  assert.match(log, /the answer began .*No API key found in request/);
+});
+
+test("still says Cronium rejected the token, and quits at startup, for an older Cronium's words", async () => {
+  const { log, code } = await bridgeLog("older_cronium_401", /no-such-line/);
   assert.equal(code, 1);
   assert.ok(log.includes(`cronium-mcp: ${TOKEN_REJECTED}`), log);
 });
@@ -668,7 +982,271 @@ test("fails fast at startup when the token is rejected outright", async () => {
   child.stderr.on("data", (c) => (stderr += c.toString()));
   const [code] = await once(child, "exit");
   assert.equal(code, 1);
-  assert.match(stderr, /CRONIUM_API_TOKEN/);
+  assert.ok(stderr.includes(`cronium-mcp: ${TOKEN_REJECTED}`), stderr);
+});
+
+test("keeps the words for a refused connection, for a tool call and a read alike", async () => {
+  const base = `http://127.0.0.1:${closedPort}`;
+  const out = await runBridge([call("c"), read("r")], { base, expected: 2 });
+  assert.equal(out.length, 2);
+  for (const res of out) {
+    assert.equal(res.error.code, -32001);
+    assert.equal(res.error.message, couldNotReach(base));
+  }
+});
+
+test("keeps the words for a refused connection to a name with several addresses", async () => {
+  const base = `http://localhost:${closedPort}`;
+  const [res] = await runBridge([call(1)], { base });
+  assert.equal(res.error.message, couldNotReach(base));
+});
+
+test("keeps the words for a name that can't be looked up", async () => {
+  const base = "http://no-such-host.invalid";
+  const [res] = await runBridge([call(1)], { base });
+  assert.equal(res.error.message, couldNotReach(base));
+});
+
+test("keeps the words for https:// to a port that speaks http", async () => {
+  const base = baseUrl.replace("http:", "https:");
+  const [res] = await runBridge([call(1)], { base });
+  assert.equal(res.error.message, couldNotReach(base));
+});
+
+test("keeps the words for an address fetch can't use", async () => {
+  const cases = {
+    "localhost:5001": "fetch failed",
+    "ftp://127.0.0.1": "fetch failed",
+    "http://127.0.0.1:6000": "fetch failed",
+    "cronium.example.invalid":
+      "Failed to parse URL from cronium.example.invalid/api/mcp",
+    "http://127.0.0.1:99999":
+      "Failed to parse URL from http://127.0.0.1:99999/api/mcp",
+  };
+  for (const [base, reason] of Object.entries(cases)) {
+    const [res] = await runBridge([call(1)], { base });
+    assert.equal(res.error.message, couldNotReach(base, reason));
+  }
+});
+
+test("says it couldn't reach Cronium with a token that can't be sent", async () => {
+  const [res] = await runBridge([call(1)], { token: "a\nb" });
+  assert.match(res.error.message, /^Could not reach Cronium at /);
+  assert.doesNotMatch(res.error.message, /gone through/);
+});
+
+for (const [name, cause] of Object.entries(NEVER_SENT)) {
+  test(`keeps the words for ${name}`, async () => {
+    const [res] = await runBridge([call(1)], {
+      preload: FAILING_FETCH,
+      env: { FETCH_FAILURE_CAUSE: JSON.stringify(cause) },
+    });
+    assert.equal(res.error.message, couldNotReach(baseUrl));
+  });
+}
+
+for (const [name, cause] of Object.entries(MAY_HAVE_BEEN_SENT)) {
+  test(`doesn't say it couldn't reach Cronium for ${name}`, async () => {
+    const [res] = await runBridge([call(1)], {
+      preload: FAILING_FETCH,
+      env: { FETCH_FAILURE_CAUSE: JSON.stringify(cause) },
+    });
+    assert.equal(res.error.message, `${CLOSED}${GONE_THROUGH}${CLOSED_CAUSES}`);
+  });
+}
+
+for (const token of ["closed", "reset", "not_http"]) {
+  test(`says a tool call may have gone through when it gets ${token}, under the right id`, async () => {
+    const [res] = await runBridge([call("the id")], { token });
+    assert.equal(res.jsonrpc, "2.0");
+    assert.equal(res.id, "the id");
+    assert.equal(res.error.code, -32001);
+    assert.equal(res.error.message, `${CLOSED}${GONE_THROUGH}${CLOSED_CAUSES}`);
+  });
+
+  test(`gives a read that gets ${token} what happened, and nothing about going through`, async () => {
+    const [res] = await runBridge([read("the id")], { token });
+    assert.equal(res.id, "the id");
+    assert.equal(res.error.message, `${CLOSED}. ${CLOSED_CAUSES}`);
+  });
+}
+
+test("says a tool call may have gone through at the bridge's own time limit", async () => {
+  const [res] = await runBridge([call("the id")], {
+    token: "no_answer_in_time",
+    preload: SHORT_TIMEOUT,
+  });
+  assert.equal(res.id, "the id");
+  assert.equal(res.error.code, -32001);
+  assert.equal(res.error.message, `${IN_TIME}${GONE_THROUGH}${IN_TIME_CAUSES}`);
+});
+
+test("gives a read at the bridge's own time limit what happened, and nothing about going through", async () => {
+  const [res] = await runBridge([read(1)], {
+    token: "no_answer_in_time",
+    preload: SHORT_TIMEOUT,
+  });
+  assert.equal(res.error.message, `${IN_TIME}. ${IN_TIME_CAUSES}`);
+});
+
+for (const token of [
+  "cut_by_length",
+  "cut_chunked",
+  "cut_then_reset",
+  "corrupt_gzip_200",
+  "bad_chunk_200",
+]) {
+  test(`says a tool call may have gone through when ${token} cuts the answer off`, async () => {
+    const [res] = await runBridge([call("the id")], { token });
+    assert.equal(res.id, "the id");
+    assert.equal(res.error.code, -32001);
+    assert.equal(
+      res.error.message,
+      `${cutOff(200)}${GONE_THROUGH}${CUT_OFF_CAUSES}`,
+    );
+  });
+}
+
+test("says a tool call may have gone through when the rest of the answer doesn't come in time", async () => {
+  const [res] = await runBridge([call(1)], {
+    token: "rest_not_in_time",
+    preload: SHORT_TIMEOUT,
+  });
+  assert.equal(
+    res.error.message,
+    `${cutOff(200)}${GONE_THROUGH}${CUT_OFF_CAUSES}`,
+  );
+});
+
+test("says the answer was cut off at a 5xx, which may have gone through as well", async () => {
+  const [res] = await runBridge([call(1)], { token: "cut_502" });
+  assert.equal(
+    res.error.message,
+    `${cutOff(502)}${GONE_THROUGH}${CUT_OFF_CAUSES}`,
+  );
+});
+
+test("leaves going through out of a refusal that was cut off", async () => {
+  for (const [token, status] of [
+    ["cut_302", 302],
+    ["cut_401", 401],
+    ["cut_403", 403],
+  ]) {
+    const [res] = await runBridge([call(1)], { token });
+    assert.equal(res.error.message, `${cutOff(status)}. ${CUT_OFF_CAUSES}`);
+  }
+});
+
+test("gives a read that was cut off what happened, and nothing about going through", async () => {
+  const [res] = await runBridge([read(1)], { token: "cut_by_length" });
+  assert.equal(res.error.message, `${cutOff(200)}. ${CUT_OFF_CAUSES}`);
+});
+
+test("answers each id of a batch that gets no answer, with what a tool call in it needs", async () => {
+  const out = await runBridge([[read("r"), call("c")]], {
+    token: "closed",
+    expected: 2,
+  });
+  assert.deepEqual(
+    out.map((m) => m.id),
+    ["r", "c"],
+  );
+  for (const res of out) {
+    assert.equal(res.error.message, `${CLOSED}${GONE_THROUGH}${CLOSED_CAUSES}`);
+  }
+});
+
+test("leaves going through out of a batch of reads that gets no answer", async () => {
+  const out = await runBridge([[read("x"), read("y")]], {
+    token: "closed",
+    expected: 2,
+  });
+  for (const res of out) {
+    assert.equal(res.error.message, `${CLOSED}. ${CLOSED_CAUSES}`);
+  }
+});
+
+test("goes on answering after a call that got no answer", async () => {
+  const out = await runBridge(
+    [
+      {
+        jsonrpc: "2.0",
+        id: "dropped",
+        method: "tools/call",
+        params: { name: "dropped" },
+      },
+      { jsonrpc: "2.0", id: "next", method: "ping" },
+    ],
+    { expected: 2 },
+  );
+  const byId = new Map(out.map((m) => [m.id, m]));
+  assert.equal(
+    byId.get("dropped").error.message,
+    `${CLOSED}${GONE_THROUGH}${CLOSED_CAUSES}`,
+  );
+  assert.deepEqual(byId.get("next").result, {});
+});
+
+test("writes nothing to stdout for a notification that got no answer", async () => {
+  const { stdout, log } = await bridgeLog("closed", /closed with no answer\./, {
+    lines: [{ jsonrpc: "2.0", method: "notifications/initialized" }],
+  });
+  assert.equal(stdout, "");
+  assert.match(
+    log,
+    /cronium-mcp: The connection to Cronium closed with no answer\. /,
+  );
+});
+
+test("logs Node's reason, which only the log gets, on one line", async () => {
+  const { log, stdout } = await bridgeLog("closed", /the cause was/, {
+    lines: [read(1)],
+  });
+  const lines = log.split("\n");
+  assert.ok(
+    lines.includes(
+      "cronium-mcp: the cause was UND_ERR_SOCKET: other side closed",
+    ),
+    log,
+  );
+  assert.doesNotMatch(stdout, /UND_ERR_SOCKET|other side closed/);
+});
+
+test("logs Node's reason when nothing was sent as well", async () => {
+  const cases = [
+    [
+      NEVER_SENT["a refused connection"],
+      "ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:1",
+    ],
+    [
+      NEVER_SENT["a refused connection to a name with two addresses"],
+      "ECONNREFUSED",
+    ],
+    [{ message: "unknown scheme" }, "unknown scheme"],
+    [
+      { code: "E_MULTI", message: "first line\nsecond line\n" },
+      "E_MULTI: first line second line",
+    ],
+  ];
+  for (const [cause, reason] of cases) {
+    const { log } = await bridgeLog(GOOD_TOKEN, /the cause was/, {
+      lines: [read(1)],
+      preload: FAILING_FETCH,
+      env: { FETCH_FAILURE_CAUSE: JSON.stringify(cause) },
+    });
+    assert.ok(
+      log.split("\n").includes(`cronium-mcp: the cause was ${reason}`),
+      log,
+    );
+  }
+});
+
+test("still only warns at startup when the first ping gets no answer", async () => {
+  for (const token of ["closed", "cut_by_length"]) {
+    const { log, code } = await bridgeLog(token, /will retry per request/);
+    assert.equal(code, null, token);
+    assert.match(log, /cronium-mcp: warning — could not reach /, token);
+  }
 });
 
 test("answers unparseable stdin lines with -32700", async () => {

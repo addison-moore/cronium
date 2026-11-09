@@ -39,7 +39,11 @@ cronium_get_variable() {
 }
 
 cronium_set_variable() {
-    printf '%s' "$2" | "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    if [ "$#" -gt 1 ]; then
+        printf '%s' "$2" | "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    else
+        "${CRONIUM_HELPERS_DIR}/cronium.setVariable" "$1"
+    fi
 }
 
 cronium_set_condition() {
@@ -86,24 +90,45 @@ cronium_delete_variable() {
     cronium_set_variable "$1" "null"
 }
 
+# Prints a whole number with no plus sign or leading zeros, which is the form $((...)) reads
+# as decimal, or returns 1 if it isn't a 64-bit integer. Left to itself, $((...)) reads a
+# leading 0 as octal, a name as a variable and anything else as an expression, which can
+# run commands. Past 64 bits it wraps without saying so, and then the number doesn't come
+# back the same.
+_cronium_integer() {
+    local pattern='^([-+]?)0*([1-9][0-9]*|0)$'
+    [[ "$1" =~ $pattern ]] || return 1
+    local number="${BASH_REMATCH[1]#+}${BASH_REMATCH[2]}"
+    [ "$number" = "-0" ] && number=0
+    [ "$((number))" = "$number" ] || return 1
+    echo "$number"
+}
+
 cronium_increment_variable() {
     local key="$1"
-    local increment="${2:-1}"
+    local by="${2-1}"
+    local increment
     local current
+    increment=$(_cronium_integer "$by") || {
+        echo "Error: Increment '$by' is not a 64-bit integer, so variable '$key' was not changed" >&2
+        return 1
+    }
     # Only a variable with no value starts from 0. One that couldn't be read still holds
     # its value, and anything written here would replace it.
     current=$(cronium_get_variable "$key") || {
         echo "Error: Could not read variable '$key', so it was not changed" >&2
         return 1
     }
-    current="${current:-0}"
-
-    if ! [[ "$current" =~ ^-?[0-9]+$ ]]; then
-        echo "Error: Variable '$key' is not numeric" >&2
+    current=$(_cronium_integer "${current:-0}") || {
+        echo "Error: Variable '$key' is not a 64-bit integer, so it was not changed" >&2
         return 1
-    fi
+    }
 
     local new_value=$((current + increment))
+    if (( (increment > 0 && new_value < current) || (increment < 0 && new_value > current) )); then
+        echo "Error: Adding $increment to variable '$key' goes past 64 bits, so it was not changed" >&2
+        return 1
+    fi
     cronium_set_variable "$key" "$new_value" || return 1
     echo "$new_value"
 }
@@ -169,6 +194,7 @@ export -f cronium_execute_tool_action cronium_send_email
 export -f cronium_send_slack_message cronium_send_discord_message
 export -f cronium_variable_exists cronium_delete_variable
 export -f cronium_increment_variable cronium_append_variable cronium_info
+export -f _cronium_integer
 export -f cronium.input cronium.output cronium.getVariable cronium.setVariable
 export -f cronium.setCondition cronium.event
 `

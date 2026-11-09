@@ -1,15 +1,18 @@
 import { z } from "zod";
 import type { ToolAction, ExecutionContext } from "@/tools/types/tool-plugin";
 import { safeZodToParameters } from "@/tools/utils/zod-to-parameters";
+import { checkFirst, counted, writeRun } from "@/tools/utils/test-run";
 import {
   mongoCredentialsSchema,
   deleteDocumentsSchema,
   DEFAULT_MONGO_TIMEOUT_MS,
 } from "../schemas";
-import { deleteDocuments } from "../client";
+import { countMatchingDocuments, deleteDocuments } from "../client";
 import {
+  type MatchCount,
   assertNonEmptyFilterForMany,
   coerceJsonObject,
+  matchesFound,
   normalizeBooleanFields,
 } from "../mongo-helpers";
 
@@ -23,6 +26,20 @@ export const deleteDocumentsAction: ToolAction = {
   actionType: "delete",
   actionTypeColor: "red",
   developmentMode: "visual",
+  testRun: writeRun(
+    (result: { deletedCount: number }) =>
+      `Deleted ${counted(result.deletedCount, "document")}.`,
+    checkFirst(
+      "Count Matches",
+      "says how many documents the filter matches, and deletes nothing",
+      ({ matchedCount, many }: MatchCount) =>
+        matchesFound(matchedCount) +
+        (!many && matchedCount > 1
+          ? ", but without Many only the first would be deleted"
+          : "") +
+        ". Nothing was deleted, so this doesn't show that the delete would be allowed.",
+    ),
+  ),
   inputSchema: deleteDocumentsSchema,
   parameters: safeZodToParameters(deleteDocumentsSchema),
   outputSchema: z.object({
@@ -70,11 +87,27 @@ export const deleteDocumentsAction: ToolAction = {
       }
       const many = parsed.many ?? false;
       if (many) assertNonEmptyFilterForMany(filter, "Delete Documents");
+      const timeoutMs = context.timeoutMs ?? DEFAULT_MONGO_TIMEOUT_MS;
+
+      // The form's Count Matches: the same filter on the same collection, counted
+      // instead of deleted.
+      if (context.isTest) {
+        const matchedCount = await countMatchingDocuments(
+          creds,
+          { collection: parsed.collection, filter },
+          { timeoutMs },
+        );
+        logger.info(
+          `MongoDB check: ${matchedCount} document(s) in ${parsed.collection} match the filter, and none were deleted`,
+        );
+        const found: MatchCount = { matchedCount, many };
+        return found;
+      }
 
       const result = await deleteDocuments(
         creds,
         { collection: parsed.collection, filter, many },
-        { timeoutMs: context.timeoutMs ?? DEFAULT_MONGO_TIMEOUT_MS },
+        { timeoutMs },
       );
 
       logger.info(

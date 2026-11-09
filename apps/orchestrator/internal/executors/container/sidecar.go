@@ -77,10 +77,16 @@ func (sm *SidecarManager) CreateRuntimeSidecar(ctx context.Context, job *types.J
 		return "", fmt.Errorf("failed to generate execution token: %w", err)
 	}
 
+	// Docker doesn't pull when it creates a container, so the same as for the job's own image.
+	image := sm.getRuntimeImage(ctx)
+	if err := sm.executor.ensureImage(ctx, image); err != nil {
+		return "", fmt.Errorf("failed to ensure image %s: %w", image, err)
+	}
+
 	// Build container configuration
 	sidecarEnv := buildSidecarEnv(job.ID, sm.executor.config.Runtime, os.Getenv("CRONIUM_API_TOKEN"))
 	containerConfig := &container.Config{
-		Image: sm.getRuntimeImage(),
+		Image: image,
 		Env:   sidecarEnv,
 		ExposedPorts: network.PortSet{
 			network.MustParsePort("8081/tcp"): struct{}{},
@@ -357,14 +363,6 @@ func (sm *SidecarManager) getExecutionToken(jobID string) (string, error) {
 	}
 
 	return token, nil
-}
-
-// getRuntimeImage returns the runtime API image to use
-func (sm *SidecarManager) getRuntimeImage() string {
-	if img := sm.executor.config.Runtime.Image; img != "" {
-		return img
-	}
-	return "cronium/runtime-api:latest"
 }
 
 // jobNetworkName is the deterministic name of a job's isolated network. It is

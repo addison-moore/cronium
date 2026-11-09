@@ -21,19 +21,45 @@ jest.mock("@/server/security/authorization", () => ({
   roleAllowsCapability: () => true,
 }));
 
+import { DrizzleQueryError } from "drizzle-orm/errors";
 import type { NextRequest } from "next/server";
+import { format } from "node:util";
+import { getAuthorizedPrincipal } from "@/server/security/authorization";
+import {
+  AccountCheckFailedError,
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+} from "@/server/security/credential-check";
 import { storage } from "@/server/storage";
 import {
   getBearerToken,
   authenticateApiToken,
   authenticateRestPrincipal,
+  restPrincipalErrorResponse,
 } from "../api-auth";
 import { TokenStatus } from "@/shared/schema";
 
 const mockGet = storage.getApiTokenByToken as jest.Mock;
 const mockUpdate = storage.updateApiToken as jest.Mock;
+const mockPrincipal = getAuthorizedPrincipal as jest.Mock;
 
-beforeEach(() => jest.clearAllMocks());
+const databaseDown = () =>
+  new DrizzleQueryError(
+    "select from api_tokens",
+    ["a-hash-of-the-token"],
+    Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+  );
+
+let consoleError: jest.SpyInstance;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  consoleError = jest
+    .spyOn(console, "error")
+    .mockImplementation(() => undefined);
+});
+
+afterEach(() => consoleError.mockRestore());
 
 function bearerRequest(token: string): NextRequest {
   return {
@@ -121,9 +147,104 @@ describe("authenticateApiToken", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it("returns null (not throw) when the lookup errors", async () => {
-    mockGet.mockRejectedValue(new Error("db down"));
-    expect(await authenticateApiToken("tok")).toBeNull();
+  describe("when the lookup fails", () => {
+    it("throws, because null would say the token is bad", async () => {
+      mockGet.mockRejectedValue(databaseDown());
+
+      await expect(authenticateApiToken("tok")).rejects.toBeInstanceOf(
+        CredentialCheckFailedError,
+      );
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("logs why, without the query's values", async () => {
+      mockGet.mockRejectedValue(databaseDown());
+
+      await authenticateApiToken("tok").catch(() => undefined);
+
+      const logged = consoleError.mock.calls
+        .map((args) => format(...(args as unknown[])))
+        .join("\n");
+      expect(logged).toContain("Error validating API token");
+      expect(logged).toContain("ECONNREFUSED");
+      expect(logged).not.toContain("a-hash-of-the-token");
+    });
+  });
+
+  it("accepts a good token when recording its use fails", async () => {
+    mockGet.mockResolvedValue({
+      id: 7,
+      userId: "user-1",
+      status: TokenStatus.ACTIVE,
+      expiresAt: null,
+      scopes: ["mcp"],
+    });
+    mockUpdate.mockRejectedValueOnce(databaseDown());
+
+    await expect(authenticateApiToken("tok")).resolves.toEqual({
+      userId: "user-1",
+      tokenId: 7,
+      scopes: ["mcp"],
+    });
+    expect(format(...(consoleError.mock.calls[0] as unknown[]))).toContain(
+      "Error recording API token use",
+    );
+  });
+
+  it("still rejects a bad token when it can't write", async () => {
+    mockGet.mockResolvedValue(undefined);
+    mockUpdate.mockRejectedValueOnce(databaseDown());
+
+    expect(await authenticateApiToken("nope")).toBeNull();
+  });
+});
+
+describe("authenticateRestPrincipal when credentials can't be checked", () => {
+  const goodToken = {
+    id: 1,
+    userId: "u",
+    status: TokenStatus.ACTIVE,
+    expiresAt: null,
+    scopes: ["full"],
+  };
+
+  it("is a 503 when the token's lookup fails, without trying the cookie", async () => {
+    mockGet.mockRejectedValue(databaseDown());
+
+    await expect(
+      authenticateRestPrincipal(bearerRequest("t"), "view", "events.getAll"),
+    ).resolves.toEqual({ ok: false, status: 503 });
+  });
+
+  it("is a 503 when the live check on its account fails", async () => {
+    mockGet.mockResolvedValue(goodToken);
+    mockPrincipal.mockRejectedValueOnce(new AccountCheckFailedError());
+
+    await expect(
+      authenticateRestPrincipal(bearerRequest("t"), "view", "events.getAll"),
+    ).resolves.toEqual({ ok: false, status: 503 });
+  });
+
+  it("is still a 401 when the live check finds the account revoked", async () => {
+    mockGet.mockResolvedValue(goodToken);
+    mockPrincipal.mockRejectedValueOnce(new Error("Account is not active"));
+
+    await expect(
+      authenticateRestPrincipal(bearerRequest("t"), "view", "events.getAll"),
+    ).resolves.toEqual({ ok: false, status: 401 });
+  });
+});
+
+describe("restPrincipalErrorResponse", () => {
+  it.each([
+    [401, "Unauthorized"],
+    [403, "Forbidden"],
+    [503, CREDENTIAL_CHECK_FAILED_MESSAGE],
+  ] as const)("answers %i with its own words", async (status, error) => {
+    const response = restPrincipalErrorResponse({ ok: false, status });
+
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error });
   });
 });
 

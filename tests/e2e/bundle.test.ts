@@ -22,10 +22,11 @@ const holdsMonaco = (source: string) =>
 
 // From the plugins' own modules. The first is the registering code in their barrel, and
 // the other two are what a static import of one plugin would bring along, not the small
-// icons that event-type-icon imports from the same directories.
+// icons that event-type-icon imports from the same directories. An action's description
+// rather than its id, which the event form's section compares against for its previews.
 const TOOL_PLUGIN_MARKERS = [
   "__pluginsInitialized",
-  "slack-send-message",
+  "Send a message to a Slack channel",
   "SsrfBlockedError",
 ];
 

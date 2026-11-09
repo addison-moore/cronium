@@ -4,9 +4,11 @@ import {
   type SSHConnectionScope,
 } from "@/lib/ssh/pool-key";
 import { createHostVerifier } from "@/lib/ssh/host-verifier";
+import type { Socket } from "net";
 import { Client } from "ssh2"; // Import Client from ssh2
-import type { ClientChannel } from "ssh2";
+import type { ClientChannel, ConnectConfig } from "ssh2";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
+import { connectWithSearch } from "@/lib/resolve-host";
 
 /**
  * SSH connection debug logging is gated behind CRONIUM_SSH_DEBUG because the
@@ -39,6 +41,108 @@ function serverIdFromScope(
   }
   return undefined;
 }
+
+/**
+ * `client.connect` with a socket of our own, because ssh2 otherwise looks the host up
+ * with `dns.lookup`, and a server's address is whatever its owner typed: see
+ * lib/resolve-host.ts.
+ *
+ * The socket has to exist before ssh2 sees it, and ssh2 throws on a key it can't parse
+ * before it listens for anything. So close it then, or its failure would be an `error`
+ * event with nobody listening, which ends the process.
+ *
+ * Hands back the socket, for `closeConnection`.
+ */
+function connectOverOwnSocket(
+  client: Client,
+  config: ConnectConfig & { host: string; port: number },
+): Socket {
+  const sock = connectWithSearch(config.host, config.port);
+  try {
+    client.connect({ ...config, sock });
+  } catch (error) {
+    sock.destroy();
+    throw error;
+  }
+  return sock;
+}
+
+/**
+ * Closes `client` and the socket under it, whatever the server does.
+ *
+ * `client.end()` says goodbye and closes our side, then waits for the server to close
+ * its side. A server that never does would keep the socket open for as long as the
+ * process runs, and `client.destroy()` does nothing once `end()` has run, because ssh2
+ * only destroys a socket it can still write to. So the socket itself goes `graceMs`
+ * later if it's still open.
+ */
+function closeConnection(
+  client: Client,
+  socket: Socket,
+  graceMs: number,
+): void {
+  client.end();
+  if (socket.destroyed) return;
+  const closeAnyway = setTimeout(() => socket.destroy(), graceMs).unref();
+  socket.once("close", () => clearTimeout(closeAnyway));
+}
+
+/** The socket under each connection `connect` made, for `disconnect`. */
+const socketOf = new WeakMap<Client, Socket>();
+
+/** `work`, unless `ms` pass first: then a rejection with `timedOut()`. */
+function withinTime<T>(
+  work: Promise<T>,
+  ms: number,
+  timedOut: () => Error,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(timedOut()), ms).unref();
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+interface CommandOutput {
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs `command` over `connection` and collects what it printed. */
+function runCommand(
+  connection: Client,
+  command: string,
+): Promise<CommandOutput> {
+  return new Promise((resolve, reject) => {
+    connection.exec(command, (err, stream) => {
+      if (err) return reject(err);
+      let stdout = "";
+      let stderr = "";
+      stream.on("data", (data: Buffer) => (stdout += data.toString()));
+      stream.stderr.on("data", (data: Buffer) => (stderr += data.toString()));
+      stream.on("close", () => resolve({ stdout, stderr }));
+    });
+  });
+}
+
+/** A health check's commands, each after the one before, over the check's own connection. */
+async function readSystemInfo(connection: Client) {
+  const platformResult = await runCommand(connection, "uname -s");
+  const releaseResult = await runCommand(connection, "uname -r");
+  const cpuResult = await runCommand(connection, "nproc");
+  const memoryResult = await runCommand(connection, "free -h | grep Mem");
+  const uptimeResult = await runCommand(connection, "uptime -p");
+  return {
+    platformResult,
+    releaseResult,
+    cpuResult,
+    memoryResult,
+    uptimeResult,
+  };
+}
+
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
@@ -56,20 +160,38 @@ interface SSHConnectionRequest {
   authType: SSHAuthType;
 }
 
+export interface SSHServiceLimits {
+  /**
+   * How long a health check's commands may take, all five together, once it has
+   * connected. A server that takes longer is reported offline.
+   */
+  healthCheckCommandsMs?: number;
+  /**
+   * How long closing a connection waits for the server to close its side before
+   * closing the socket outright.
+   */
+  closeGraceMs?: number;
+}
+
 export class SSHService {
-  private ssh?: Client; // Changed to optional ssh2 Client
-  private isConnected = false;
   private connectionPool = new Map<string, SSHConnection>();
   private maxConnections = 3; // Further reduced to prevent overwhelming servers
   private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
   private connectionTimeout = 300000; // 5 minutes - longer for terminal sessions
   private channelCounts = new Map<string, number>(); // Track open channels
+  private readonly healthCheckCommandsMs: number;
+  private readonly closeGraceMs: number;
 
-  constructor() {
+  constructor({
+    healthCheckCommandsMs = 30_000,
+    closeGraceMs = 5_000,
+  }: SSHServiceLimits = {}) {
+    this.healthCheckCommandsMs = healthCheckCommandsMs;
+    this.closeGraceMs = closeGraceMs;
     // Clean up stale connections every 2 minutes
     setInterval(() => {
       this.cleanupStaleConnections();
-    }, 120000);
+    }, 120000).unref();
   }
 
   private cleanupStaleConnections(): void {
@@ -215,7 +337,7 @@ export class SSHService {
       const connectionTimeout = setTimeout(() => {
         ssh.end();
         reject(new Error(`Connection to ${host ?? ""} timed out.`));
-      }, 20000); // Use readyTimeout from connect options
+      }, 20000).unref(); // Use readyTimeout from connect options
 
       ssh.on("ready", () => {
         clearTimeout(connectionTimeout);
@@ -273,7 +395,7 @@ export class SSHService {
         console.log(`SSH connection to ${connectionKey ?? ""} closed.`);
         this.connectionPool.delete(connectionKey);
       });
-      ssh.connect({
+      connectOverOwnSocket(ssh, {
         host,
         username,
         ...(authType === "password"
@@ -329,7 +451,10 @@ export class SSHService {
   }
 
   /**
-   * Establishes an SSH connection to a remote server
+   * Connects to a server, and hands back the connection for the caller to close with
+   * `disconnect`. It's the caller's alone: `sshService` is one object for the whole
+   * process, so a connection kept on it would be used and closed by whichever call
+   * came next, another user's included.
    */
   public async connect(
     host: string,
@@ -338,51 +463,64 @@ export class SSHService {
     port = 22,
     authType: "privateKey" | "password" = "privateKey",
     serverId?: number,
-  ): Promise<void> {
+  ): Promise<Client> {
     return new Promise((resolve, reject) => {
       const sshClient = new Client();
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(connectionTimeout);
+        this.disconnect(sshClient);
+        reject(error);
+      };
       const connectionTimeout = setTimeout(() => {
-        sshClient.end();
-        reject(new Error(`Connection to ${host ?? ""} timed out.`));
-      }, 60000); // Use readyTimeout from connect options
+        fail(new Error(`Connection to ${host ?? ""} timed out.`));
+      }, 60000).unref(); // Use readyTimeout from connect options
 
       sshClient
         .on("ready", () => {
+          if (settled) {
+            // Too late: nobody is waiting for it, so nobody else would close it.
+            this.disconnect(sshClient);
+            return;
+          }
+          settled = true;
           clearTimeout(connectionTimeout);
-          this.ssh = sshClient;
-          this.isConnected = true;
-          resolve();
+          resolve(sshClient);
         })
-        .on("error", (err) => {
-          clearTimeout(connectionTimeout);
-          this.isConnected = false;
-          reject(err);
-        })
-        .connect({
-          host,
-          username,
-          ...(authType === "password"
-            ? { password: authCredential }
-            : { privateKey: authCredential }),
-          port,
-          readyTimeout: 60000,
-          // Verify the server's host key (TOFU) before the credential is sent.
-          hostVerifier: createHostVerifier({ serverId, host }),
-          keepaliveInterval: 5000,
-          keepaliveCountMax: 10,
-          tryKeyboard: false,
-          algorithms: {
-            kex: [
-              "ecdh-sha2-nistp256",
-              "ecdh-sha2-nistp384",
-              "ecdh-sha2-nistp521",
-              "diffie-hellman-group14-sha256",
-            ],
-            cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr"],
-            serverHostKey: ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"],
-            hmac: ["hmac-sha2-256", "hmac-sha2-512"],
-          },
-        });
+        // Stays for as long as the connection does. An `error` event with nobody
+        // listening would end the process, and what the connection was doing fails by
+        // itself.
+        .on("error", fail);
+      // The handlers above only ever run after this returns, so `disconnect` finds the
+      // socket recorded. If it throws, connectOverOwnSocket has closed the socket itself.
+      const socket = connectOverOwnSocket(sshClient, {
+        host,
+        username,
+        ...(authType === "password"
+          ? { password: authCredential }
+          : { privateKey: authCredential }),
+        port,
+        readyTimeout: 60000,
+        // Verify the server's host key (TOFU) before the credential is sent.
+        hostVerifier: createHostVerifier({ serverId, host }),
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 10,
+        tryKeyboard: false,
+        algorithms: {
+          kex: [
+            "ecdh-sha2-nistp256",
+            "ecdh-sha2-nistp384",
+            "ecdh-sha2-nistp521",
+            "diffie-hellman-group14-sha256",
+          ],
+          cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr"],
+          serverHostKey: ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"],
+          hmac: ["hmac-sha2-256", "hmac-sha2-512"],
+        },
+      });
+      socketOf.set(sshClient, socket);
     });
   }
 
@@ -398,7 +536,7 @@ export class SSHService {
     serverId?: number,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.connect(
+      const connection = await this.connect(
         host,
         authCredential,
         username,
@@ -406,7 +544,7 @@ export class SSHService {
         authType,
         serverId,
       );
-      await this.disconnect();
+      this.disconnect(connection);
       return { success: true, message: "Connection successful" };
     } catch (error) {
       const errorMessage =
@@ -416,14 +554,13 @@ export class SSHService {
   }
 
   /**
-   * Disconnects the current SSH session
+   * Closes a connection that `connect` made. The server gets `closeGraceMs` to close its
+   * side, and then the socket closes anyway.
    */
-  public async disconnect(): Promise<void> {
-    if (this.isConnected && this.ssh) {
-      this.ssh.end();
-      this.isConnected = false;
-      delete this.ssh;
-    }
+  public disconnect(connection: Client): void {
+    const socket = socketOf.get(connection);
+    if (socket) closeConnection(connection, socket, this.closeGraceMs);
+    else connection.end();
   }
 
   async checkServerHealth(server: {
@@ -455,7 +592,7 @@ export class SSHService {
       const authCredential = server.sshKey ?? server.password ?? "";
       const authType = server.sshKey ? "privateKey" : "password";
 
-      await this.connect(
+      const connection = await this.connect(
         server.address,
         authCredential,
         server.username,
@@ -464,88 +601,23 @@ export class SSHService {
         server.id,
       );
 
-      // Get system information
-      const platformResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uname -s", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const releaseResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uname -r", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const cpuResult = await new Promise<{ stdout: string; stderr: string }>(
-        (resolve, reject) => {
-          this.ssh!.exec("nproc", (err, stream) => {
-            if (err) return reject(err);
-            let stdout = "";
-            let stderr = "";
-            stream.on("data", (data: Buffer) => (stdout += data.toString()));
-            stream.stderr.on(
-              "data",
-              (data: Buffer) => (stderr += data.toString()),
-            );
-            stream.on("close", () => resolve({ stdout, stderr }));
-          });
-        },
-      );
-      const memoryResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("free -h | grep Mem", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const uptimeResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uptime -p", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-
-      await this.disconnect();
+      // Get system information, unless the server takes too long, and close the
+      // connection however that went. A command that never finishes would otherwise
+      // hold the request and its connection for good.
+      const {
+        platformResult,
+        releaseResult,
+        cpuResult,
+        memoryResult,
+        uptimeResult,
+      } = await withinTime(
+        readSystemInfo(connection),
+        this.healthCheckCommandsMs,
+        () =>
+          new Error(
+            `Health check timed out: ${server.address} didn't answer its commands within ${this.healthCheckCommandsMs / 1000} seconds.`,
+          ),
+      ).finally(() => this.disconnect(connection));
 
       // Parse memory information
       let totalMemory = "";

@@ -115,10 +115,13 @@ AlertDialogDescription.displayName =
 const AlertDialogAction = React.forwardRef<
   React.ComponentRef<typeof AlertDialogPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => (
+>(({ className, asChild, ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
-    className={cn(buttonVariants(), className)}
+    // A child styles itself. These classes would win over its own, so a `destructive`
+    // Button showed as the default button.
+    className={asChild ? className : cn(buttonVariants(), className)}
+    asChild={asChild}
     {...props}
   />
 ));

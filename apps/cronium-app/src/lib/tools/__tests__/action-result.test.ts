@@ -1,4 +1,8 @@
-import { isFailureResult, ToolActionError } from "../action-result";
+import {
+  isFailureResult,
+  ToolActionError,
+  failureReason,
+} from "../action-result";
 
 describe("isFailureResult", () => {
   it("treats an explicit ok:false as failure (slack shape)", () => {
@@ -43,5 +47,24 @@ describe("ToolActionError", () => {
     expect(err.name).toBe("ToolActionError");
     expect(err.message).toBe("nope");
     expect(err.result).toBe(result);
+  });
+});
+
+describe("failureReason", () => {
+  it("uses the reason an action gave", () => {
+    expect(
+      failureReason({ success: false, error: "no such host" }, "Run"),
+    ).toBe("no such host");
+  });
+
+  it.each([
+    ["no reason", { success: false }],
+    ["an empty one", { ok: false, error: "" }],
+    ["one that isn't text", { success: false, error: { code: 1 } }],
+    ["nothing at all", null],
+  ])("names the action when it gave %s", (_case, result) => {
+    expect(failureReason(result, "Run Query")).toBe(
+      "Run Query reported failure",
+    );
   });
 });

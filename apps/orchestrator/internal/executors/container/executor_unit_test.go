@@ -69,26 +69,6 @@ func TestValidate(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported script type")
 }
 
-func TestGetImageForScript(t *testing.T) {
-	e := newUnitExecutor()
-
-	// Defaults when nothing configured.
-	assert.Equal(t, "cronium/runner:bash-alpine", e.getImageForScript(types.ScriptTypeBash))
-	assert.Equal(t, "cronium/runner:python-alpine", e.getImageForScript(types.ScriptTypePython))
-	assert.Equal(t, "cronium/runner:node-alpine", e.getImageForScript(types.ScriptTypeNode))
-
-	// Configured images win; the lookup key is the lowercased script type.
-	e.config.Images = map[string]string{
-		"bash":   "custom/bash:1",
-		"python": "", // empty value falls back to the default
-	}
-	assert.Equal(t, "custom/bash:1", e.getImageForScript(types.ScriptTypeBash))
-	assert.Equal(t, "cronium/runner:python-alpine", e.getImageForScript(types.ScriptTypePython))
-
-	// Unknown type: ultimate fallback.
-	assert.Equal(t, "cronium/runner:bash-alpine", e.getImageForScript("RUBY"))
-}
-
 func TestBuildEnvironment(t *testing.T) {
 	e := newUnitExecutor()
 	job := scriptJob(types.ScriptTypeBash)

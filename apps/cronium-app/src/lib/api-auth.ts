@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { storage } from "@/server/storage";
 import type { Capability } from "@/server/security/authorization";
+import {
+  CREDENTIAL_CHECK_FAILED_MESSAGE,
+  CredentialCheckFailedError,
+  checkingCredentials,
+} from "@/server/security/credential-check";
 import { TokenStatus, type UserRole } from "@/shared/schema";
 import { failureWithStack } from "@/lib/pg-errors";
 
@@ -16,7 +21,9 @@ export function getBearerToken(headers: Headers): string | null {
 
 /**
  * Validate a raw API token string. Returns the owning user id + token id when
- * the token is active and unexpired, otherwise null. Bumps `lastUsed`.
+ * the token is active and unexpired, otherwise null, which means it was looked at
+ * and isn't good. Throws CredentialCheckFailedError when the lookup fails, which
+ * means nothing is known about it. Bumps `lastUsed`.
  * Header-agnostic so both REST (NextRequest) and tRPC (Headers) paths reuse it.
  */
 export async function authenticateApiToken(token: string): Promise<{
@@ -24,31 +31,33 @@ export async function authenticateApiToken(token: string): Promise<{
   tokenId: number;
   scopes: string[] | null;
 } | null> {
-  try {
-    const apiToken = await storage.getApiTokenByToken(token);
+  const apiToken = await checkingCredentials("Error validating API token", () =>
+    storage.getApiTokenByToken(token),
+  );
 
-    if (apiToken?.status !== TokenStatus.ACTIVE) {
-      return null;
-    }
-    if (apiToken.expiresAt && apiToken.expiresAt.getTime() < Date.now()) {
-      return null;
-    }
-
-    // Update last used time
-    await storage.updateApiToken(apiToken.id, { lastUsed: new Date() });
-
-    return {
-      userId: apiToken.userId,
-      tokenId: apiToken.id,
-      // A bearer token with no stored scopes is NOT full access: coerce to an
-      // explicit empty (deny-all) scope set so legacy unscoped tokens fail
-      // closed on scoped transports. New tokens always carry explicit scopes.
-      scopes: apiToken.scopes ?? [],
-    };
-  } catch (error) {
-    console.error("Error validating API token:", failureWithStack(error));
+  if (apiToken?.status !== TokenStatus.ACTIVE) {
     return null;
   }
+  if (apiToken.expiresAt && apiToken.expiresAt.getTime() < Date.now()) {
+    return null;
+  }
+
+  // Only a record of its use, and the token has passed by now, so a database that
+  // reads but won't write, as during a failover, doesn't turn it away.
+  try {
+    await storage.updateApiToken(apiToken.id, { lastUsed: new Date() });
+  } catch (error) {
+    console.error("Error recording API token use:", failureWithStack(error));
+  }
+
+  return {
+    userId: apiToken.userId,
+    tokenId: apiToken.id,
+    // A bearer token with no stored scopes is NOT full access: coerce to an
+    // explicit empty (deny-all) scope set so legacy unscoped tokens fail
+    // closed on scoped transports. New tokens always carry explicit scopes.
+    scopes: apiToken.scopes ?? [],
+  };
 }
 
 export type RestPrincipal =
@@ -59,7 +68,7 @@ export type RestPrincipal =
       /** The bearer token's scopes; null for a cookie session. */
       scopes: string[] | null;
     }
-  | { ok: false; status: 401 | 403 };
+  | { ok: false; status: 401 | 403 | 503 };
 
 /**
  * Single REST authentication + authorization choke point (security plan Phase
@@ -67,7 +76,8 @@ export type RestPrincipal =
  * session, re-checks live status/role/sessionVersion against the database
  * (fail closed), and enforces the route's declared role capability. There is
  * deliberately no fallback principal of any kind: unauthenticated requests are
- * rejected.
+ * rejected. Credentials that couldn't be checked are refused too, with a 503 because
+ * that says nothing about them.
  */
 export async function authenticateRestPrincipal(
   request: NextRequest,
@@ -90,7 +100,15 @@ export async function authenticateRestPrincipal(
   let tokenScopes: string[] | null = null;
 
   const token = getBearerToken(request.headers);
-  const tokenAuth = token ? await authenticateApiToken(token) : null;
+  let tokenAuth: Awaited<ReturnType<typeof authenticateApiToken>>;
+  try {
+    tokenAuth = token ? await authenticateApiToken(token) : null;
+  } catch (error) {
+    if (error instanceof CredentialCheckFailedError) {
+      return { ok: false, status: 503 };
+    }
+    throw error;
+  }
   if (tokenAuth) {
     userId = tokenAuth.userId;
     tokenScopes = tokenAuth.scopes;
@@ -140,16 +158,25 @@ export async function authenticateRestPrincipal(
       role: principal.role,
       scopes: tokenScopes,
     };
-  } catch {
-    return { ok: false, status: 401 };
+  } catch (error) {
+    return {
+      ok: false,
+      status: error instanceof CredentialCheckFailedError ? 503 : 401,
+    };
   }
 }
+
+const REST_REFUSALS = {
+  401: "Unauthorized",
+  403: "Forbidden",
+  503: CREDENTIAL_CHECK_FAILED_MESSAGE,
+};
 
 export function restPrincipalErrorResponse(
   result: Extract<RestPrincipal, { ok: false }>,
 ): NextResponse {
   return NextResponse.json(
-    { error: result.status === 401 ? "Unauthorized" : "Forbidden" },
+    { error: REST_REFUSALS[result.status] },
     { status: result.status },
   );
 }

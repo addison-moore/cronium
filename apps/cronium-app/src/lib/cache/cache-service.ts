@@ -4,6 +4,7 @@ import superjson from "superjson";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
 import { failureWithStack } from "@/lib/pg-errors";
 import { quotedForLog } from "@/lib/security/audit-entry";
+import { CacheUnavailableError } from "./cache-unavailable";
 
 // Cache key prefixes for remaining cache use cases
 export const CACHE_PREFIXES = {
@@ -34,6 +35,21 @@ export interface CacheOptions {
 function keyForLog(key: string): string {
   const kept = key.slice(0, key.lastIndexOf(":") + 1);
   return `${quotedForLog(kept)}[not logged]`;
+}
+
+/**
+ * A command's failure without what ioredis adds to it: `command.args`, which holds the key and
+ * the value, so an MCP OAuth code or token, for anything that logs the error whole.
+ */
+function failureWithoutArguments(error: unknown): Error {
+  const { name, message, code } =
+    typeof error === "object" && error !== null
+      ? (error as { name?: unknown; message?: unknown; code?: unknown })
+      : {};
+  const copy = new Error(typeof message === "string" ? message : String(error));
+  if (typeof name === "string") copy.name = name;
+  if (typeof code === "string") Object.assign(copy, { code });
+  return copy;
 }
 
 export class CacheService {
@@ -108,13 +124,87 @@ export class CacheService {
       // Wait for connection
       await this.client.ping();
     } catch (error) {
+      // As when the app starts before Valkey. The client is kept: ioredis goes on trying, and
+      // the "connect" event makes it usable once it gets through. Dropping it left the cache
+      // off until a restart, every read a miss, while isAvailable() said it was on.
       console.error(
         "Failed to connect to Valkey/Redis:",
         failureWithStack(error),
       );
-      this.client = null;
-      this.isConnected = false;
     }
+  }
+
+  /** Runs one command, and throws CacheUnavailableError for any way that fails. */
+  private async ask<R>(
+    command: string,
+    send: (client: RedisClient) => Promise<R>,
+  ): Promise<R> {
+    // The first connection may still be on its way, as on a process's first request, which
+    // loads this. Waiting for it costs milliseconds, where refusing would be a false outage.
+    // It settles either way, so a Valkey that's down at the start fails here in seconds.
+    await this.connectionPromise;
+    if (!this.client || !this.isConnected) {
+      throw new CacheUnavailableError("Valkey isn't connected");
+    }
+    try {
+      return await send(this.client);
+    } catch (error) {
+      throw new CacheUnavailableError(`Valkey couldn't answer ${command}`, {
+        cause: failureWithoutArguments(error),
+      });
+    }
+  }
+
+  /** A stored value. One that doesn't parse can't be used, so it reads as missing. */
+  private parsedOrMissing<T>(key: string, value: string | null): T | null {
+    if (!value) return null;
+    try {
+      return superjson.parse<T>(value);
+    } catch (error) {
+      console.error(
+        "Cache value for key %s doesn't parse:",
+        keyForLog(key),
+        failureWithStack(error),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Like `get`, except that a Valkey it couldn't ask throws CacheUnavailableError, where `get`
+   * answers null as it does for a miss. For a value whose absence is a verdict, such as a
+   * single-use credential's, so that an outage doesn't read as one.
+   */
+  async getStrict<T>(key: string): Promise<T | null> {
+    const value = await this.ask("GET", (client) => client.get(key));
+    return this.parsedOrMissing<T>(key, value);
+  }
+
+  /**
+   * Atomically gets and deletes a value (GETDEL), for single-use credentials such as MCP
+   * OAuth's codes and refresh tokens: of any number of callers, one gets it. Null means it
+   * isn't there, and a Valkey it couldn't ask throws CacheUnavailableError, as for getStrict.
+   * A reply lost on the way back can't be told from a failure, though the key may be gone.
+   */
+  async getdelStrict<T>(key: string): Promise<T | null> {
+    const value = await this.ask("GETDEL", (client) => client.getdel(key));
+    return this.parsedOrMissing<T>(key, value);
+  }
+
+  /**
+   * Like `set` without tags, except that a write Valkey refused, or that couldn't be sent,
+   * throws CacheUnavailableError where `set` answers false. A reply lost on the way back
+   * throws too, though the value may be stored.
+   */
+  async setStrict<T>(
+    key: string,
+    value: T,
+    options: { ttl: number },
+  ): Promise<void> {
+    const serialized = superjson.stringify(value);
+    await this.ask("SET", (client) =>
+      client.setex(key, options.ttl, serialized),
+    );
   }
 
   /**
@@ -184,30 +274,6 @@ export class CacheService {
       );
       // Return false on any error to prevent app crashes
       return false;
-    }
-  }
-
-  /**
-   * Atomically get and delete a value (Redis/Valkey GETDEL). Used for
-   * single-use credentials (OAuth authorization codes, refresh-token rotation)
-   * so a get-then-delete race cannot let two callers both consume one token.
-   * Returns null when the key is absent or the cache is unavailable.
-   */
-  async getdel<T>(key: string): Promise<T | null> {
-    try {
-      if (!this.client || !this.isConnected) {
-        return null;
-      }
-      const value = await this.client.getdel(key);
-      if (!value) return null;
-      return superjson.parse(value);
-    } catch (error) {
-      console.error(
-        "Cache getdel error for key %s:",
-        keyForLog(key),
-        failureWithStack(error),
-      );
-      return null;
     }
   }
 

@@ -51,6 +51,7 @@ import { RateLimitService } from "@/lib/rate-limit-service";
 import { dispatchEventJob } from "@/lib/scheduling/dispatch";
 import { startWorkflowRun } from "@/lib/scheduling/workflow-engine";
 import { getAuthorizedPrincipal } from "@/server/security/authorization";
+import { AccountCheckFailedError } from "@/server/security/credential-check";
 import {
   assertEventRelations,
   assertWorkflowGraphCapability,
@@ -200,6 +201,32 @@ describe.each(routes)("POST /api/$path/{id}/execute", (route) => {
       const res = await call(route);
       expect(res.status).toBe(401);
       expect(route.enqueue).not.toHaveBeenCalled();
+    });
+
+    describe("when the token couldn't be checked", () => {
+      // A CI job takes a 401 as a token to replace, and a 503 as a run to try again.
+      it.each<[string, () => void]>([
+        [
+          "its lookup",
+          () => s.getApiTokenByToken!.mockRejectedValue(new Error("db down")),
+        ],
+        [
+          "the live check on its account",
+          () => mockPrincipal.mockRejectedValue(new AccountCheckFailedError()),
+        ],
+      ])(
+        "answers 503 when %s fails, and runs nothing",
+        async (_label, fail) => {
+          const consoleError = silenceErrors();
+          fail();
+
+          const res = await call(route);
+
+          expect(res.status).toBe(503);
+          expect(route.enqueue).not.toHaveBeenCalled();
+          consoleError.mockRestore();
+        },
+      );
     });
 
     it("says nothing about the request before authenticating it", async () => {
