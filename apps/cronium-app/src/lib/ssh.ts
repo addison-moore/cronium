@@ -63,6 +63,44 @@ function connectOverOwnSocket(
   }
 }
 
+interface CommandOutput {
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs `command` over `connection` and collects what it printed. */
+function runCommand(
+  connection: Client,
+  command: string,
+): Promise<CommandOutput> {
+  return new Promise((resolve, reject) => {
+    connection.exec(command, (err, stream) => {
+      if (err) return reject(err);
+      let stdout = "";
+      let stderr = "";
+      stream.on("data", (data: Buffer) => (stdout += data.toString()));
+      stream.stderr.on("data", (data: Buffer) => (stderr += data.toString()));
+      stream.on("close", () => resolve({ stdout, stderr }));
+    });
+  });
+}
+
+/** A health check's commands, each after the one before, over the check's own connection. */
+async function readSystemInfo(connection: Client) {
+  const platformResult = await runCommand(connection, "uname -s");
+  const releaseResult = await runCommand(connection, "uname -r");
+  const cpuResult = await runCommand(connection, "nproc");
+  const memoryResult = await runCommand(connection, "free -h | grep Mem");
+  const uptimeResult = await runCommand(connection, "uptime -p");
+  return {
+    platformResult,
+    releaseResult,
+    cpuResult,
+    memoryResult,
+    uptimeResult,
+  };
+}
+
 interface SSHConnection {
   ssh: Client; // Changed from NodeSSH to ssh2 Client
   isConnected: boolean;
@@ -81,8 +119,6 @@ interface SSHConnectionRequest {
 }
 
 export class SSHService {
-  private ssh?: Client; // Changed to optional ssh2 Client
-  private isConnected = false;
   private connectionPool = new Map<string, SSHConnection>();
   private maxConnections = 3; // Further reduced to prevent overwhelming servers
   private maxChannelsPerConnection = 5; // Reduced SSH channels limit per connection
@@ -353,7 +389,10 @@ export class SSHService {
   }
 
   /**
-   * Establishes an SSH connection to a remote server
+   * Connects to a server, and hands back the connection for the caller to close with
+   * `disconnect`. It's the caller's alone: `sshService` is one object for the whole
+   * process, so a connection kept on it would be used and closed by whichever call
+   * came next, another user's included.
    */
   public async connect(
     host: string,
@@ -362,26 +401,36 @@ export class SSHService {
     port = 22,
     authType: "privateKey" | "password" = "privateKey",
     serverId?: number,
-  ): Promise<void> {
+  ): Promise<Client> {
     return new Promise((resolve, reject) => {
       const sshClient = new Client();
-      const connectionTimeout = setTimeout(() => {
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(connectionTimeout);
         sshClient.end();
-        reject(new Error(`Connection to ${host ?? ""} timed out.`));
+        reject(error);
+      };
+      const connectionTimeout = setTimeout(() => {
+        fail(new Error(`Connection to ${host ?? ""} timed out.`));
       }, 60000).unref(); // Use readyTimeout from connect options
 
       sshClient
         .on("ready", () => {
+          if (settled) {
+            // Too late: nobody is waiting for it, so nobody else would close it.
+            sshClient.end();
+            return;
+          }
+          settled = true;
           clearTimeout(connectionTimeout);
-          this.ssh = sshClient;
-          this.isConnected = true;
-          resolve();
+          resolve(sshClient);
         })
-        .on("error", (err) => {
-          clearTimeout(connectionTimeout);
-          this.isConnected = false;
-          reject(err);
-        });
+        // Stays for as long as the connection does. An `error` event with nobody
+        // listening would end the process, and what the connection was doing fails by
+        // itself.
+        .on("error", fail);
       connectOverOwnSocket(sshClient, {
         host,
         username,
@@ -422,7 +471,7 @@ export class SSHService {
     serverId?: number,
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.connect(
+      const connection = await this.connect(
         host,
         authCredential,
         username,
@@ -430,7 +479,7 @@ export class SSHService {
         authType,
         serverId,
       );
-      await this.disconnect();
+      this.disconnect(connection);
       return { success: true, message: "Connection successful" };
     } catch (error) {
       const errorMessage =
@@ -440,14 +489,10 @@ export class SSHService {
   }
 
   /**
-   * Disconnects the current SSH session
+   * Closes a connection that `connect` handed back.
    */
-  public async disconnect(): Promise<void> {
-    if (this.isConnected && this.ssh) {
-      this.ssh.end();
-      this.isConnected = false;
-      delete this.ssh;
-    }
+  public disconnect(connection: Client): void {
+    connection.end();
   }
 
   async checkServerHealth(server: {
@@ -479,7 +524,7 @@ export class SSHService {
       const authCredential = server.sshKey ?? server.password ?? "";
       const authType = server.sshKey ? "privateKey" : "password";
 
-      await this.connect(
+      const connection = await this.connect(
         server.address,
         authCredential,
         server.username,
@@ -488,88 +533,16 @@ export class SSHService {
         server.id,
       );
 
-      // Get system information
-      const platformResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uname -s", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const releaseResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uname -r", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const cpuResult = await new Promise<{ stdout: string; stderr: string }>(
-        (resolve, reject) => {
-          this.ssh!.exec("nproc", (err, stream) => {
-            if (err) return reject(err);
-            let stdout = "";
-            let stderr = "";
-            stream.on("data", (data: Buffer) => (stdout += data.toString()));
-            stream.stderr.on(
-              "data",
-              (data: Buffer) => (stderr += data.toString()),
-            );
-            stream.on("close", () => resolve({ stdout, stderr }));
-          });
-        },
+      // Get system information, and close the connection however that went
+      const {
+        platformResult,
+        releaseResult,
+        cpuResult,
+        memoryResult,
+        uptimeResult,
+      } = await readSystemInfo(connection).finally(() =>
+        this.disconnect(connection),
       );
-      const memoryResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("free -h | grep Mem", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-      const uptimeResult = await new Promise<{
-        stdout: string;
-        stderr: string;
-      }>((resolve, reject) => {
-        this.ssh!.exec("uptime -p", (err, stream) => {
-          if (err) return reject(err);
-          let stdout = "";
-          let stderr = "";
-          stream.on("data", (data: Buffer) => (stdout += data.toString()));
-          stream.stderr.on(
-            "data",
-            (data: Buffer) => (stderr += data.toString()),
-          );
-          stream.on("close", () => resolve({ stdout, stderr }));
-        });
-      });
-
-      await this.disconnect();
 
       // Parse memory information
       let totalMemory = "";
