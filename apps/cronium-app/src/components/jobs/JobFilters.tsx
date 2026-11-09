@@ -13,20 +13,33 @@ import { Input } from "@cronium/ui";
 import { Label } from "@cronium/ui";
 import { Search, Filter, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  JOB_SEARCH_MAX_LENGTH,
+  JOB_STATUS_OPTIONS,
+  JOB_TYPE_OPTIONS,
+  NO_JOB_FILTERS,
+  jobListQuery,
+  type JobListFilters,
+} from "@/shared/job-list-filters";
 
-export function JobFilters() {
+interface JobFiltersProps {
+  /**
+   * The filters the page's address asks for, already checked. The controls start
+   * from these, so a reload or a shared link shows what the list is filtered by.
+   */
+  initial?: JobListFilters;
+}
+
+export function JobFilters({ initial = NO_JOB_FILTERS }: JobFiltersProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<string>("all");
-  const [type, setType] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<JobListFilters["status"]>(
+    initial.status,
+  );
+  const [type, setType] = useState<JobListFilters["type"]>(initial.type);
+  const [search, setSearch] = useState(initial.search);
 
   const handleApplyFilters = () => {
-    const params = new URLSearchParams();
-    if (status !== "all") params.set("status", status);
-    if (type !== "all") params.set("type", type);
-    if (search) params.set("search", search);
-
-    const queryString = params.toString();
+    const queryString = jobListQuery({ search, status, type });
     router.push(`/dashboard/jobs${queryString ? `?${queryString}` : ""}`);
   };
 
@@ -70,7 +83,15 @@ export function JobFilters() {
               id="search"
               placeholder="Job ID or Event ID"
               value={search}
+              maxLength={JOB_SEARCH_MAX_LENGTH}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                // Not while an input method is still composing text: its Enter
+                // picks the characters.
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  handleApplyFilters();
+                }
+              }}
               className="pl-8"
             />
           </div>
@@ -80,18 +101,22 @@ export function JobFilters() {
           <Label htmlFor="status" className="sr-only">
             Status
           </Label>
-          <Select value={status} onValueChange={setStatus}>
+          <Select
+            value={status}
+            onValueChange={(value) =>
+              setStatus(value as JobListFilters["status"])
+            }
+          >
             <SelectTrigger id="status">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="queued">Queued</SelectItem>
-              <SelectItem value="claimed">Claimed</SelectItem>
-              <SelectItem value="running">Running</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {JOB_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -100,15 +125,20 @@ export function JobFilters() {
           <Label htmlFor="type" className="sr-only">
             Type
           </Label>
-          <Select value={type} onValueChange={setType}>
+          <Select
+            value={type}
+            onValueChange={(value) => setType(value as JobListFilters["type"])}
+          >
             <SelectTrigger id="type">
               <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="script">Script</SelectItem>
-              <SelectItem value="http">HTTP</SelectItem>
-              <SelectItem value="workflow">Workflow</SelectItem>
+              {JOB_TYPE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
