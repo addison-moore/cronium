@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useEffect,
   useId,
   useState,
   useLayoutEffect,
@@ -45,12 +46,14 @@ import { useToast } from "@cronium/ui";
 import { type Tool } from "@/shared/schema";
 import {
   type ActionTestRun,
+  type ShownResult,
   type ToolAction,
   type ToolPlugin,
   ToolPluginRegistry,
 } from "@/tools/types/tool-plugin";
 import { useToolPlugins } from "@/tools/use-tool-plugins";
 import ActionParameterForm from "./ActionParameterForm";
+import RunResult from "./RunResult";
 import { cn } from "@/lib/utils";
 import { SlackMessagePreview, EmailPreview } from "@/tools/previews";
 import Link from "next/link";
@@ -134,12 +137,6 @@ type RunMode = "simulate" | "check" | "run";
 const mainRunMode = (action: ToolAction): RunMode =>
   action.testRun.kind === "simulated" ? "simulate" : "run";
 
-/** The action and button pressed. Another action can be chosen while it runs. */
-interface Press {
-  action: ToolAction;
-  mode: RunMode;
-}
-
 // A run that changes nothing needs no question: a simulation contacts nothing, and a read
 // can't write.
 const asksBeforeRunning = ({ kind }: ActionTestRun): boolean =>
@@ -153,7 +150,7 @@ const RUN_SUCCEEDED_TITLE: Record<ActionTestRun["kind"], string> = {
   writes: "Done",
 };
 
-const runFailedTitle = ({ action, mode }: Press): string => {
+const runFailedTitle = ({ action, mode }: PressedRun): string => {
   if (mode === "check") {
     return `${action.testRun.check?.label ?? "Check"} failed`;
   }
@@ -183,6 +180,29 @@ const templateValueNote = (
     ? `Template values such as ${value} aren't filled in here: they go as written.`
     : undefined;
 };
+
+// A press of the run button, or of the check beside it. The answer is about this, and
+// another credential or action can be chosen while it runs.
+interface PressedRun {
+  action: ToolAction;
+  /** Which was asked for: the check, a simulation or the real run. */
+  mode: RunMode;
+  credential: Tool;
+  parameters: Record<string, unknown>;
+  /** False once another credential or action is chosen, so its result isn't shown. */
+  stillChosen: boolean;
+}
+
+// A run that came back with something to show, and what it ran with.
+interface ShownRun {
+  toolId: number;
+  actionId: string;
+  actionName: string;
+  credentialName: string;
+  parameters: Record<string, unknown>;
+  summary: string;
+  shown: ShownResult;
+}
 
 // What a stored config's tool and action are called. A row can name ones no plugin has
 // now, or leave the tool out: only the form writes whole ones, and the API takes any JSON.
@@ -452,49 +472,67 @@ export default function ToolActionSection({
     }
   };
 
-  // The answer is about the action and button that were pressed, and another action can
-  // be chosen meanwhile.
-  const pressed = useRef<Press | null>(null);
+  const pressedRun = useRef<PressedRun | null>(null);
+  const [lastRun, setLastRun] = useState<ShownRun | null>(null);
+
+  // A result is about the credential and action it ran with, so it goes when either
+  // changes, by a choice here or through the event's settings, and one still on its way
+  // won't show.
+  useEffect(() => {
+    setLastRun(null);
+    if (pressedRun.current) pressedRun.current.stillChosen = false;
+  }, [selectedTool?.id, selectedAction?.id]);
 
   const runActionMutation = trpc.tools.executeAction.useMutation({
     onSuccess: (answer) => {
-      const press = pressed.current;
-      if (!press) return;
-      const { action } = press;
+      const run = pressedRun.current;
+      if (!run) return;
+      const { action } = run;
       if (!answer.success) {
         toast({
-          title: runFailedTitle(press),
+          title: runFailedTitle(run),
           description: answer.error,
           variant: "destructive",
         });
         return;
       }
       // Go by what the server says ran. One that didn't know the check ran it for real.
-      const check = action.testRun.check;
-      toast(
-        answer.checked && check
-          ? { title: "Checked", description: check.succeeded(answer.result) }
-          : {
-              title: RUN_SUCCEEDED_TITLE[action.testRun.kind],
-              description: action.testRun.succeeded(answer.result),
-            },
-      );
-      console.log("Tool action result:", answer.result);
+      const check = answer.checked ? action.testRun.check : undefined;
+      const summary = check
+        ? check.succeeded(answer.result)
+        : action.testRun.succeeded(answer.result);
+      toast({
+        title: check ? "Checked" : RUN_SUCCEEDED_TITLE[action.testRun.kind],
+        description: summary,
+      });
+      // Only a read or a prompt has something to show: a simulation's result is made up,
+      // a check's is all in its toast, and a send or a write comes back with little more
+      // than the count the toast gave.
+      const { shows } = action.testRun;
+      if (shows && !answer.simulated && !answer.checked && run.stillChosen) {
+        setLastRun({
+          toolId: run.credential.id,
+          actionId: action.id,
+          actionName: action.name,
+          credentialName: run.credential.name,
+          parameters: run.parameters,
+          summary,
+          shown: shows(answer.result),
+        });
+      }
     },
     onError: (error) => {
-      const press = pressed.current;
-      if (!press) return;
+      const run = pressedRun.current;
+      if (!run) return;
       const message = trpcErrorMessage(error, "The server gave no reason.");
       // The server only says no before running anything. With no answer, or a broken one,
       // nobody here can tell, and a proxy can give up on a run that goes on without it.
       // A simulation or a check changes nothing either way.
       const refused = (error.data?.httpStatus ?? 500) < 500;
       const mayHaveRun =
-        !refused &&
-        press.mode === "run" &&
-        asksBeforeRunning(press.action.testRun);
+        !refused && run.mode === "run" && asksBeforeRunning(run.action.testRun);
       toast({
-        title: runFailedTitle(press),
+        title: runFailedTitle(run),
         description: mayHaveRun ? `${message} It may still have run.` : message,
         variant: "destructive",
       });
@@ -504,7 +542,16 @@ export default function ToolActionSection({
   const runAction = (mode: RunMode) => {
     if (!selectedTool || !selectedAction) return;
 
-    pressed.current = { action: selectedAction, mode };
+    pressedRun.current = {
+      action: selectedAction,
+      mode,
+      credential: selectedTool,
+      parameters,
+      stillChosen: true,
+    };
+    // Whatever this run comes back with, the last one's result isn't it. A check shows
+    // nothing there, so a result it didn't replace, such as a paid answer, stays.
+    if (mode !== "check") setLastRun(null);
     runActionMutation.mutate({
       toolId: selectedTool.id,
       actionId: selectedAction.id,
@@ -532,6 +579,21 @@ export default function ToolActionSection({
   const runNote = selectedAction
     ? templateValueNote(selectedAction, parameters)
     : undefined;
+
+  // Never one about another credential or action, even in the render before the effect
+  // above clears it.
+  const shownRun =
+    lastRun &&
+    lastRun.toolId === selectedTool?.id &&
+    lastRun.actionId === selectedAction?.id
+      ? lastRun
+      : null;
+  const shownRunIsStale = useMemo(
+    () =>
+      !!shownRun &&
+      JSON.stringify(shownRun.parameters) !== JSON.stringify(parameters),
+    [shownRun, parameters],
+  );
 
   // Clear selection
   const handleClearSelection = () => {
@@ -1115,6 +1177,17 @@ export default function ToolActionSection({
                       </div>
                     </div>
                   </div>
+
+                  {shownRun && (
+                    <RunResult
+                      actionName={shownRun.actionName}
+                      credentialName={shownRun.credentialName}
+                      summary={shownRun.summary}
+                      shown={shownRun.shown}
+                      stale={shownRunIsStale}
+                      onDismiss={() => setLastRun(null)}
+                    />
+                  )}
 
                   {/* Portaled out of the form, so its buttons can't submit it. */}
                   <ConfirmationDialog
