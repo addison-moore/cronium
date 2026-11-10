@@ -85,6 +85,7 @@ import { jobsRouter } from "../jobs";
 import { jobService } from "@/lib/services/job-service";
 import {
   type Job,
+  JobSource,
   JobStatus,
   JobType,
   JobPriority,
@@ -302,6 +303,68 @@ describe("jobs.list", () => {
       0,
     );
     expect(result.filters).toEqual({ eventId: 0 });
+  });
+
+  it("passes the jobs page's type, source and search filters through and echoes them", async () => {
+    mockJobService.listJobs.mockResolvedValueOnce({ jobs: [], total: 0 });
+
+    const result = await userCaller().jobs.list({
+      status: JobStatus.FAILED,
+      type: JobType.HTTP_REQUEST,
+      source: JobSource.WORKFLOW_STEP,
+      search: "  job_ab  ",
+    });
+
+    expect(mockJobService.listJobs).toHaveBeenCalledWith(
+      {
+        userId: USER_ID,
+        status: JobStatus.FAILED,
+        type: JobType.HTTP_REQUEST,
+        source: JobSource.WORKFLOW_STEP,
+        search: "job_ab",
+      },
+      50,
+      0,
+    );
+    expect(result.filters).toEqual({
+      status: "failed",
+      type: "HTTP_REQUEST",
+      source: "WORKFLOW_STEP",
+      search: "job_ab",
+    });
+  });
+
+  it("treats a blank search as no search", async () => {
+    mockJobService.listJobs.mockResolvedValueOnce({ jobs: [], total: 0 });
+
+    const result = await userCaller().jobs.list({ search: "   " });
+
+    expect(mockJobService.listJobs).toHaveBeenCalledWith(
+      { userId: USER_ID },
+      50,
+      0,
+    );
+    expect(result.filters).toEqual({});
+  });
+
+  it("rejects an unknown type or source, and a search longer than the page sends (zod)", async () => {
+    await expect(
+      userCaller().jobs.list({
+        type: "workflow" as unknown as JobType.SCRIPT,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      userCaller().jobs.list({
+        source: "cron" as unknown as JobSource.EVENT,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      userCaller().jobs.list({ search: "x".repeat(101) }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Surrounding spaces don't count towards the limit.
+    mockJobService.listJobs.mockResolvedValueOnce({ jobs: [], total: 0 });
+    await userCaller().jobs.list({ search: ` ${"x".repeat(100)} ` });
+    expect(mockJobService.listJobs).toHaveBeenCalledTimes(1);
   });
 
   it("rejects out-of-range pagination (zod)", async () => {

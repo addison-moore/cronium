@@ -21,10 +21,12 @@ import {
   isNull,
   lte,
   gte,
+  ilike,
   inArray,
   sql,
   count,
   getTableColumns,
+  type SQL,
 } from "drizzle-orm";
 
 /** Claim-lease duration; owners renew via heartbeat well inside this window
@@ -116,12 +118,40 @@ export interface UpdateJobInput {
 
 export interface JobFilter {
   status?: JobStatus | JobStatus[];
+  type?: JobType;
+  source?: JobSource;
+  /** What the jobs page's search box matches: see jobSearchCondition. */
+  search?: string;
   orchestratorId?: string;
   userId?: string;
   eventId?: number;
   priority?: JobPriority;
   scheduledBefore?: Date;
   completedAfter?: Date;
+}
+
+/** events.id is a Postgres integer: a larger number would fail the query. */
+const MAX_EVENT_ID = 2_147_483_647;
+
+/** So `%`, `_` and `\` in a search match themselves, not any characters. */
+function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/**
+ * The jobs page's search box says "Job ID or Event ID". A job matches when its id
+ * starts with the text, ignoring case, so a pasted id or its first few characters
+ * finds it. When the text is a whole number, the jobs of the event with that id
+ * match as well.
+ */
+export function jobSearchCondition(search: string): SQL {
+  const text = search.trim();
+  // Postgres can't store a NUL character, so no id has one, and sending one in a
+  // query fails it.
+  if (text.includes("\u0000")) return sql`false`;
+  const byJobId = ilike(jobsTable.id, `${escapeLikePattern(text)}%`);
+  if (!/^\d{1,10}$/.test(text) || Number(text) > MAX_EVENT_ID) return byJobId;
+  return or(byJobId, eq(jobsTable.eventId, Number(text)))!;
 }
 
 export class JobService {
@@ -203,6 +233,18 @@ export class JobService {
       } else {
         conditions.push(eq(jobsTable.status, filter.status));
       }
+    }
+
+    if (filter.type !== undefined) {
+      conditions.push(eq(jobsTable.type, filter.type));
+    }
+
+    if (filter.source !== undefined) {
+      conditions.push(eq(jobsTable.source, filter.source));
+    }
+
+    if (filter.search !== undefined) {
+      conditions.push(jobSearchCondition(filter.search));
     }
 
     if (filter.orchestratorId !== undefined) {
