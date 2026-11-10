@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +21,11 @@ import WorkflowForm, {
 import type { Node, Edge } from "@xyflow/react";
 import { trpc } from "@/lib/trpc";
 import type { WorkflowNode, WorkflowEdge } from "@/shared/schemas/workflows";
+import {
+  type CanvasGraph,
+  isSameGraph,
+  toCanvasGraph,
+} from "@/components/workflows/lib/stored-graph";
 
 const copy = {
   loading: "Loading workflow...",
@@ -71,8 +76,6 @@ export default function EditWorkflowPage() {
   const workflowId = params?.id ? parseInt(params.id) : NaN;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [workflowNodes, setWorkflowNodes] = useState<Node[]>([]);
-  const [workflowEdges, setWorkflowEdges] = useState<Edge[]>([]);
 
   const form = useForm<WorkflowFormData>({
     resolver: zodResolver(workflowFormSchema),
@@ -137,61 +140,13 @@ export default function EditWorkflowPage() {
     }
   }, [workflowError, router, toast]);
 
-  // Convert workflow nodes and edges when data is loaded
-  useEffect(() => {
-    if (workflowData) {
-      // Define proper types for workflow data from tRPC
-      interface WorkflowNode {
-        id: number;
-        eventId: number;
-        position_x: number;
-        position_y: number;
-        event?: {
-          id: number;
-          name: string;
-          type: string;
-        };
-      }
-
-      interface WorkflowConnection {
-        id: number;
-        sourceNodeId: number;
-        targetNodeId: number;
-        connectionType?: string;
-      }
-
-      // Convert workflow nodes to canvas format
-      const workflowDetails = workflowData.data;
-      const typedNodes = workflowDetails?.nodes as WorkflowNode[] | undefined;
-      const nodes: Node[] = (typedNodes ?? []).map((node) => ({
-        id: `node-${String(node.id)}`,
-        type: "workflowNode",
-        position: { x: node.position_x, y: node.position_y },
-        data: {
-          eventId: node.eventId,
-          label: node.event?.name ?? "",
-          type: node.event?.type ?? "",
-          eventTypeIcon: node.event?.type ?? "",
-        },
-      }));
-      setWorkflowNodes(nodes);
-
-      // Convert workflow connections to canvas format
-      const typedConnections = workflowDetails?.connections as
-        WorkflowConnection[] | undefined;
-      const edges: Edge[] = (typedConnections ?? []).map((conn) => ({
-        id: `edge-${String(conn.id)}`,
-        source: `node-${String(conn.sourceNodeId)}`,
-        target: `node-${String(conn.targetNodeId)}`,
-        type: "connectionEdge",
-        data: {
-          connectionType:
-            (conn.connectionType as ConnectionType) || ConnectionType.ALWAYS,
-        },
-      }));
-      setWorkflowEdges(edges);
-    }
-  }, [workflowData]);
+  // The graph the form starts from. The form copies it once, as it mounts, so it has to
+  // be here by then, and a refetch mustn't change it under the form: a save compares
+  // the canvas against it, and only sends the graph if the canvas changed it.
+  const startingGraph = useRef<CanvasGraph | null>(null);
+  if (startingGraph.current === null && workflowData?.data) {
+    startingGraph.current = toCanvasGraph(workflowData.data);
+  }
 
   // Use tRPC mutation to update workflow
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
@@ -289,13 +244,22 @@ export default function EditWorkflowPage() {
         },
       }));
 
+      // A graph that's sent replaces every node and connection with new ones, which a
+      // running workflow can't follow, so it goes only when the canvas changed it. A
+      // form that never had the workflow's graph never sends one.
+      const graphChanged =
+        startingGraph.current !== null &&
+        !isSameGraph(startingGraph.current, { nodes, edges });
+
       await updateWorkflowMutation.mutateAsync({
         id: workflowId,
         ...workflowValues,
         scheduleUnit: workflowValues.scheduleUnit as
           TimeUnit | null | undefined,
-        nodes: transformedNodes,
-        edges: transformedEdges,
+        ...(graphChanged && {
+          nodes: transformedNodes,
+          edges: transformedEdges,
+        }),
       });
     } finally {
       setIsLoading(false);
@@ -332,7 +296,8 @@ export default function EditWorkflowPage() {
     return <DetailPageSkeleton withSidebar={false} />;
   }
 
-  if (!workflowData) {
+  const graph = startingGraph.current;
+  if (!workflowData || !graph) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -394,8 +359,8 @@ export default function EditWorkflowPage() {
           isLoading={isLoading}
           submitButtonText={copy.saveWorkflow}
           showActionsAtTop={true}
-          initialNodes={workflowNodes}
-          initialEdges={workflowEdges}
+          initialNodes={graph.nodes}
+          initialEdges={graph.edges}
           workflowId={workflowId}
         />
       </PageShell>

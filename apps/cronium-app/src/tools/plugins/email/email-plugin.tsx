@@ -112,8 +112,8 @@ function EmailCredentialForm({
           {...form.register("smtpPort", { valueAsNumber: true })}
         />
         <p className="text-muted-foreground mt-1 text-xs">
-          587 for STARTTLS (Enable TLS), 465 for SSL (Enable SSL), 25 for
-          unencrypted.
+          587 for STARTTLS (Enable TLS), 465 for SSL (Enable SSL), 25
+          unencrypted, with both unticked.
         </p>
       </div>
       <div>
@@ -154,9 +154,20 @@ function EmailCredentialForm({
           {...form.register("fromName")}
         />
       </div>
-      <div className="flex items-center space-x-2">
-        <input type="checkbox" id="enableTLS" {...form.register("enableTLS")} />
-        <Label htmlFor="enableTLS">Enable TLS</Label>
+      <div>
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="enableTLS"
+            aria-describedby="enableTLS-hint"
+            {...form.register("enableTLS")}
+          />
+          <Label htmlFor="enableTLS">Enable TLS</Label>
+        </div>
+        <p id="enableTLS-hint" className="text-muted-foreground mt-1 text-xs">
+          Cronium signs in and sends only after the server switches to TLS with
+          STARTTLS.
+        </p>
       </div>
       <div className="flex items-center space-x-2">
         <input type="checkbox" id="enableSSL" {...form.register("enableSSL")} />

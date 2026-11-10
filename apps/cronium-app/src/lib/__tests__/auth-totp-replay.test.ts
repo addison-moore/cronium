@@ -25,6 +25,7 @@ jest.mock("@/server/storage", () => ({
 import { authOptions } from "../auth";
 import { verifyTotp } from "@/lib/security/totp";
 import { storage } from "@/server/storage";
+import { RATE_LIMIT_UNAVAILABLE } from "@/shared/rate-limit";
 
 const provider = authOptions.providers[0] as unknown as {
   options: {
@@ -48,8 +49,19 @@ const allowFirstUseOnly = () => {
     const key = `${bucket}:${identifier}`;
     const allowed = !seen.has(key);
     seen.add(key);
-    return Promise.resolve({ allowed });
+    return Promise.resolve(
+      allowed ? { allowed } : { allowed, reason: "limited" },
+    );
   });
+};
+
+/** One bucket answers as the limiter does when Valkey can't be asked, or is over its limit. */
+const refuseIn = (refused: string, reason: "limited" | "unavailable") => {
+  limiter.mockImplementation((_identifier: string, bucket: string) =>
+    Promise.resolve(
+      bucket === refused ? { allowed: false, reason } : { allowed: true },
+    ),
+  );
 };
 
 beforeEach(() => {
@@ -85,6 +97,33 @@ describe("TOTP replay", () => {
       "auth:totp-used",
       expect.objectContaining({ maxRequests: 1 }),
     );
+  });
+});
+
+describe("a limiter that couldn't check", () => {
+  it("refuses the sign-in with its own code, and leaves a real limit's words as they were", async () => {
+    refuseIn("auth:credentials-login", "unavailable");
+    await expect(login("123456")).rejects.toMatchObject({
+      message: RATE_LIMIT_UNAVAILABLE,
+    });
+    expect(storage.getUserByUsername).not.toHaveBeenCalled();
+
+    refuseIn("auth:credentials-login", "limited");
+    await expect(login("123456")).rejects.toMatchObject({
+      message: "Too many login attempts. Please try again later.",
+    });
+  });
+
+  it("refuses a code whose use it couldn't record, without calling the code invalid", async () => {
+    refuseIn("auth:totp-used", "unavailable");
+    await expect(login("123456")).rejects.toMatchObject({
+      message: RATE_LIMIT_UNAVAILABLE,
+    });
+    expect(storage.updateUser).not.toHaveBeenCalled();
+
+    // Nothing was recorded, so the same code works once the limiter answers.
+    allowFirstUseOnly();
+    await expect(login("123456")).resolves.toMatchObject({ id: "user-1" });
   });
 });
 

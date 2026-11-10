@@ -4,6 +4,9 @@
  * deliveries go out on, as `webhook.<name>`. Postgres refuses some of what a request can
  * carry, and it refuses it on every attempt, so the endpoint checks before it writes
  * anything and tells the sender what's wrong, rather than answering 500 each time.
+ *
+ * The same goes for JSON nested deeper than Cronium's own code can walk, which fails
+ * long before Postgres would.
  */
 
 /** What deliveries call an event that came in at an inbound endpoint. */
@@ -71,4 +74,49 @@ function firstUnstorableCharacter(value: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * How deep a request's JSON can nest, counting each array or object as a level, so
+ * `{"items":[1]}` is 2 deep. Processing an event walks it recursively, and so do
+ * `String`, `JSON.stringify`, and the superjson `webhookSystem.getEventHistory` answers
+ * through. Each throws once it runs out of stack, on every attempt. On Node 22, through
+ * a production build, the history gave out first, for an event 921 levels deep, then
+ * the endpoint itself at 2,117 (Postgres's `jsonb` took 15,000). This leaves room
+ * under both for other platforms and versions, and is far deeper than events go.
+ */
+export const MAX_INBOUND_JSON_DEPTH = 256;
+
+/** Why a request's body nests too deep to process, said for its sender, or undefined. */
+export function tooDeeplyNested(body: unknown): string | undefined {
+  const depth = nestingDepth(body);
+  if (depth <= MAX_INBOUND_JSON_DEPTH) return undefined;
+  return `This event is nested too deeply: it has arrays and objects ${depth.toLocaleString("en-US")} levels deep, and the limit is ${MAX_INBOUND_JSON_DEPTH}.`;
+}
+
+/**
+ * How many arrays and objects deep a value from JSON goes: 0 for a string or a number,
+ * 1 for `{}` or `[1]`. A level at a time, without recursion, so how deep it goes can't
+ * make this fail.
+ */
+function nestingDepth(value: unknown): number {
+  let depth = 0;
+  let level: object[] = isContainer(value) ? [value] : [];
+  while (level.length > 0) {
+    depth++;
+    const inside: object[] = [];
+    for (const container of level) {
+      for (const item of Array.isArray(container)
+        ? (container as unknown[])
+        : Object.values(container)) {
+        if (isContainer(item)) inside.push(item);
+      }
+    }
+    level = inside;
+  }
+  return depth;
+}
+
+function isContainer(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
 }

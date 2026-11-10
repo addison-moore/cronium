@@ -2,6 +2,7 @@ import Redis, { type Redis as RedisClient } from "ioredis";
 import { env } from "@/env.mjs";
 import superjson from "superjson";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { VALKEY_ANSWER_LIMITS } from "@/lib/valkey-answer-limit";
 import { failureWithStack } from "@/lib/pg-errors";
 import { quotedForLog } from "@/lib/security/audit-entry";
 import { CacheUnavailableError } from "./cache-unavailable";
@@ -89,6 +90,9 @@ export class CacheService {
       this.client = new Redis(normalizeValkeyUrl(redisUrl), {
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
+        // A Valkey that stops answering would otherwise hold every read here, and the
+        // principal check on every signed-in request reads here first.
+        ...VALKEY_ANSWER_LIMITS,
         retryStrategy: (times) => {
           const delay = Math.min(times * 100, 3000);
           return delay;
@@ -103,7 +107,11 @@ export class CacheService {
         },
       });
 
-      this.client.on("connect", () => {
+      // Usable from "ready", not "connect". A Valkey that accepts connections and never
+      // answers is connected to again every few seconds, after socketTimeout closes the
+      // last connection, and never gets ready. Until it does, every call here skips it
+      // straight away instead of waiting out VALKEY_ANSWER_MS.
+      this.client.on("ready", () => {
         console.log("Connected to Valkey/Redis cache");
         this.isConnected = true;
       });

@@ -72,7 +72,9 @@ export function JobFilters({ initial = NO_JOB_FILTERS }: JobFiltersProps) {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Four columns only from xl: below it, with the sidebar open, a quarter of the
+          row is narrower than Apply Filters and Reset side by side. */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="search" className="sr-only">
             Search

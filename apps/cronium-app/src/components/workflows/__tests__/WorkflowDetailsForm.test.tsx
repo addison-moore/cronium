@@ -22,6 +22,9 @@ const mockMutateAsync = jest.fn();
 
 jest.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      workflows: { getById: { cancel: jest.fn() } },
+    }),
     workflows: {
       update: {
         useMutation: jest.fn(() => ({

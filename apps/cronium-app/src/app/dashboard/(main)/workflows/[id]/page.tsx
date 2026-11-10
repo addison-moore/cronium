@@ -27,6 +27,7 @@ import WorkflowDetailsForm from "@/components/workflows/WorkflowDetailsForm";
 import {
   type AvailableEvent,
   withCurrentEventDetails,
+  workflowGraphKey,
 } from "@/components/workflows/lib/canvas-transforms";
 import { formatDate } from "@/lib/utils";
 import {
@@ -163,8 +164,21 @@ export default function WorkflowDetailsPage({
     failureCount: number;
   }
 
-  const [workflowNodes, setWorkflowNodes] = useState<LocalWorkflowNode[]>([]);
-  const [workflowEdges, setWorkflowEdges] = useState<WorkflowEdge[]>([]);
+  // The graph the canvas shows, which Save sends, and what's saved, as of the last read
+  // or save. Save is on while the two differ.
+  const [graph, setGraph] = useState<{
+    nodes: LocalWorkflowNode[];
+    edges: WorkflowEdge[];
+    savedKey: string | null;
+  }>({ nodes: [], edges: [], savedKey: null });
+  const workflowNodes = graph.nodes;
+  const workflowEdges = graph.edges;
+  const hasUnsavedChanges = useMemo(
+    () =>
+      graph.savedKey !== null &&
+      workflowGraphKey(graph.nodes, graph.edges) !== graph.savedKey,
+    [graph],
+  );
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
   const [currentExecution, setCurrentExecution] =
     useState<WorkflowExecutionDetailed | null>(null);
@@ -194,7 +208,6 @@ export default function WorkflowDetailsPage({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [hasInitialData, setHasInitialData] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [executionHistoryRefreshTrigger, setExecutionHistoryRefreshTrigger] =
     useState(0);
   const router = useRouter();
@@ -267,7 +280,6 @@ export default function WorkflowDetailsPage({
           updatedAt: node.event?.updatedAt ?? "",
         },
       }));
-      setWorkflowNodes(nodes);
 
       const typedConnections = workflowDetails?.connections as
         WorkflowConnection[] | undefined;
@@ -281,10 +293,18 @@ export default function WorkflowDetailsPage({
           connectionType: conn.connectionType ?? "ALWAYS",
         },
       }));
-      setWorkflowEdges(edges);
 
+      // Every read lands here, a refocus included: superjson's new Dates make each one a
+      // new answer, even when nothing changed. It mustn't undo an edit that isn't saved,
+      // because the canvas still shows it and Save sends what the canvas shows.
+      const savedKey = workflowGraphKey(nodes, edges);
+      setGraph((current) => {
+        const unsaved =
+          current.savedKey !== null &&
+          workflowGraphKey(current.nodes, current.edges) !== current.savedKey;
+        return unsaved ? { ...current, savedKey } : { nodes, edges, savedKey };
+      });
       setHasInitialData(true);
-      setHasUnsavedChanges(false);
     }
   }, [workflowData]);
 
@@ -390,9 +410,9 @@ export default function WorkflowDetailsPage({
     (nodes: LocalWorkflowNode[], edges: WorkflowEdge[]) => {
       if (!hasInitialData) return;
 
-      setWorkflowNodes(nodes);
-      setWorkflowEdges(edges);
-      setHasUnsavedChanges(true);
+      // Save goes on if this differs from what's saved, and off again if it doesn't,
+      // as after an undo.
+      setGraph((current) => ({ ...current, nodes, edges }));
 
       // Auto-save functionality removed - users must manually save canvas changes
     },
@@ -403,8 +423,13 @@ export default function WorkflowDetailsPage({
 
   // Use tRPC mutation for saving
   const updateWorkflowMutation = trpc.workflows.update.useMutation({
-    onSuccess: () => {
-      setHasUnsavedChanges(false);
+    onSuccess: (_saved, { nodes, edges }) => {
+      // What's saved is now what was sent. An edit made while it was on its way still
+      // differs from that, so Save stays on for it.
+      if (nodes && edges) {
+        const savedKey = workflowGraphKey(nodes, edges);
+        setGraph((current) => ({ ...current, savedKey }));
+      }
       toast({
         title: "Saved",
         description: "Workflow saved successfully",
@@ -812,9 +837,11 @@ export default function WorkflowDetailsPage({
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="text-muted-foreground h-4 w-4" />
+                    <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
                     <span className="text-sm font-medium">Name:</span>
-                    <span className="text-sm font-semibold">
+                    {/* A name without spaces, such as nightly_db_backup_to_s3,
+                        breaks to fit rather than widening the page */}
+                    <span className="min-w-0 text-sm font-semibold break-words">
                       {workflow.name}
                     </span>
                   </div>
@@ -827,7 +854,7 @@ export default function WorkflowDetailsPage({
                     <div className="flex items-start gap-2">
                       <FileText className="text-muted-foreground mt-1 h-4 w-4" />
                       <span className="text-sm font-medium">Description:</span>
-                      <span className="text-muted-foreground text-sm">
+                      <span className="text-muted-foreground min-w-0 text-sm break-words">
                         {workflow.description}
                       </span>
                     </div>
@@ -900,7 +927,9 @@ export default function WorkflowDetailsPage({
                       <Activity className="h-4 w-4" />
                       Execution Statistics
                     </h4>
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* One per line on a phone: three columns there are narrower
+                        than "Successful: 3", which ran into "Failed:" */}
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-3">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="text-success h-4 w-4" />
                         <span className="text-sm font-medium">Successful:</span>

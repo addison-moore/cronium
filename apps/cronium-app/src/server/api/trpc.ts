@@ -390,6 +390,7 @@ export const withTiming = t.middleware(async ({ path, type, next }) => {
  * Provides distributed rate limiting across all server instances
  */
 import { RateLimitService } from "@/lib/rate-limit-service";
+import { rateLimitRefusal } from "@/server/security/rate-limit-refusal";
 
 export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
   return t.middleware(async ({ ctx, path, next }) => {
@@ -413,6 +414,8 @@ export const withRateLimit = (maxRequests = 100, windowMs = 60000) => {
  * (security plan Phase 1.3). Keyed by the trusted-proxy-derived client IP; if
  * the limiter's Valkey backend is unavailable the request is DENIED rather
  * than allowed, so brute force cannot be unlocked by knocking out the cache.
+ * That denial is a 503 saying the limit couldn't be checked, and only a real
+ * limit is a 429.
  */
 export const withAuthRateLimit = (maxRequests: number, windowMs: number) => {
   return t.middleware(async ({ ctx, path, next }) => {
@@ -423,19 +426,12 @@ export const withAuthRateLimit = (maxRequests: number, windowMs: number) => {
     // strict rather than permissive (all such callers share one budget).
     const identifier = clientIpFromHeaders(ctx.headers) ?? "unknown-ip";
 
-    const { allowed, resetAt } = await consumeAtomicRateLimit(
-      identifier,
-      path,
-      {
-        maxRequests,
-        windowMs,
-      },
-    );
-    if (!allowed) {
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: `Too many attempts. Please try again after ${resetAt.toISOString()}`,
-      });
+    const limit = await consumeAtomicRateLimit(identifier, path, {
+      maxRequests,
+      windowMs,
+    });
+    if (!limit.allowed) {
+      throw rateLimitRefusal(limit);
     }
     return next();
   });
