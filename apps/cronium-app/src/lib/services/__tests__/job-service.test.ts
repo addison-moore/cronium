@@ -63,6 +63,7 @@ jest.mock("nanoid", () => ({
 import {
   JobService,
   DEFAULT_CLAIM_LEASE_MS,
+  jobSearchCondition,
   type CreateJobInput,
 } from "../job-service";
 import { db } from "@server/db";
@@ -80,7 +81,8 @@ import {
   jobs as jobsTable,
   jobTransitions,
 } from "@shared/schema";
-import { eq, ne, and, isNull, lte, inArray } from "drizzle-orm";
+import { eq, ne, and, isNull, lte, inArray, type SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { RETRY_BASE_DELAY_MS, RETRY_MAX_DELAY_MS } from "../retry-policy";
 
 // ---------------------------------------------------------------------------
@@ -432,6 +434,80 @@ describe("listJobs", () => {
     mockDb.select.mockReturnValueOnce(chain([])).mockReturnValueOnce(chain([]));
     const result = await service.listJobs({ userId: "user-1" });
     expect(result.total).toBe(0);
+  });
+
+  it("filters both queries by the jobs page's type, source and search", async () => {
+    const rowsChain = chain([]);
+    const countChain = chain([{ value: 0 }]);
+    mockDb.select
+      .mockReturnValueOnce(rowsChain)
+      .mockReturnValueOnce(countChain);
+
+    await service.listJobs({
+      type: JobType.TOOL_ACTION,
+      source: JobSource.WORKFLOW_STEP,
+      search: "job_x",
+      userId: "user-1",
+    });
+
+    expect(toQuery(rowsChain.where.mock.calls[0]![0])).toEqual({
+      sql: '("jobs"."type" = $1 and "jobs"."source" = $2 and "jobs"."id" ilike $3 and "jobs"."user_id" = $4)',
+      params: ["TOOL_ACTION", "WORKFLOW_STEP", "job\\_x%", "user-1"],
+    });
+    expect(countChain.where).toHaveBeenCalledWith(
+      rowsChain.where.mock.calls[0]![0],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// jobSearchCondition — the jobs page's "Job ID or Event ID" search
+// ---------------------------------------------------------------------------
+
+function toQuery(condition: SQL): { sql: string; params: unknown[] } {
+  const { sql, params } = new PgDialect().sqlToQuery(condition);
+  return { sql, params };
+}
+
+describe("jobSearchCondition", () => {
+  it("matches a job id prefix, ignoring case", () => {
+    expect(toQuery(jobSearchCondition("JOB_Ab3"))).toEqual({
+      sql: '"jobs"."id" ilike $1',
+      params: ["JOB\\_Ab3%"],
+    });
+  });
+
+  it("makes %, _ and \\ match themselves, not any characters", () => {
+    expect(toQuery(jobSearchCondition("a%b_c\\d")).params).toEqual([
+      "a\\%b\\_c\\\\d%",
+    ]);
+  });
+
+  it("matches that event's jobs too when the search is a whole number", () => {
+    expect(toQuery(jobSearchCondition(" 42 "))).toEqual({
+      sql: '("jobs"."id" ilike $1 or "jobs"."event_id" = $2)',
+      params: ["42%", 42],
+    });
+    // The largest id an integer column holds.
+    expect(toQuery(jobSearchCondition("2147483647")).params).toEqual([
+      "2147483647%",
+      2147483647,
+    ]);
+  });
+
+  it("doesn't compare an event id with a number Postgres would refuse", () => {
+    for (const search of ["2147483648", "99999999999", "4.2", "-1", "1e3"]) {
+      expect(toQuery(jobSearchCondition(search)).sql).toBe(
+        '"jobs"."id" ilike $1',
+      );
+    }
+  });
+
+  it("matches nothing for a NUL character, which would fail the query", () => {
+    expect(toQuery(jobSearchCondition("job_\u0000"))).toEqual({
+      sql: "false",
+      params: [],
+    });
   });
 });
 

@@ -17,7 +17,8 @@ import {
   createPaginatedResult,
 } from "@/server/utils/db-patterns";
 import { jobService } from "@/lib/services/job-service";
-import { JobStatus, logs } from "@/shared/schema";
+import { JobSource, JobStatus, JobType, logs } from "@/shared/schema";
+import { JOB_SEARCH_MAX_LENGTH } from "@/shared/job-list-filters";
 import { db } from "@/server/db";
 import { count, eq } from "drizzle-orm";
 
@@ -31,6 +32,12 @@ const getJobSchema = z.object({
 
 const listJobsSchema = z.object({
   status: z.nativeEnum(JobStatus).optional(),
+  type: z.nativeEnum(JobType).optional(),
+  // WORKFLOW_STEP is the jobs page's Workflow type: a workflow's steps are jobs of
+  // their own types.
+  source: z.nativeEnum(JobSource).optional(),
+  // A job id prefix, or an event id: see jobSearchCondition. Blank means no search.
+  search: z.string().trim().max(JOB_SEARCH_MAX_LENGTH).optional(),
   eventId: z.number().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
@@ -84,6 +91,15 @@ export const jobsRouter = createTRPCRouter({
         if (input.status !== undefined) {
           filter.status = input.status;
         }
+        if (input.type !== undefined) {
+          filter.type = input.type;
+        }
+        if (input.source !== undefined) {
+          filter.source = input.source;
+        }
+        if (input.search) {
+          filter.search = input.search;
+        }
         if (input.eventId !== undefined) {
           filter.eventId = input.eventId;
         }
@@ -103,6 +119,15 @@ export const jobsRouter = createTRPCRouter({
         } = {};
         if (input.status !== undefined) {
           filters.status = String(input.status);
+        }
+        if (input.type !== undefined) {
+          filters.type = String(input.type);
+        }
+        if (input.source !== undefined) {
+          filters.source = input.source;
+        }
+        if (input.search) {
+          filters.search = input.search;
         }
         if (input.eventId !== undefined) {
           filters.eventId = input.eventId;

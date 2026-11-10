@@ -15,8 +15,9 @@
  * for good. The service gets small limits there, so nothing waits for its real ones.
  *
  * Last, the terminal's pool, which keeps connections for the shells it opens and closes
- * them itself: each way it does that, at the server that never closes its side, and what
- * it keeps in the pool when a connection it replaced closes.
+ * them itself: each way it does that, at the server that never closes its side, what it
+ * keeps in the pool when a connection it replaced closes, and that it never closes a
+ * connection while a shell over it is open.
  */
 // For the host key verifier. With no key on file, it records the one it's shown.
 let mockStoredHostKey: string | null = null;
@@ -31,7 +32,7 @@ jest.mock("@server/storage", () => ({
 
 import net from "net";
 import { Server as SshServer, utils as sshUtils } from "ssh2";
-import type { Connection } from "ssh2";
+import type { ClientChannel, Connection, ServerChannel } from "ssh2";
 import { SSHService } from "../ssh";
 import { createServerSSHConnectionScope } from "../ssh/pool-key";
 
@@ -95,6 +96,10 @@ interface FakeServer {
   connections: () => number;
   /** Connections to it that haven't closed. */
   open: () => number;
+  /** Every shell it has opened, closed or not. */
+  shellsOpened: () => number;
+  /** Shells open at it, over any connection. */
+  shells: () => number;
   close: () => Promise<void>;
 }
 
@@ -108,7 +113,13 @@ afterEach(async () => {
  * shell for a terminal. `holdFirst` keeps the first command it gets waiting until it
  * resolves, and `delayMs` spaces every answer out, so calls overlap. `shellDelayMs` takes
  * that long to open each shell, as a busy machine can. `holdSignIn` never answers a
- * sign-in, and `refuseChannels` refuses every channel, so every shell.
+ * sign-in, and `refuseChannels` refuses every channel, so every shell. `maxSessions`
+ * refuses a channel to a connection with that many open, as OpenSSH's `MaxSessions`
+ * does, where a command and a shell are a session each. `holdFirstShell` keeps the first
+ * shell it's asked for waiting until it resolves.
+ *
+ * A shell echoes what it's sent, and exits once its input ends, as a shell at its prompt
+ * does when the terminal's websocket ends it.
  */
 async function startServer(
   answers: Record<string, string>,
@@ -119,15 +130,26 @@ async function startServer(
     shellDelayMs?: number;
     holdSignIn?: boolean;
     refuseChannels?: boolean;
+    maxSessions?: number;
+    holdFirstShell?: Promise<void>;
   } = {},
 ): Promise<FakeServer> {
   const commands: string[] = [];
   const open = new Set<Connection>();
+  const shells = new Set<ServerChannel>();
   let connections = 0;
+  let shellsAsked = 0;
+  let shellsOpened = 0;
   const server = new SshServer({ hostKeys: [hostKey] }, (client) => {
     connections += 1;
     open.add(client);
-    client.on("close", () => open.delete(client));
+    // Its shells' input ends with it too, and then they can't say anything.
+    let gone = false;
+    client.on("end", () => (gone = true));
+    client.on("close", () => {
+      gone = true;
+      open.delete(client);
+    });
     client.on("error", () => undefined);
     client.on("authentication", (context) => {
       if (options.holdSignIn) return;
@@ -138,12 +160,15 @@ async function startServer(
       }
     });
     client.on("ready", () => {
+      let sessions = 0;
       client.on("session", (acceptSession, rejectSession) => {
-        if (options.refuseChannels) {
+        if (options.refuseChannels || sessions === options.maxSessions) {
           rejectSession();
           return;
         }
+        sessions += 1;
         acceptSession()
+          .on("close", () => (sessions -= 1))
           .on("exec", (acceptExec, rejectExec, info) => {
             const first = commands.length === 0;
             commands.push(info.command);
@@ -168,17 +193,46 @@ async function startServer(
           .on("pty", (acceptPty) => acceptPty())
           .on("shell", (acceptShell) => {
             const startShell = () => {
+              // Nothing to accept once the connection or the channel has gone.
+              let shell: ServerChannel | undefined;
               try {
-                const shell = acceptShell();
-                shell.on("error", () => undefined);
-                shell.write("a shell\n");
+                shell = gone
+                  ? undefined
+                  : (acceptShell() as ServerChannel | undefined);
               } catch {
                 // The connection closed while this one waited.
               }
+              if (!shell) return;
+              shellsOpened += 1;
+              shells.add(shell);
+              shell.on("close", () => shells.delete(shell));
+              shell.on("error", () => undefined);
+              shell.on("data", (data: Buffer) => {
+                try {
+                  shell.write(data);
+                } catch {
+                  // The connection has gone.
+                }
+              });
+              shell.on("end", () => {
+                if (gone) return;
+                try {
+                  shell.exit(0);
+                  shell.close();
+                } catch {
+                  // The connection has gone.
+                }
+              });
+              shell.write("a shell\n");
             };
-            if (options.shellDelayMs)
+            shellsAsked += 1;
+            if (shellsAsked === 1 && options.holdFirstShell) {
+              void options.holdFirstShell.then(startShell);
+            } else if (options.shellDelayMs) {
               setTimeout(startShell, options.shellDelayMs);
-            else startShell();
+            } else {
+              startShell();
+            }
           });
       });
     });
@@ -189,6 +243,8 @@ async function startServer(
     commands,
     connections: () => connections,
     open: () => open.size,
+    shellsOpened: () => shellsOpened,
+    shells: () => shells.size,
     close: () =>
       new Promise<void>((resolve) => {
         for (const client of open) client.end();
@@ -680,7 +736,8 @@ describe("SSHService's terminal pool", () => {
 
   /**
    * A shell, as the terminal's websocket opens one and reads it. The pool counts a shell
-   * as open until it has been read to its end.
+   * as open until it closes, and an ssh2 shell nobody reads never closes. `closed` says
+   * whether it has.
    */
   async function openShell(port: number, password = PASSWORD) {
     const opened = await sshService.openShell(
@@ -693,8 +750,36 @@ describe("SSHService's terminal pool", () => {
       24,
       "password",
     );
-    opened.shell.resume();
-    return opened;
+    let closed = false;
+    opened.shell.on("close", () => (closed = true)).resume();
+    return { ...opened, closed: () => closed };
+  }
+
+  type OpenedShell = Awaited<ReturnType<typeof openShell>>;
+
+  /**
+   * Ends a shell as the terminal's websocket does when its tab closes: `cleanup`, and
+   * then the end of the shell's input. The fake server's shell exits then, and closes.
+   */
+  function endAsTheTerminalDoes({ shell, cleanup }: OpenedShell) {
+    cleanup();
+    shell.end();
+  }
+
+  /** Whether `shell` still answers: the fake server's shells echo what they're sent. */
+  async function answers(shell: ClientChannel) {
+    let echoed = "";
+    const heard = new Promise<true>((resolve) => {
+      const listen = (data: Buffer) => {
+        echoed += data.toString();
+        if (!echoed.includes("still here")) return;
+        shell.off("data", listen);
+        resolve(true);
+      };
+      shell.on("data", listen);
+    });
+    shell.write("still here\n");
+    return settlesWithin(5_000, heard);
   }
 
   /** An SSH server that answers as server A, behind one that never closes its side. */
@@ -786,18 +871,20 @@ describe("SSHService's terminal pool", () => {
     await closedThoughServerNeverDid(neverCloses, a);
   });
 
-  it("closes a connection with too many shells once it's replaced, though the server never closes its side", async () => {
-    sshService = new SSHService({ ...GRACE, replacedConnectionMs: 100 });
+  it("closes a connection with too many shells once it's replaced and they've closed, though the server never closes its side", async () => {
     const { a, neverCloses } = await startServers();
 
     // Five shells share a connection, and the sixth gets a new one.
+    const firstFive: OpenedShell[] = [];
     for (let shells = 0; shells < 5; shells += 1) {
-      await openShell(neverCloses.port);
+      firstFive.push(await openShell(neverCloses.port));
     }
     expect(a.connections()).toBe(1);
     await openShell(neverCloses.port);
     expect(a.connections()).toBe(2);
 
+    // The first connection closes once the last of its shells has.
+    for (const { shell } of firstFive) shell.close();
     await closedThoughServerNeverDid(neverCloses, a, 1);
     // The first one closing left the second in the pool, for the next shell.
     await openShell(neverCloses.port);
@@ -806,13 +893,15 @@ describe("SSHService's terminal pool", () => {
 
   it("keeps the connection that replaced one with too many shells", async () => {
     // Here the first one closes as soon as it's told to, with the second in the pool.
-    sshService = new SSHService({ ...GRACE, replacedConnectionMs: 300 });
     const a = await startServer(SERVER_A.answers);
 
-    for (let shells = 0; shells < 6; shells += 1) {
-      await openShell(a.port);
+    const firstFive: OpenedShell[] = [];
+    for (let shells = 0; shells < 5; shells += 1) {
+      firstFive.push(await openShell(a.port));
     }
+    await openShell(a.port);
     expect(a.connections()).toBe(2);
+    firstFive.forEach(endAsTheTerminalDoes);
     await until(
       "the first connection to close",
       () => a.open() === 1 && tcpSocketsHere() === 2,
@@ -820,5 +909,165 @@ describe("SSHService's terminal pool", () => {
     await openShell(a.port);
 
     expect(a.connections()).toBe(2);
+  });
+
+  it("keeps a connection while a shell over it is open, however long ago it was handed out", async () => {
+    sshService = new SSHService({
+      ...GRACE,
+      terminalIdleMs: 300,
+      terminalSweepMs: 50,
+    });
+    const a = await startServer(SERVER_A.answers);
+
+    // Two shells share a connection, and the first ends, which the pool hears twice:
+    // from its cleanup, and when it closes. It's one shell, and the other is still open.
+    const first = await openShell(a.port);
+    const second = await openShell(a.port);
+    expect(a.connections()).toBe(1);
+    endAsTheTerminalDoes(first);
+    await until("the first shell to close", first.closed);
+
+    // Well past the time the pool keeps a connection with no shells, with sweeps all
+    // along.
+    await wait(1_000);
+    expect(second.closed()).toBe(false);
+    expect([a.open(), a.shells()]).toEqual([1, 1]);
+    expect(await answers(second.shell)).toBe(true);
+
+    // Its idle time counts from when its last shell closed.
+    const lastClosed = new Promise<number>((resolve) =>
+      second.shell.once("close", () => resolve(performance.now())),
+    );
+    second.shell.close();
+    const closedAt = await lastClosed;
+    await until("the connection to close", () => a.open() === 0);
+    expect(performance.now() - closedAt).toBeGreaterThanOrEqual(250);
+  });
+
+  it("keeps five shells going after a sixth opens, and closes their connection after the last", async () => {
+    const a = await startServer(SERVER_A.answers);
+
+    // Five shells share a connection, and the sixth gets a new one.
+    const firstFive: OpenedShell[] = [];
+    for (let shells = 0; shells < 5; shells += 1) {
+      firstFive.push(await openShell(a.port));
+    }
+    await openShell(a.port);
+    expect(a.connections()).toBe(2);
+
+    // Longer than the 5 seconds the pool used to give them before it closed their
+    // connection.
+    await wait(5_500);
+    expect(firstFive.filter(({ closed }) => closed()).length).toBe(0);
+    expect([a.open(), a.shells()]).toEqual([2, 6]);
+    for (const { shell } of firstFive) {
+      expect(await answers(shell)).toBe(true);
+    }
+
+    // Their connection closes with the last of them, and not before.
+    const last = firstFive.pop()!;
+    firstFive.forEach(endAsTheTerminalDoes);
+    await until(
+      "four shells to close, here and at the server",
+      () => firstFive.every(({ closed }) => closed()) && a.shells() === 2,
+    );
+    await wait(300);
+    expect(last.closed()).toBe(false);
+    expect([a.open(), a.shells()]).toEqual([2, 2]);
+    endAsTheTerminalDoes(last);
+    await until(
+      "the first connection to close",
+      () => a.open() === 1 && a.shells() === 1,
+    );
+  });
+
+  it("keeps a connection whose check failed until its shell has closed", async () => {
+    // As OpenSSH with `MaxSessions 1`. Before the pool hands a connection out again, it
+    // runs a command over it, a second session, which the server refuses.
+    const a = await startServer(SERVER_A.answers, { maxSessions: 1 });
+
+    const first = await openShell(a.port);
+    const second = await openShell(a.port);
+    expect(a.connections()).toBe(2);
+
+    await wait(500);
+    expect(first.closed()).toBe(false);
+    expect([a.open(), a.shells()]).toEqual([2, 2]);
+    expect(await answers(first.shell)).toBe(true);
+
+    // Out of the pool, the first connection closes once its shell has.
+    endAsTheTerminalDoes(first);
+    await until("the first connection to close", () => a.open() === 1);
+    expect(second.closed()).toBe(false);
+  });
+
+  it("keeps a connection whose server refused a shell until its other shell has closed", async () => {
+    // Two terminals at once share the connection being made, and the server allows a
+    // connection one session, as OpenSSH with `MaxSessions 1`.
+    const a = await startServer(SERVER_A.answers, { maxSessions: 1 });
+
+    const results = await Promise.allSettled([
+      openShell(a.port),
+      openShell(a.port),
+    ]);
+    expect(results.map(({ status }) => status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    const refused = results.find(({ status }) => status === "rejected");
+    expect(String((refused as PromiseRejectedResult).reason)).toContain(
+      "(SSH) Channel open failure",
+    );
+    const { value: opened } = results.find(
+      (result) => result.status === "fulfilled",
+    ) as PromiseFulfilledResult<OpenedShell>;
+    expect(a.connections()).toBe(1);
+
+    await wait(500);
+    expect(opened.closed()).toBe(false);
+    expect([a.open(), a.shells()]).toEqual([1, 1]);
+    expect(await answers(opened.shell)).toBe(true);
+
+    // Out of the pool, it closes once that shell has.
+    endAsTheTerminalDoes(opened);
+    await until("the connection to close", () => a.open() === 0);
+  });
+
+  it("closes a shell that opens after it stopped waiting, and doesn't count it", async () => {
+    // The only shell here is the one the server holds, so the short limit on opening a
+    // shell is never a race. The pool measures how long it has kept a connection with
+    // Date.now(), which stands still until the clock is moved on below.
+    let now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      sshService = new SSHService({
+        ...GRACE,
+        terminalShellMs: 200,
+        terminalIdleMs: 100,
+        terminalSweepMs: 50,
+      });
+      const letShellThrough = gate();
+      const a = await startServer(SERVER_A.answers, {
+        holdFirstShell: letShellThrough.opened,
+      });
+
+      await expect(openShell(a.port)).rejects.toThrow(
+        "Shell creation timeout - server may be overloaded",
+      );
+      // The server opens it after all, when nothing would ever read it or end it.
+      letShellThrough.open();
+      await until(
+        "the late shell to close",
+        () => a.shellsOpened() === 1 && a.shells() === 0,
+      );
+      expect(a.open()).toBe(1);
+
+      // Nor does it count as the connection's shell: with none, the connection is idle,
+      // so once the clock moves past the limit, the next sweep closes it.
+      now += 1_000;
+      await until("the connection to close", () => a.open() === 0);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
