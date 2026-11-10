@@ -116,16 +116,18 @@ export function EventsFilters({
           </div>
         </div>
 
-        {/* Sort By */}
+        {/* Sort By: the direction button wraps under the select where the column is
+            too narrow for both, rather than sticking out of the card or cutting
+            off the select's label */}
         <div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Select
               value={filters.sortBy}
               onValueChange={(value: "name" | "createdAt" | "lastRunAt") => {
                 onFiltersChange({ sortBy: value });
               }}
             >
-              <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 w-full rounded-md transition-all focus:ring-2">
+              <SelectTrigger className="focus:ring-primary/20 text-foreground h-10 flex-1 rounded-md transition-all focus:ring-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

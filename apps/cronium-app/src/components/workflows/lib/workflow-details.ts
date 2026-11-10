@@ -94,6 +94,23 @@ export function workflowToFormValues(
 }
 
 /**
+ * The form's fields whose value isn't the one that was sent, compared by value: what
+ * was typed while a save was on its way. `sent` is the save's payload.
+ */
+export function fieldsChangedSince(
+  sent: Partial<Record<keyof WorkflowDetailsFormData, unknown>>,
+  now: WorkflowDetailsFormData,
+): Partial<WorkflowDetailsFormData> {
+  return Object.fromEntries(
+    Object.entries(now).filter(
+      ([name, value]) =>
+        JSON.stringify(value) !==
+        JSON.stringify(sent[name as keyof WorkflowDetailsFormData]),
+    ),
+  );
+}
+
+/**
  * Assemble the `workflows.update` payload: form values plus the canvas nodes
  * and edges normalized to the shapes `updateWorkflowSchema` expects
  * (`eventNode`/`connectionEdge` type literals, tags and connectionType

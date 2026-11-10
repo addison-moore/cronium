@@ -11,7 +11,11 @@ jest.mock("@/env.mjs", () => ({ env: {} }));
 
 import net from "node:net";
 import nodemailer from "nodemailer";
-import { checkSmtpLogin, sendEmailDetailed } from "../email";
+import {
+  checkSmtpLogin,
+  sendEmailDetailed,
+  StartTlsRefusedError,
+} from "../email";
 
 const PASSWORD = "right-password";
 
@@ -142,6 +146,26 @@ describe("checkSmtpLogin", () => {
 
     await server.hung();
     expect(server.heard).toEqual(["EHLO", "QUIT"]);
+  });
+
+  // Enable TLS asks for STARTTLS whether or not the server lists it. A check that signed
+  // in without TLS where the send won't would give the password to anyone in between.
+  it("won't sign in without TLS when TLS is required, as the send won't", async () => {
+    server = await mailServer({ offersAuth: true });
+    const smtp = { ...smtpFor(server.port), requireTls: true };
+
+    const checked = await checkSmtpLogin(smtp).catch((e: Error) => e);
+    expect(server.heard).toEqual(["EHLO", "STARTTLS"]);
+    const sent = await sendEmailDetailed(message, smtp).catch((e: Error) => e);
+
+    expect(checked).toBeInstanceOf(StartTlsRefusedError);
+    expect((checked as Error).message).toBe(
+      "127.0.0.1 didn't switch to TLS when asked (STARTTLS), so Cronium didn't sign in or send anything. " +
+        "To use this server without encryption, untick Enable TLS on this credential. " +
+        "The server answered: 502 not here",
+    );
+    expect((checked as Error).message).toBe((sent as Error).message);
+    expect(server.heard).not.toContain("AUTH");
   });
 
   it("refuses what the send refuses before connecting", async () => {

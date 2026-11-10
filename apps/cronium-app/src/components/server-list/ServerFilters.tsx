@@ -47,8 +47,8 @@ export function ServerFilters({
     <div className="mb-6 space-y-4">
       {/* Filter Controls Row */}
       <div className="flex flex-wrap gap-4">
-        {/* Search */}
-        <div className="relative min-w-[300px] flex-1">
+        {/* Search: at least 300px, or the whole row where that's narrower */}
+        <div className="relative min-w-[min(300px,100%)] flex-1">
           <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
           <Input
             placeholder="Search servers..."

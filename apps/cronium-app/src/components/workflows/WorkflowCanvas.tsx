@@ -79,6 +79,7 @@ import {
   filterAvailableEvents,
   normalizeEdges,
   withCurrentEventDetails,
+  workflowGraphKey,
 } from "./lib/canvas-transforms";
 
 // Event type icon mapping - now using consistent icons
@@ -104,6 +105,13 @@ interface HistoryState {
   nodes: Node[];
   edges: Edge[];
   timestamp: number;
+}
+
+/** A graph the parent has been told about, or was given to start from. */
+interface ReportedGraph {
+  key: string;
+  nodes: Node[];
+  edges: Edge[];
 }
 
 export default function WorkflowCanvas({
@@ -195,16 +203,35 @@ export default function WorkflowCanvas({
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [prevNodesLength, setPrevNodesLength] = useState(0);
 
+  // The graph as the parent was last told it, or as it was given to start from, so that
+  // opening the canvas isn't a change.
+  const reportedRef = useRef<ReportedGraph | null>(null);
+  reportedRef.current ??= {
+    key: workflowGraphKey(initialNodes, initialEdges),
+    nodes: initialNodes,
+    edges: initialEdges,
+  };
+  // Once the parent has been told of a change, what it passes back as initialNodes and
+  // initialEdges is that change, not a graph to load.
+  const changedRef = useRef(false);
+
   // Load initial data only once
   useEffect(() => {
     // Only set nodes if we have data and haven't loaded yet, or if nodes changed from empty to populated
     if (
       initialNodes.length > 0 &&
-      (!initialDataLoaded || prevNodesLength === 0)
+      (!initialDataLoaded || prevNodesLength === 0) &&
+      !changedRef.current
     ) {
       setNodes(initialNodes);
       setInitialDataLoaded(true);
       setPrevNodesLength(initialNodes.length);
+      // A graph that arrives after the canvas opened is where it starts, not a change.
+      reportedRef.current = {
+        key: workflowGraphKey(initialNodes, initialEdges),
+        nodes: initialNodes,
+        edges: initialEdges,
+      };
 
       // Fit view after nodes are set
       if (reactFlowInstance) {
@@ -220,6 +247,7 @@ export default function WorkflowCanvas({
       // Initialize history only once after nodes and edges are set
       if (
         !historyInitialized &&
+        !changedRef.current &&
         (initialNodes.length > 0 || initialEdges.length > 0)
       ) {
         const initialState = createHistoryState(initialNodes, initialEdges);
@@ -246,11 +274,16 @@ export default function WorkflowCanvas({
 
   useEffect(() => {
     // Only set edges if they've actually changed and we have data
-    if (initialEdges.length > 0 && !initialEdgesLoaded) {
+    if (initialEdges.length > 0 && !initialEdgesLoaded && !changedRef.current) {
       // Normalize edges to ensure all required properties are present
       const normalizedEdges = normalizeEdges(initialEdges);
       setEdges(normalizedEdges);
       setInitialEdgesLoaded(true);
+      reportedRef.current = {
+        key: workflowGraphKey(initialNodes, initialEdges),
+        nodes: initialNodes,
+        edges: initialEdges,
+      };
 
       // Fit view again after edges are set if we have nodes
       if (reactFlowInstance && nodes.length > 0) {
@@ -260,6 +293,7 @@ export default function WorkflowCanvas({
       }
     }
   }, [
+    initialNodes,
     initialEdges,
     reactFlowInstance,
     nodes.length,
@@ -267,21 +301,20 @@ export default function WorkflowCanvas({
     setEdges,
   ]);
 
-  // Update last saved state when save is called
+  // "Undo all changes" goes back to what's saved. That's the graph the parent was last
+  // told about, at the moment the parent says nothing is unsaved any more: after a save,
+  // or an undo or a read of the workflow that makes the two match. Taking the canvas
+  // whenever nothing looked unsaved took a change in the moment before the parent heard
+  // of it, and that change then counted as saved.
+  const hadUnsavedChangesRef = useRef(hasUnsavedChanges || isSaving);
   useEffect(() => {
-    if (!isSaving && hasUnsavedChanges === false && !isInitializing) {
-      // Save was successful, update last saved state
-      const currentState = createHistoryState(nodes, edges);
-      setLastSavedState(currentState);
+    const unsaved = hasUnsavedChanges || isSaving;
+    if (hadUnsavedChangesRef.current && !unsaved && reportedRef.current) {
+      const { nodes: saved, edges: savedEdges } = reportedRef.current;
+      setLastSavedState(createHistoryState(saved, savedEdges));
     }
-  }, [
-    isSaving,
-    hasUnsavedChanges,
-    isInitializing,
-    nodes,
-    edges,
-    createHistoryState,
-  ]);
+    hadUnsavedChangesRef.current = unsaved;
+  }, [isSaving, hasUnsavedChanges, createHistoryState]);
 
   // Undo functionality
   const canUndo = currentHistoryIndex > 0;
@@ -302,21 +335,9 @@ export default function WorkflowCanvas({
       setEdges(normalizedEdges);
       setCurrentHistoryIndex(previousIndex);
 
-      // Notify parent of changes
-      if (onChange && !isInitializing) {
-        onChange(previousState.nodes, previousState.edges);
-      }
+      // Parent will be notified via useEffect
     }
-  }, [
-    canUndo,
-    readOnly,
-    currentHistoryIndex,
-    history,
-    setNodes,
-    setEdges,
-    onChange,
-    isInitializing,
-  ]);
+  }, [canUndo, readOnly, currentHistoryIndex, history, setNodes, setEdges]);
 
   const undoAllChanges = useCallback(() => {
     if (!canUndoToSave || !lastSavedState || readOnly) {
@@ -332,29 +353,8 @@ export default function WorkflowCanvas({
     setHistory([lastSavedState]);
     setCurrentHistoryIndex(0);
 
-    // Notify parent of changes
-    if (onChange && !isInitializing) {
-      onChange(lastSavedState.nodes, lastSavedState.edges);
-    }
-  }, [
-    canUndoToSave,
-    lastSavedState,
-    readOnly,
-    setNodes,
-    setEdges,
-    onChange,
-    isInitializing,
-  ]);
-
-  // Call onChange only for user interactions, not prop updates
-  const notifyParentOfChanges = useCallback(
-    (newNodes: Node[], newEdges: Edge[]) => {
-      if (onChange && !isInitializing) {
-        onChange(newNodes, newEdges);
-      }
-    },
-    [onChange, isInitializing],
-  );
+    // Parent will be notified via useEffect
+  }, [canUndoToSave, lastSavedState, readOnly, setNodes, setEdges]);
 
   // Handle node changes
   const handleNodesChange = useCallback(
@@ -415,42 +415,25 @@ export default function WorkflowCanvas({
       onNodesChange,
       readOnly,
       setNodes,
-      notifyParentOfChanges,
       addToHistory,
       isDragging,
       createHistoryState,
     ],
   );
 
-  // Store nodes in a ref so we always have the current value
-  const nodesRef = useRef(nodes);
-  nodesRef.current = nodes;
-
-  // Track when edges are updated by ConnectionEdge component
-  const lastNotifiedEdgesRef = useRef<string>("");
-
+  // Tell the parent about every change to what a save writes: a node dropped, moved or
+  // deleted, a connection made, removed or given a new condition by its edge, and an
+  // undo. Watching the graph sees them all, whatever made them, where watching only the
+  // edges missed every change to the nodes alone. A node being dragged counts once it's
+  // let go.
   useEffect(() => {
-    // Only check for changes after initialization
-    if (!isInitializing) {
-      const currentEdgesStr = JSON.stringify(
-        edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          data: e.data,
-        })),
-      );
-
-      // Only notify if the edges have actually changed since last notification
-      if (lastNotifiedEdgesRef.current !== currentEdgesStr) {
-        lastNotifiedEdgesRef.current = currentEdgesStr;
-        // Use the current nodes from ref and notify parent
-        if (onChange) {
-          onChange(nodesRef.current, edges);
-        }
-      }
-    }
-  }, [edges, isInitializing, onChange]); // Safe dependencies
+    if (isInitializing || nodes.some((node) => node.dragging)) return;
+    const key = workflowGraphKey(nodes, edges);
+    if (key === reportedRef.current?.key) return;
+    reportedRef.current = { key, nodes, edges };
+    changedRef.current = true;
+    onChange?.(nodes, edges);
+  }, [nodes, edges, isInitializing, onChange]);
 
   // Handle edge changes
   const handleEdgesChange = useCallback(
@@ -504,7 +487,7 @@ export default function WorkflowCanvas({
 
       // Parent will be notified via useEffect
     },
-    [edges, nodes, setEdges, readOnly, notifyParentOfChanges, addToHistory],
+    [edges, nodes, setEdges, readOnly, addToHistory],
   );
 
   // Handle dropping a new node onto the canvas
@@ -568,7 +551,7 @@ export default function WorkflowCanvas({
       edges,
       setNodes,
       readOnly,
-      notifyParentOfChanges,
+      addToHistory,
       toast,
     ],
   );
@@ -750,6 +733,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={undo}
@@ -771,6 +755,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={undoAllChanges}
@@ -797,6 +782,7 @@ export default function WorkflowCanvas({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              type="button"
                               onClick={onSave}
                               disabled={isSaving || !hasUnsavedChanges}
                               size="sm"
@@ -831,6 +817,7 @@ export default function WorkflowCanvas({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={deleteSelected}
@@ -874,6 +861,7 @@ export default function WorkflowCanvas({
                       <h3 className="font-medium">{copy.availableEvents}</h3>
                     )}
                     <Button
+                      type="button"
                       variant="ghost"
                       size="icon"
                       className="hover:bg-accent/50 h-6 w-6 transition-colors"
@@ -905,6 +893,7 @@ export default function WorkflowCanvas({
                         />
                         {searchQuery && (
                           <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             className="hover:bg-accent/50 absolute top-1/2 right-1 h-5 w-5 -translate-y-1/2 transform p-0"

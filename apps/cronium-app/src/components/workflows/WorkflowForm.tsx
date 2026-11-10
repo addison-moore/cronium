@@ -36,6 +36,8 @@ import type { UseFormReturn } from "react-hook-form";
 import { EventStatus, WorkflowTriggerType } from "@/shared/schema";
 import type { EventType, RunLocation } from "@/shared/schema";
 import WorkflowCanvas from "@/components/workflows/WorkflowCanvas-lazy";
+import type { AvailableEvent } from "@/components/workflows/lib/canvas-transforms";
+import { toAvailableEvent } from "@/components/workflows/lib/stored-graph";
 import type { Node, Edge } from "@xyflow/react";
 import { trpc } from "@/lib/trpc";
 
@@ -73,7 +75,10 @@ interface WorkflowFormProps {
   cancelButtonText?: string;
   onCancel?: () => void;
   showActionsAtTop?: boolean;
-  // Optional initial data for editing workflows
+  /**
+   * The graph to edit. Read once, as the form mounts, so a page that has to load it
+   * renders the form only once it has it.
+   */
   initialNodes?: Node[];
   initialEdges?: Edge[];
   workflowId?: number;
@@ -115,15 +120,11 @@ export default function WorkflowForm({
       online: undefined,
     });
 
-  // Transform tRPC data
-  const events: EventItem[] = useMemo(() => {
-    if (!eventsData?.events) return [];
-    return eventsData.events.map((event) => ({
-      id: event.id,
-      name: event.name,
-      type: event.type,
-    }));
-  }, [eventsData]);
+  // With their details: the canvas shows a node's event as this list has it.
+  const events: AvailableEvent[] = useMemo(
+    () => (eventsData?.events ?? []).map(toAvailableEvent),
+    [eventsData],
+  );
 
   const servers = useMemo(() => {
     return serversData?.servers ?? [];

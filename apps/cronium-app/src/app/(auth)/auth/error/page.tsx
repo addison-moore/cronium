@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import {
+  RATE_LIMIT_UNAVAILABLE,
+  RATE_LIMIT_UNAVAILABLE_MESSAGE,
+} from "@/shared/rate-limit";
 
 const errorMessages: Record<string, string> = {
   CredentialsSignin: "Invalid email or password.",
@@ -18,6 +22,7 @@ const errorMessages: Record<string, string> = {
   OAuthSignin: "There was a problem signing in with your provider.",
   OAuthCallback: "The OAuth provider returned an error.",
   Configuration: "The authentication system is misconfigured.",
+  [RATE_LIMIT_UNAVAILABLE]: RATE_LIMIT_UNAVAILABLE_MESSAGE,
 };
 
 const defaultErrorMessage =
