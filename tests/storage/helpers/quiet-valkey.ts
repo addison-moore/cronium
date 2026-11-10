@@ -12,6 +12,10 @@ import net from "node:net";
  *   unanswered.
  * - `stop()` refuses new connections and drops the open ones, as `docker stop` does to a
  *   client, and `start()` listens again on the same port, if it isn't already.
+ * - `dropFrom(pattern)` lets everything through until a client sends a command matching
+ *   `pattern`, then throws that away and everything after it on that connection, as a
+ *   Valkey that stops answering just then. Other connections, and later ones, carry on.
+ *   `restore()` also takes back a `dropFrom` nothing has matched yet.
  *
  * The real Valkey stays up, so a test can look at what reached it.
  */
@@ -22,6 +26,8 @@ export interface QuietRelay {
   resume(): void;
   drop(): void;
   restore(): void;
+  /** Once only: the first matching command after this is the one that goes unanswered. */
+  dropFrom(pattern: RegExp): void;
   stop(): Promise<void>;
   start(): Promise<void>;
   /** Connections accepted since the relay started. */
@@ -42,6 +48,7 @@ export async function quietRelayTo(valkeyUrl: string): Promise<QuietRelay> {
   let port = 0;
   let paused = false;
   let dropping = false;
+  let dropFrom: RegExp | null = null;
   let accepted = 0;
 
   const end = (pair: Pair) => {
@@ -58,6 +65,11 @@ export async function quietRelayTo(valkeyUrl: string): Promise<QuietRelay> {
     });
     upstream.on("error", () => end(pair)).on("close", () => end(pair));
     pair.client.on("data", (chunk) => {
+      // ioredis writes each command whole, so the chunk is the command, or a few.
+      if (!pair.dropping && dropFrom?.test(chunk.toString("latin1"))) {
+        dropFrom = null;
+        pair.dropping = true;
+      }
       if (!pair.dropping) upstream.write(chunk);
     });
   }
@@ -129,6 +141,10 @@ export async function quietRelayTo(valkeyUrl: string): Promise<QuietRelay> {
     },
     restore() {
       dropping = false;
+      dropFrom = null;
+    },
+    dropFrom(pattern: RegExp) {
+      dropFrom = pattern;
     },
     stop,
     start,

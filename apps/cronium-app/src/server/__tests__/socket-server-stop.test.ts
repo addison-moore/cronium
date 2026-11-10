@@ -6,6 +6,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { Manager } from "socket.io-client";
+import { VALKEY_ANSWER_MS } from "../../lib/valkey-answer-limit";
 import { SHUTDOWN_TIMEOUT_MS } from "../socket-server-shutdown";
 
 /**
@@ -266,8 +267,11 @@ describe("stopping the socket server", () => {
     const { code, tookMs } = await stopping;
 
     expect(code).toBe(143);
-    expect(output).toContain(OUT_OF_TIME);
-    expect(tookMs).toBeLessThan(STOPPED_WITHIN_MS);
+    // The wait on Valkey now ends by itself: UNSUBSCRIBE gives up after
+    // VALKEY_ANSWER_MS, before the time limit this used to run out.
+    expect(output).not.toContain(OUT_OF_TIME);
+    expect(tookMs).toBeGreaterThanOrEqual(VALKEY_ANSWER_MS - 50);
+    expect(tookMs).toBeLessThan(SHUTDOWN_TIMEOUT_MS);
   });
 
   it("exits in time when a client never finishes its request", async () => {
@@ -314,12 +318,12 @@ describe("stopping the socket server", () => {
   );
 
   it("reports a stop during startup as a stop, not a failed preflight", async () => {
-    // The store gives up on connecting after 5 seconds, so the preflight fails while
-    // the stop waits on it, inside the time limit.
+    // The store gives up on a connection Valkey doesn't answer after VALKEY_ANSWER_MS,
+    // so the preflight fails while the stop waits on it, inside the time limit.
     valkey.answering = false;
     await launch();
     await waitFor("the server to reach Valkey", () => valkey.connections > 0);
-    await sleep(3_000);
+    await sleep(VALKEY_ANSWER_MS / 2);
 
     const { code } = await stop("SIGTERM");
 
