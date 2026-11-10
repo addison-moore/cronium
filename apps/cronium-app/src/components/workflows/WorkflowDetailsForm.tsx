@@ -36,8 +36,6 @@ import {
 import { trpc } from "@/lib/trpc";
 import {
   type WorkflowDetailsFormData,
-  type WorkflowEdge,
-  type WorkflowNode,
   applyCronSchedulingToggle,
   applyServerOverrideToggle,
   buildWorkflowUpdatePayload,
@@ -48,15 +46,15 @@ import {
 
 interface WorkflowDetailsFormProps {
   workflow: Workflow;
-  workflowNodes: WorkflowNode[];
-  workflowEdges: WorkflowEdge[];
   onUpdate: (workflow: Workflow) => void;
 }
 
+/**
+ * The workflow's details. Its Save sends only these fields: the graph is the canvas's,
+ * and goes out through the canvas's own Save (see buildWorkflowUpdatePayload).
+ */
 export default function WorkflowDetailsForm({
   workflow,
-  workflowNodes,
-  workflowEdges,
   onUpdate,
 }: WorkflowDetailsFormProps) {
   const { toast } = useToast();
@@ -167,14 +165,9 @@ export default function WorkflowDetailsForm({
 
   const onSubmit = async (data: WorkflowDetailsFormData) => {
     try {
-      const updateData = buildWorkflowUpdatePayload(
-        workflow.id,
-        data,
-        workflowNodes,
-        workflowEdges,
+      await updateWorkflowMutation.mutateAsync(
+        buildWorkflowUpdatePayload(workflow.id, data),
       );
-
-      await updateWorkflowMutation.mutateAsync(updateData);
     } catch {
       // Error handled by mutation onError
     }

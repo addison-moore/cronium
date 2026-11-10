@@ -1053,12 +1053,7 @@ export default function WorkflowDetailsPage({
 
         <TabsContent value="edit" className="space-y-6">
           {workflow && (
-            <WorkflowDetailsForm
-              workflow={workflow}
-              workflowNodes={enrichedWorkflowNodes}
-              workflowEdges={workflowEdges}
-              onUpdate={setWorkflow}
-            />
+            <WorkflowDetailsForm workflow={workflow} onUpdate={setWorkflow} />
           )}
         </TabsContent>
 

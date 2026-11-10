@@ -10,13 +10,11 @@ import userEvent from "@testing-library/user-event";
 import WorkflowDetailsForm from "../WorkflowDetailsForm";
 import {
   type Workflow,
-  ConnectionType,
   EventStatus,
   RunLocation,
   TimeUnit,
   WorkflowTriggerType,
 } from "@/shared/schema";
-import type { WorkflowEdge, WorkflowNode } from "../lib/workflow-details";
 
 const mockMutateAsync = jest.fn();
 
@@ -77,34 +75,9 @@ function makeWorkflow(overrides: Partial<Workflow> = {}): Workflow {
   };
 }
 
-const nodes: WorkflowNode[] = [
-  {
-    id: "node-1",
-    type: "custom",
-    position: { x: 10, y: 20 },
-    data: {
-      eventId: 11,
-      label: "Step one",
-      type: "BASH",
-      eventTypeIcon: "BASH",
-    },
-  },
-];
-
-const edges: WorkflowEdge[] = [
-  { id: "e1", source: "node-1", target: "node-2" },
-];
-
 function renderForm(workflow = makeWorkflow()) {
   const onUpdate = jest.fn();
-  render(
-    <WorkflowDetailsForm
-      workflow={workflow}
-      workflowNodes={nodes}
-      workflowEdges={edges}
-      onUpdate={onUpdate}
-    />,
-  );
+  render(<WorkflowDetailsForm workflow={workflow} onUpdate={onUpdate} />);
   return { onUpdate };
 }
 
@@ -206,7 +179,8 @@ describe("WorkflowDetailsForm", () => {
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
-  it("submits the update payload with normalized nodes and edges", async () => {
+  // A graph in the payload makes the server make every node again, with new ids.
+  it("submits the workflow's details, with no graph", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderForm();
 
@@ -217,41 +191,17 @@ describe("WorkflowDetailsForm", () => {
 
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
 
-    const payload = mockMutateAsync.mock.calls[0]![0] as {
-      id: number;
-      name: string;
-      nodes: Array<{ type: string; data: { tags: string[] } }>;
-      edges: Array<{
-        type: string;
-        animated: boolean;
-        data: { connectionType: ConnectionType };
-      }>;
-    };
-
-    expect(payload.id).toBe(7);
-    expect(payload.name).toBe("Renamed workflow");
-    expect(payload.nodes).toEqual([
-      expect.objectContaining({
-        id: "node-1",
-        type: "eventNode",
-        position: { x: 10, y: 20 },
-        data: expect.objectContaining({
-          eventId: 11,
-          label: "Step one",
-          tags: [],
-        }),
-      }),
-    ]);
-    expect(payload.edges).toEqual([
-      {
-        id: "e1",
-        source: "node-1",
-        target: "node-2",
-        type: "connectionEdge",
-        animated: true,
-        data: { connectionType: ConnectionType.ALWAYS },
-      },
-    ]);
+    const payload = mockMutateAsync.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(payload).toMatchObject({
+      id: 7,
+      name: "Renamed workflow",
+      description: "Deploys at night",
+    });
+    expect(payload).not.toHaveProperty("nodes");
+    expect(payload).not.toHaveProperty("edges");
   });
 
   it("keeps schedule values when saving a scheduled workflow", async () => {
