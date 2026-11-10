@@ -252,9 +252,11 @@ export default function WorkflowForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
+                        {/* The lists show the form's value as it is now, not as it was when
+                            they mounted, which a reset or a page's read could change. */}
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -336,7 +338,7 @@ export default function WorkflowForm({
                       <FormLabel>Trigger Type</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -451,7 +453,7 @@ export default function WorkflowForm({
                                 <FormLabel>Unit</FormLabel>
                                 <Select
                                   onValueChange={field.onChange}
-                                  defaultValue={field.value ?? ""}
+                                  value={field.value ?? ""}
                                 >
                                   <FormControl>
                                     <SelectTrigger>

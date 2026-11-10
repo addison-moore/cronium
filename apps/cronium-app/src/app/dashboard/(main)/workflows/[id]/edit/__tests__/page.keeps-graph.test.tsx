@@ -9,6 +9,12 @@
  * memory. `workflows.update` handles a graph the way the real one does, replacing every
  * node and connection with new ones, so these tests read what's stored, not what's sent.
  * The new workflow page uses the same form, so it's here too.
+ *
+ * The Details tab had two bugs of its own. Every read of the workflow, which React Query
+ * makes whenever the window comes back, reset the form to what's stored, so a save wrote
+ * back the stored name over a typed one and said it worked. And the Status and Trigger
+ * Type lists showed the form's starting values, Draft and Manual, while the form held
+ * and saved the workflow's own.
  */
 import React from "react";
 import {
@@ -71,7 +77,23 @@ jest.mock("@/lib/security/field-secret", () => ({
 
 async function mockAnswer(request: Request): Promise<unknown> {
   mockRequests.push(request);
-  return mockServerAnswer(request);
+  return asSent(mockServerAnswer(request));
+}
+
+/**
+ * An answer as the page gets it. superjson makes new Dates for every answer, and React
+ * Query's structural sharing keeps the last answer only where everything is the same
+ * object, so every read of the workflow is a new object even when nothing changed.
+ */
+function asSent<T>(value: T): T {
+  if (value instanceof Date) return new Date(value) as T;
+  if (Array.isArray(value)) return value.map(asSent) as T;
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, asSent(item)]),
+    ) as T;
+  }
+  return value;
 }
 
 jest.mock("@/lib/trpc", () => {
@@ -389,6 +411,37 @@ async function openPage(page: React.ReactElement = <EditWorkflowPage />) {
 
 const nameField = () => screen.findByLabelText("Name", undefined, FIND);
 
+/** Waits for the stored name, which is there once the page has the workflow. */
+async function typeName(user: UserEvent, typed: string) {
+  const name = await nameField();
+  await waitFor(() => expect(name).toHaveValue("Deploy"), FIND);
+  await user.clear(name);
+  await user.type(name, typed);
+}
+
+type ListName = "Status" | "Trigger Type";
+
+/** A Radix Select's button, which shows the option chosen. */
+const list = (name: ListName) => screen.getByRole("combobox", { name });
+
+async function choose(user: UserEvent, name: ListName, option: RegExp) {
+  await user.click(list(name));
+  await user.click(await screen.findByRole("option", { name: option }, FIND));
+}
+
+/** As coming back to the window does: the page reads the workflow again. */
+async function refocus() {
+  const reads = sent("workflows.getById").length;
+  await act(async () => {
+    window.dispatchEvent(new Event("visibilitychange"));
+  });
+  await waitFor(
+    () => expect(sent("workflows.getById").length).toBeGreaterThan(reads),
+    FIND,
+  );
+  await settle();
+}
+
 /** Enabled once the events list is in, which the canvas needs. */
 async function submitButton(name: string) {
   const button = await screen.findByRole("button", { name }, FIND);
@@ -475,6 +528,11 @@ beforeAll(() => {
     offsetHeight: { configurable: true, get: () => 60 },
     offsetWidth: { configurable: true, get: () => 192 },
   });
+  // And what Radix Select asks of one, for the Details tab's lists.
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => undefined;
+  Element.prototype.releasePointerCapture = () => undefined;
+  Element.prototype.scrollIntoView = () => undefined;
 });
 
 beforeEach(() => {
@@ -648,6 +706,162 @@ describe("the workflow edit page", () => {
       expect(storedGraph()).toEqual(STORED_GRAPH);
     });
   });
+
+  describe("the Details tab", () => {
+    it("shows the workflow's status and trigger type", async () => {
+      mockWorkflow = storedWorkflow(WORKFLOW_ID, {
+        status: EventStatus.PAUSED,
+        triggerType: WorkflowTriggerType.WEBHOOK,
+      });
+      await openPage();
+      await waitFor(
+        async () => expect(await nameField()).toHaveValue("Deploy"),
+        FIND,
+      );
+
+      expect(list("Status")).toHaveTextContent("Paused");
+      expect(list("Trigger Type")).toHaveTextContent(/^Webhook/);
+    });
+  });
+
+  // React Query reads the workflow again whenever the window comes back.
+  describe("reading the workflow again while the page is open", () => {
+    it.each([
+      ["nothing has changed", () => {}],
+      [
+        "an event on it was renamed",
+        () => {
+          mockEvents.get(NIGHTLY)!.name = "nightly backup";
+        },
+      ],
+    ])("keeps a typed name when %s", async (_change, change) => {
+      const user = await openPage();
+      await typeName(user, "Deploy nightly");
+
+      change();
+      await refocus();
+
+      expect(await nameField()).toHaveValue("Deploy nightly");
+      await save(user);
+      expect(mockWorkflow.name).toBe("Deploy nightly");
+    });
+
+    it("keeps what was chosen in the lists", async () => {
+      const user = await openPage();
+      await waitFor(
+        async () => expect(await nameField()).toHaveValue("Deploy"),
+        FIND,
+      );
+      await choose(user, "Status", /^Paused/);
+      await choose(user, "Trigger Type", /^Webhook/);
+
+      mockWorkflow.description = "Ships the build";
+      await refocus();
+
+      expect(list("Status")).toHaveTextContent("Paused");
+      expect(list("Trigger Type")).toHaveTextContent(/^Webhook/);
+      await save(user);
+      expect(mockWorkflow).toMatchObject({
+        status: EventStatus.PAUSED,
+        triggerType: WorkflowTriggerType.WEBHOOK,
+      });
+    });
+
+    // A save sends every field, so one still holding the old value would put it back.
+    it("takes a change made elsewhere into the fields nobody has edited", async () => {
+      const user = await openPage();
+      await typeName(user, "Deploy nightly");
+
+      // Paused from the workflows list, say, while this page was open.
+      Object.assign(mockWorkflow, {
+        status: EventStatus.PAUSED,
+        triggerType: WorkflowTriggerType.WEBHOOK,
+        description: "Ships the build",
+      });
+      await refocus();
+
+      expect(await nameField()).toHaveValue("Deploy nightly");
+      expect(screen.getByLabelText("Description")).toHaveValue(
+        "Ships the build",
+      );
+      expect(list("Status")).toHaveTextContent("Paused");
+      expect(list("Trigger Type")).toHaveTextContent(/^Webhook/);
+      await save(user);
+      expect(mockWorkflow).toMatchObject({
+        name: "Deploy nightly",
+        description: "Ships the build",
+        status: EventStatus.PAUSED,
+        triggerType: WorkflowTriggerType.WEBHOOK,
+      });
+    });
+
+    // With keepDirtyValues, react-hook-form merges an array no field registered item by
+    // item, so a removed item can come back. The tags are one field's, so one value.
+    it("keeps a removed tag removed", async () => {
+      mockWorkflow = storedWorkflow(WORKFLOW_ID, { tags: ["prod", "backups"] });
+      const user = await openPage();
+      const prod = await screen.findByText("prod", undefined, FIND);
+      await user.click(within(prod).getByRole("button"));
+      await waitFor(() => expect(screen.queryByText("prod")).toBeNull(), FIND);
+
+      mockWorkflow.description = "Ships the build";
+      await refocus();
+
+      expect(screen.queryByText("prod")).toBeNull();
+      expect(screen.getByText("backups")).toBeInTheDocument();
+      await save(user);
+      expect(mockWorkflow.tags).toEqual(["backups"]);
+    });
+
+    // The canvas keeps the graph it opened on, so a save mustn't take the difference
+    // between that and what's stored now for an edit, and replace the graph.
+    it("leaves a graph changed elsewhere, which the canvas doesn't show", async () => {
+      const user = await openPage();
+      await typeName(user, "Deploy nightly");
+      mockNodes.push({
+        id: 3,
+        eventId: SPARE,
+        position_x: 720,
+        position_y: 90,
+      });
+      mockConnections.push({
+        id: 2,
+        sourceNodeId: 2,
+        targetNodeId: 3,
+        connectionType: ConnectionType.ALWAYS,
+      });
+      const changed = storedGraph();
+
+      await refocus();
+      await save(user);
+
+      expect(mockWorkflow.name).toBe("Deploy nightly");
+      expect(storedGraph()).toEqual(changed);
+      expect(mockNodes.map((node) => node.id)).toEqual([1, 2, 3]);
+    });
+
+    it("keeps the canvas's changes", async () => {
+      const user = await openPage();
+      await openTab(user, "Workflow");
+      clickOnCanvas(await canvasNode("weekly"));
+      await canvasToSettle();
+      const remove = screen.getByRole("button", { name: "Delete selected" });
+      await waitFor(() => expect(remove).toBeEnabled(), FIND);
+      await user.click(remove);
+      await waitFor(() => expect(canvasNodes()).toHaveLength(1), FIND);
+
+      await refocus();
+      await openTab(user, "Details");
+      await typeName(user, "Deploy nightly");
+      await save(user);
+
+      expect(mockWorkflow.name).toBe("Deploy nightly");
+      expect(storedGraph()).toEqual({
+        nodes: [{ eventId: NIGHTLY, x: 120, y: 90 }],
+        connections: [],
+      });
+    });
+  });
 });
 
 // The same form, starting from nothing.
@@ -722,5 +936,26 @@ describe("the new workflow page", () => {
     await settle();
 
     expect(sent("workflows.create")).toHaveLength(0);
+  });
+
+  it("starts as a manual draft and creates the workflow with the status and trigger chosen", async () => {
+    const user = await openPage(<NewWorkflowPage />);
+    await user.type(await nameField(), "Nightly deploy");
+    expect(list("Status")).toHaveTextContent("Draft");
+    expect(list("Trigger Type")).toHaveTextContent(/^Manual/);
+
+    // Not Active, which the server refuses for a workflow with no nodes.
+    await choose(user, "Status", /^Paused/);
+    await choose(user, "Trigger Type", /^Webhook/);
+    expect(list("Status")).toHaveTextContent("Paused");
+    expect(list("Trigger Type")).toHaveTextContent(/^Webhook/);
+    await user.click(await submitButton("Create Workflow"));
+    await waitFor(() => expect(sent("workflows.create")).toHaveLength(1), FIND);
+
+    expect(mockWorkflow).toMatchObject({
+      name: "Nightly deploy",
+      status: EventStatus.PAUSED,
+      triggerType: WorkflowTriggerType.WEBHOOK,
+    });
   });
 });
