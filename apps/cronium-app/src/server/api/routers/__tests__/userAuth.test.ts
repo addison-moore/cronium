@@ -56,15 +56,29 @@ jest.mock("@/lib/rate-limit-service", () => ({
   },
 }));
 
-const rateLimitState = { allowed: true };
+const rateLimitState: {
+  allowed: boolean;
+  reason: "limited" | "unavailable";
+} = { allowed: true, reason: "limited" };
 
 jest.mock("@/lib/security/atomic-rate-limiter", () => ({
   consumeAtomicRateLimit: jest.fn(() =>
-    Promise.resolve({
-      allowed: rateLimitState.allowed,
-      remaining: rateLimitState.allowed ? 1 : 0,
-      resetAt: new Date(Date.now() + 60_000),
-    }),
+    Promise.resolve(
+      rateLimitState.allowed
+        ? {
+            allowed: true,
+            remaining: 1,
+            resetAt: new Date(Date.now() + 60_000),
+          }
+        : rateLimitState.reason === "unavailable"
+          ? { allowed: false, reason: "unavailable" }
+          : {
+              allowed: false,
+              reason: "limited",
+              remaining: 0,
+              resetAt: new Date(Date.now() + 60_000),
+            },
+    ),
   ),
 }));
 
@@ -128,6 +142,7 @@ import { getSmtpSettings, sendPasswordResetEmail } from "@/lib/email";
 import { encryptionService } from "@/lib/encryption-service";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
 import { UnreadableSettingError } from "@/lib/security/unreadable-setting";
+import { RATE_LIMIT_UNAVAILABLE_MESSAGE } from "@/shared/rate-limit";
 // Real (unmocked) hash helper: reset tokens are stored hashed at rest, so the
 // tests assert storage only ever sees hashApiToken(rawToken).
 import { hashApiToken } from "@/lib/api-token-hash";
@@ -245,6 +260,7 @@ const NEW_PASSWORD = "brand-new-password-1";
 beforeEach(() => {
   jest.clearAllMocks();
   rateLimitState.allowed = true;
+  rateLimitState.reason = "limited";
   dbState.rows = [principalRow()];
   dbState.error = null;
 
@@ -789,6 +805,17 @@ describe("userAuth.login", () => {
       "userAuth.login",
       { maxRequests: 10, windowMs: 60_000 },
     );
+  });
+
+  it("is refused with a 503, not a 429, when the limiter couldn't check", async () => {
+    rateLimitState.allowed = false;
+    rateLimitState.reason = "unavailable";
+
+    await expect(publicCaller().userAuth.login(input)).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      message: RATE_LIMIT_UNAVAILABLE_MESSAGE,
+    });
+    expect(s.getUserByUsername).not.toHaveBeenCalled();
   });
 
   it("wraps unexpected failures as INTERNAL_SERVER_ERROR", async () => {

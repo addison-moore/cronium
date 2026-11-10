@@ -20,6 +20,10 @@ import { Input } from "@cronium/ui";
 import { Button } from "@cronium/ui";
 import { sameOriginRedirect } from "@/lib/safe-redirect";
 import { useEarlyFormInput } from "@/hooks/useEarlyFormInput";
+import {
+  RATE_LIMIT_UNAVAILABLE,
+  RATE_LIMIT_UNAVAILABLE_MESSAGE,
+} from "@/shared/rate-limit";
 
 const signinSchema = z.object({
   username: z.string().min(1, "Username or email is required"),
@@ -141,6 +145,14 @@ export default function SignIn() {
           setError("root.serverError", {
             type: "manual",
             message: copy.mfaPrompt,
+          });
+          return;
+        }
+        // The rate limiter couldn't be asked, which says nothing about what was typed.
+        if (nextAuthResult.error === RATE_LIMIT_UNAVAILABLE) {
+          setError("root.serverError", {
+            type: "manual",
+            message: RATE_LIMIT_UNAVAILABLE_MESSAGE,
           });
           return;
         }

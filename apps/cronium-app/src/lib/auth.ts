@@ -5,6 +5,7 @@ import { storage } from "@/server/storage";
 import { UserStatus } from "@/shared/schema";
 import { consumeAtomicRateLimit } from "@/lib/security/atomic-rate-limiter";
 import { resolveRequestClientIp } from "@/lib/security/client-ip";
+import { RATE_LIMIT_UNAVAILABLE } from "@/shared/rate-limit";
 import { sameOriginRedirect } from "@/lib/safe-redirect";
 import { verifyTotp } from "@/lib/security/totp";
 import { failureWithStack } from "@/lib/pg-errors";
@@ -41,7 +42,8 @@ export const authOptions: NextAuthOptions = {
         // Rate-limit credential logins per trusted client IP. This path does
         // not go through the tRPC middleware, so it is enforced here to block
         // brute force / password spraying. Atomic and FAILS CLOSED — a request
-        // is denied when the limiter backend is unavailable.
+        // is denied when the limiter backend is unavailable, with its own code,
+        // which the route answers with a 503 rather than NextAuth's 401.
         const headers = (req?.headers ?? {}) as Record<
           string,
           string | string[] | undefined
@@ -55,13 +57,17 @@ export const authOptions: NextAuthOptions = {
             pickHeader("x-forwarded-for"),
             pickHeader("x-real-ip"),
           ) ?? "unknown-ip";
-        const { allowed } = await consumeAtomicRateLimit(
+        const limit = await consumeAtomicRateLimit(
           clientIp,
           "auth:credentials-login",
           { maxRequests: 10, windowMs: 60_000 },
         );
-        if (!allowed) {
-          throw new Error("Too many login attempts. Please try again later.");
+        if (!limit.allowed) {
+          throw new Error(
+            limit.reason === "unavailable"
+              ? RATE_LIMIT_UNAVAILABLE
+              : "Too many login attempts. Please try again later.",
+          );
         }
 
         try {
@@ -105,13 +111,19 @@ export const authOptions: NextAuthOptions = {
               // RFC 6238 §5.2: a code must not be accepted twice. Without this
               // a code read off someone's screen stays good for the whole
               // ±1-step window. Keyed on the code and held past that window.
-              const { allowed } = await consumeAtomicRateLimit(
+              // A code whose use couldn't be recorded is refused too, but it
+              // isn't called invalid: it's good for another try shortly.
+              const firstUse = await consumeAtomicRateLimit(
                 `${user.id}:${submitted}`,
                 "auth:totp-used",
                 { maxRequests: 1, windowMs: TOTP_REPLAY_WINDOW_MS },
               );
-              if (!allowed) {
-                throw new Error("Invalid authenticator or recovery code.");
+              if (!firstUse.allowed) {
+                throw new Error(
+                  firstUse.reason === "unavailable"
+                    ? RATE_LIMIT_UNAVAILABLE
+                    : "Invalid authenticator or recovery code.",
+                );
               }
             } else {
               // Fall back to a single-use recovery code.
@@ -145,11 +157,14 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           // MFA challenge signals must reach the client (they drive the
-          // second-factor UI); every other error is a generic auth failure.
+          // second-factor UI), and so must a code the limiter couldn't check,
+          // or it would read as a wrong password. Every other error is a
+          // generic auth failure.
           if (
             error instanceof Error &&
             (error.message === "MFA_REQUIRED" ||
-              error.message === "Invalid authenticator or recovery code.")
+              error.message === "Invalid authenticator or recovery code." ||
+              error.message === RATE_LIMIT_UNAVAILABLE)
           ) {
             throw error;
           }

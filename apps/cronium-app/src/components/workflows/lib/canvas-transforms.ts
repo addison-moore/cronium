@@ -74,6 +74,51 @@ export function withCurrentEventDetails<N extends { data: object }>(
   });
 }
 
+/**
+ * A workflow's graph as a save writes it, as text that's the same for two graphs exactly
+ * when saving either would write the same: each node's event and position, and the
+ * connections between nodes with their conditions. Node ids aren't part of it, because the
+ * server makes every node again with a new id on each save. Neither is what a node shows
+ * about its event (see {@link withCurrentEventDetails}), nor React Flow's own fields, such as
+ * selection and sizes. A connection to a node that isn't there isn't saved, so it's left out.
+ */
+export function workflowGraphKey(
+  nodes: ReadonlyArray<{
+    id: string;
+    position: { x: number; y: number };
+    data: object;
+  }>,
+  edges: ReadonlyArray<{ source: string; target: string; data?: object }>,
+): string {
+  // In the order of what they are, so a node has the same place whatever its id. Two nodes
+  // with the same event and position keep the order they came in, as a save does.
+  const described = nodes
+    .map((node) => ({
+      id: node.id,
+      what: JSON.stringify([
+        (node.data as { eventId?: unknown }).eventId ?? null,
+        node.position.x,
+        node.position.y,
+      ]),
+    }))
+    .sort((a, b) => (a.what < b.what ? -1 : a.what > b.what ? 1 : 0));
+  const place = new Map(described.map(({ id }, index) => [id, index]));
+
+  const connections = edges
+    .filter((edge) => place.has(edge.source) && place.has(edge.target))
+    .map((edge) =>
+      JSON.stringify([
+        place.get(edge.source),
+        place.get(edge.target),
+        (edge.data as { connectionType?: unknown } | undefined)
+          ?.connectionType ?? ConnectionType.ALWAYS,
+      ]),
+    )
+    .sort();
+
+  return JSON.stringify([described.map(({ what }) => what), connections]);
+}
+
 /** Fill in the edge properties the canvas requires when they are missing. */
 export function normalizeEdge(edge: Edge): Edge {
   return {

@@ -28,6 +28,15 @@ export async function POST(req: Request): Promise<Response> {
     windowMs: 60_000,
   });
   if (!limit.allowed) {
+    if (limit.reason === "unavailable") {
+      // Refused all the same, since the limiter fails closed, but nothing was counted. In
+      // OAuth's shape with the code the token endpoint gives an outage.
+      return oauthError(
+        "temporarily_unavailable",
+        "Cronium can't check its limit on registrations right now, usually because Valkey is down or full, so it didn't register this client. Try again shortly.",
+        503,
+      );
+    }
     return oauthError(
       "invalid_request",
       "Too many registration requests; retry later",

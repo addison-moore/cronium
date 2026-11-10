@@ -23,12 +23,20 @@ jest.mock("ioredis", () => {
 
 import { randomUUID } from "crypto";
 import {
+  ANSWER_TIMEOUT_MS,
   consumeWebhookDeliveryOnce,
+  type DeliveryClaim,
   releaseWebhookDelivery,
 } from "../webhook-replay-store";
 
+interface FakeClient {
+  status: string;
+  connect: jest.Mock;
+  eval: jest.Mock;
+}
+
 const { mockClient: valkey } = jest.requireMock("ioredis") as {
-  mockClient: { status: string; eval: jest.Mock };
+  mockClient: FakeClient;
 };
 
 const TTL = 660;
@@ -247,4 +255,212 @@ describe("releaseWebhookDelivery", () => {
       expect(lastCheck().stranded).toEqual([claim.token]);
     },
   );
+});
+
+// What a request does when Valkey has the script and doesn't answer, as a paused
+// container or a partition leaves it. tests/storage/webhook-delivery-id-outage.test.ts
+// pauses a real one through the real route.
+describe("a Valkey that stops answering", () => {
+  /** Answers the client is still waiting for, lost after each test if not given. */
+  const owed: Array<{ answer: (taken: number) => void; lose: () => void }> = [];
+
+  /** The next script sent gets no answer until the test gives one, or loses it. */
+  function answerOwed() {
+    const debt = { answer: (_taken: number) => {}, lose: () => {} };
+    valkey.eval.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          debt.answer = resolve;
+          debt.lose = () => reject(noAnswer());
+        }),
+    );
+    owed.push(debt);
+    return debt;
+  }
+
+  /** Whether it has settled once everything waiting to run has, with no time passing. */
+  async function settledAtOnce(promise: Promise<unknown>) {
+    let settled = false;
+    void promise.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await jest.advanceTimersByTimeAsync(0);
+    return settled;
+  }
+
+  async function takenId() {
+    const id = randomUUID();
+    valkey.eval.mockResolvedValueOnce(1);
+    const check = await consumeWebhookDeliveryOnce(7, id, TTL);
+    return { id, claim: (check as { claim: DeliveryClaim }).claim };
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    for (const debt of owed.splice(0)) debt.lose();
+    await jest.advanceTimersByTimeAsync(0);
+    jest.useRealTimers();
+  });
+
+  it("says the id can't be checked once it has waited ANSWER_TIMEOUT_MS, and the next check takes its claim back", async () => {
+    const id = randomUUID();
+    const debt = answerOwed();
+    const check = consumeWebhookDeliveryOnce(7, id, TTL);
+
+    await jest.advanceTimersByTimeAsync(ANSWER_TIMEOUT_MS - 1);
+    expect(await settledAtOnce(check)).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(check).resolves.toEqual({ outcome: "unavailable" });
+    const unanswered = lastCheck().token;
+
+    // Valkey runs it once it answers again, so the id is held for a request that was
+    // told nothing was taken.
+    debt.answer(1);
+    valkey.eval.mockResolvedValueOnce(1);
+    await expect(consumeWebhookDeliveryOnce(7, id, TTL)).resolves.toMatchObject(
+      { outcome: "fresh" },
+    );
+    expect(lastCheck().stranded).toEqual([unanswered]);
+  });
+
+  it.each([
+    ["answers", (debt: ReturnType<typeof answerOwed>) => debt.answer(1)],
+    [
+      "loses the connection",
+      (debt: ReturnType<typeof answerOwed>) => debt.lose(),
+    ],
+  ])(
+    "sends nothing while it owes an answer, answering at once, and sends again once it %s",
+    async (_how, settle) => {
+      const refused = await takenId();
+      const debt = answerOwed();
+      const first = consumeWebhookDeliveryOnce(7, randomUUID(), TTL);
+      await jest.advanceTimersByTimeAsync(ANSWER_TIMEOUT_MS);
+      await expect(first).resolves.toEqual({ outcome: "unavailable" });
+      const sentSoFar = valkey.eval.mock.calls.length;
+
+      const id = randomUUID();
+      const check = consumeWebhookDeliveryOnce(7, id, TTL);
+      expect(await settledAtOnce(check)).toBe(true);
+      await expect(check).resolves.toEqual({ outcome: "unavailable" });
+      const release = releaseWebhookDelivery(refused.claim);
+      expect(await settledAtOnce(release)).toBe(true);
+      expect(valkey.eval).toHaveBeenCalledTimes(sentSoFar);
+
+      settle(debt);
+      valkey.eval.mockResolvedValue(1);
+      // Nothing was sent for it, so there's nothing to take back.
+      await expect(
+        consumeWebhookDeliveryOnce(7, id, TTL),
+      ).resolves.toMatchObject({ outcome: "fresh" });
+      expect(lastCheck().stranded).toEqual([]);
+      // The release that wasn't sent is done by the next check of its id.
+      await consumeWebhookDeliveryOnce(7, refused.id, TTL);
+      expect(lastCheck().stranded).toEqual([refused.claim.token]);
+    },
+  );
+
+  it("leaves a claim whose release isn't answered in time for the next check of the id", async () => {
+    const { id, claim } = await takenId();
+    const debt = answerOwed();
+    const release = releaseWebhookDelivery(claim);
+
+    await jest.advanceTimersByTimeAsync(ANSWER_TIMEOUT_MS - 1);
+    expect(await settledAtOnce(release)).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(release).resolves.toBeUndefined();
+    expect(valkey.eval.mock.lastCall!.slice(1)).toEqual([
+      1,
+      claim.key,
+      claim.token,
+    ]);
+
+    // The connection goes, so whether Valkey ran it can't be known.
+    debt.lose();
+    valkey.eval.mockResolvedValueOnce(1);
+    await consumeWebhookDeliveryOnce(7, id, TTL);
+    expect(lastCheck().stranded).toEqual([claim.token]);
+  });
+
+  /**
+   * A new copy of the store, whose client connects when it's first used. The fake client
+   * is the same object as the other copy's.
+   */
+  async function freshStore(
+    run: (
+      store: typeof import("../webhook-replay-store"),
+      client: FakeClient,
+    ) => Promise<void>,
+  ) {
+    await jest.isolateModulesAsync(async () => {
+      const { mockClient } = jest.requireMock("ioredis") as {
+        mockClient: FakeClient;
+      };
+      await run(await import("../webhook-replay-store"), mockClient);
+    });
+  }
+
+  it("waits no longer for a connection than for an answer, and sends nothing for a request that stopped waiting", async () => {
+    await freshStore(async (store, client) => {
+      let connected!: () => void;
+      client.connect.mockReturnValueOnce(
+        new Promise<void>((resolve) => (connected = resolve)),
+      );
+      const id = randomUUID();
+      const check = store.consumeWebhookDeliveryOnce(7, id, TTL);
+
+      await jest.advanceTimersByTimeAsync(store.ANSWER_TIMEOUT_MS - 1);
+      expect(await settledAtOnce(check)).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(await settledAtOnce(check)).toBe(true);
+      await expect(check).resolves.toEqual({ outcome: "unavailable" });
+
+      connected();
+      client.eval.mockResolvedValueOnce(1);
+      await expect(
+        store.consumeWebhookDeliveryOnce(7, id, TTL),
+      ).resolves.toMatchObject({ outcome: "fresh" });
+      expect(client.eval).toHaveBeenCalledTimes(1);
+      expect(sent(client.eval.mock.lastCall!).stranded).toEqual([]);
+    });
+  });
+
+  it("keeps at most MAX_STRANDED_CLAIMS claims, forgetting the oldest, and one taken back doesn't count", async () => {
+    await freshStore(async (store, client) => {
+      const { MAX_STRANDED_CLAIMS: max } = store;
+      const claimOn = (id: string): DeliveryClaim => ({
+        key: `cronium:webhook:delivery:9:${id}`,
+        token: randomUUID(),
+        expiresAt: Date.now() + TTL * 1000,
+      });
+      /** Releases that can't be sent, which strands each claim. */
+      async function strandAll(claims: DeliveryClaim[]) {
+        client.status = "reconnecting";
+        for (const claim of claims) await store.releaseWebhookDelivery(claim);
+        client.status = "ready";
+      }
+      /** What the next check of the id carries, which it then takes back. */
+      async function carriedBy(id: string) {
+        await store.consumeWebhookDeliveryOnce(9, id, TTL);
+        return sent(client.eval.mock.lastCall!).stranded;
+      }
+      client.eval.mockResolvedValue(1);
+
+      const takenBack = claimOn("taken-back");
+      await strandAll([takenBack]);
+      expect(await carriedBy("taken-back")).toEqual([takenBack.token]);
+
+      const claims = Array.from({ length: max + 1 }, (_, i) =>
+        claimOn(String(i)),
+      );
+      await strandAll(claims);
+      expect(await carriedBy("0")).toEqual([]);
+      expect(await carriedBy("1")).toEqual([claims[1]!.token]);
+      expect(await carriedBy(String(max))).toEqual([claims[max]!.token]);
+    });
+  });
 });

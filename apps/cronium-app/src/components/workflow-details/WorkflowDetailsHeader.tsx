@@ -22,18 +22,23 @@ export function WorkflowDetailsHeader({
   onStatusChange,
   isRunning,
 }: WorkflowDetailsHeaderProps) {
+  // The buttons wrap under the name when both don't fit on one line, and the name
+  // truncates rather than widening the page. Without `min-w-0` on each flex item
+  // around it, `truncate` does nothing: those items won't shrink below the name's
+  // full width, and the page grows past the screen, taking the header's theme and
+  // menu buttons with it.
   return (
-    <div className="mb-6 flex justify-between gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="mb-6 flex flex-wrap justify-between gap-4">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
         <Button variant="ghost" size="sm" asChild className="h-8 w-fit">
           <Link href="/dashboard/workflows">
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Workflows
           </Link>
         </Button>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <GitFork className="h-5 w-5 rotate-90" />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <GitFork className="h-5 w-5 shrink-0 rotate-90" />
             <h1 className="truncate text-xl font-bold">{workflow.name}</h1>
           </div>
           <ClickableStatusBadge
