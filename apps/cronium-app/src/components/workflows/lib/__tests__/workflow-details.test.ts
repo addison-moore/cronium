@@ -1,6 +1,5 @@
 import {
   type Workflow,
-  ConnectionType,
   EventStatus,
   RunLocation,
   TimeUnit,
@@ -8,8 +7,6 @@ import {
 } from "@/shared/schema";
 import {
   type WorkflowDetailsFormData,
-  type WorkflowEdge,
-  type WorkflowNode,
   applyCronSchedulingToggle,
   applyServerOverrideToggle,
   buildWorkflowUpdatePayload,
@@ -178,88 +175,16 @@ describe("workflowToFormValues", () => {
 });
 
 describe("buildWorkflowUpdatePayload", () => {
-  const nodes: WorkflowNode[] = [
-    {
-      id: "node-1",
-      type: "whatever",
-      position: { x: 10, y: 20 },
-      data: {
-        eventId: 11,
-        label: "Step one",
-        type: "BASH",
-        eventTypeIcon: "BASH",
-        // no description/tags/server fields
-      },
-    },
-  ];
-  const edges: WorkflowEdge[] = [
-    {
-      id: "e1",
-      source: "node-1",
-      target: "node-2",
-      // no type/animated/data
-    },
-    {
-      id: "e2",
-      source: "node-2",
-      target: "node-3",
-      data: { connectionType: ConnectionType.ON_FAILURE },
-    },
-  ];
-
-  it("spreads the form data behind the workflow id", () => {
+  it("sends the form data behind the workflow id", () => {
     const data = makeFormData({ name: "Renamed", shared: true });
-    const payload = buildWorkflowUpdatePayload(7, data, [], []);
-    expect(payload.id).toBe(7);
-    expect(payload.name).toBe("Renamed");
-    expect(payload.shared).toBe(true);
-    expect(payload.nodes).toEqual([]);
-    expect(payload.edges).toEqual([]);
+    expect(buildWorkflowUpdatePayload(7, data)).toEqual({ id: 7, ...data });
   });
 
-  it("normalizes nodes to the eventNode shape with tag defaults", () => {
-    const payload = buildWorkflowUpdatePayload(7, makeFormData(), nodes, []);
-    expect(payload.nodes).toEqual([
-      {
-        id: "node-1",
-        type: "eventNode",
-        position: { x: 10, y: 20 },
-        data: {
-          eventId: 11,
-          label: "Step one",
-          type: "BASH",
-          eventTypeIcon: "BASH",
-          description: undefined,
-          tags: [],
-          serverId: undefined,
-          serverName: undefined,
-          createdAt: undefined,
-          updatedAt: undefined,
-        },
-      },
-    ]);
-  });
-
-  it("normalizes edges: connectionEdge type, forced animation, ALWAYS default", () => {
-    const payload = buildWorkflowUpdatePayload(7, makeFormData(), [], edges);
-    expect(payload.edges).toEqual([
-      {
-        id: "e1",
-        source: "node-1",
-        target: "node-2",
-        type: "connectionEdge",
-        animated: true,
-        data: { connectionType: ConnectionType.ALWAYS },
-      },
-      {
-        id: "e2",
-        source: "node-2",
-        target: "node-3",
-        type: "connectionEdge",
-        animated: true,
-        data: { connectionType: ConnectionType.ON_FAILURE },
-      },
-    ]);
+  // The server makes every node again, with new ids, for any graph it's sent.
+  it("sends no graph", () => {
+    const payload = buildWorkflowUpdatePayload(7, makeFormData());
+    expect(payload).not.toHaveProperty("nodes");
+    expect(payload).not.toHaveProperty("edges");
   });
 });
 
@@ -267,8 +192,6 @@ describe("fieldsChangedSince", () => {
   const sent = buildWorkflowUpdatePayload(
     7,
     makeFormData({ name: "renamed", tags: ["ops"], scheduleNumber: 2 }),
-    [],
-    [],
   );
 
   it("is empty when the form still holds what was sent", () => {

@@ -1076,8 +1076,6 @@ export default function WorkflowDetailsPage({
           {editFormMounted && workflow && (
             <MemoWorkflowDetailsForm
               workflow={workflow}
-              workflowNodes={enrichedWorkflowNodes}
-              workflowEdges={workflowEdges}
               onUpdate={setWorkflow}
             />
           )}
