@@ -8,23 +8,7 @@ import {
   WorkflowTriggerType,
   EventStatus,
   TimeUnit,
-  ConnectionType,
 } from "@/shared/schema";
-
-export interface WorkflowNode {
-  id: string;
-  type: string;
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-}
-
-export interface WorkflowEdge {
-  id: string;
-  source: string;
-  target: string;
-  type?: string;
-  data?: Record<string, unknown>;
-}
 
 // Define the form schema with proper validation
 export const workflowDetailsSchema = z
@@ -111,47 +95,17 @@ export function fieldsChangedSince(
 }
 
 /**
- * Assemble the `workflows.update` payload: form values plus the canvas nodes
- * and edges normalized to the shapes `updateWorkflowSchema` expects
- * (`eventNode`/`connectionEdge` type literals, tags and connectionType
- * defaults).
+ * The `workflows.update` payload for a Details save: the form's fields, and no graph.
+ * The server takes any graph it's sent as a new one: it deletes every node and connection
+ * and makes them again with new ids, and a running workflow's remaining steps then fail.
+ * Sending the page's graph also wrote back a copy older than one saved elsewhere, and
+ * saved unfinished canvas edits. Those wait for the canvas's own Save.
  */
 export function buildWorkflowUpdatePayload(
   workflowId: number,
   data: WorkflowDetailsFormData,
-  workflowNodes: WorkflowNode[],
-  workflowEdges: WorkflowEdge[],
 ) {
-  return {
-    id: workflowId,
-    ...data,
-    nodes: workflowNodes.map((node) => ({
-      ...node,
-      type: "eventNode" as const,
-      data: {
-        eventId: node.data.eventId as number,
-        label: node.data.label as string,
-        type: node.data.type as string,
-        eventTypeIcon: node.data.eventTypeIcon as string,
-        description: node.data.description as string | undefined,
-        tags: (node.data.tags as string[]) || [],
-        serverId: node.data.serverId as number | undefined,
-        serverName: node.data.serverName as string | undefined,
-        createdAt: node.data.createdAt as string | undefined,
-        updatedAt: node.data.updatedAt as string | undefined,
-      },
-    })),
-    edges: workflowEdges.map((edge) => ({
-      ...edge,
-      type: "connectionEdge" as const,
-      animated: true,
-      data: {
-        connectionType:
-          (edge.data?.connectionType as ConnectionType | undefined) ??
-          ConnectionType.ALWAYS,
-      },
-    })),
-  };
+  return { id: workflowId, ...data };
 }
 
 /**

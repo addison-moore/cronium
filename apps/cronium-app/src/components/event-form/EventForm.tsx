@@ -696,7 +696,9 @@ function EventFormFields({
 
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              {/* Settings and Clear go under the title when the three don't fit on
+                  one line, as at 320 px, instead of past the edge of the page. */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle>{eventsCopy.Fields.Content}</CardTitle>
                 <div className="flex items-center gap-2">
                   <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useCallback, useMemo } from "react";
+import { useState, useEffect, use, useCallback, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -104,6 +104,11 @@ function toAvailableEvent(event: Event): AvailableEvent {
 
 import { WorkflowDetailsHeader } from "@/components/workflow-details/WorkflowDetailsHeader";
 import { StatusBadge } from "@/components/ui/status-badge";
+
+// Once opened, the Edit tab's form stays mounted, out of sight on the other tabs, and the
+// page re-renders on every poll of a running workflow. The form only needs to render when
+// what it's given changes.
+const MemoWorkflowDetailsForm = memo(WorkflowDetailsForm);
 
 interface WorkflowDetailsPageProps {
   params: Promise<{ id: string }>;
@@ -218,6 +223,17 @@ export default function WorkflowDetailsPage({
     defaultTab: "overview",
     validTabs: ["overview", "edit", "canvas", "execution-history"],
   });
+
+  // Radix unmounts an inactive tab's content, and a new Details form starts from the
+  // stored workflow, so a visit to another tab and back put every edited field back to
+  // its stored value, with nothing to say so. So the form mounts the first time the Edit
+  // tab opens, and stays: the tab's content is force-mounted, and hidden here while
+  // another tab shows, since Radix doesn't hide content it force-mounts. A save resets
+  // the form to what was saved.
+  const [editFormMounted, setEditFormMounted] = useState(false);
+  if (activeTab === "edit" && !editFormMounted) {
+    setEditFormMounted(true);
+  }
 
   // Use tRPC queries
   const workflowId = parseInt(resolvedParams.id);
@@ -1051,12 +1067,15 @@ export default function WorkflowDetailsPage({
           )}
         </TabsContent>
 
-        <TabsContent value="edit" className="space-y-6">
-          {workflow && (
-            <WorkflowDetailsForm
+        <TabsContent
+          value="edit"
+          className="space-y-6"
+          forceMount
+          hidden={activeTab !== "edit"}
+        >
+          {editFormMounted && workflow && (
+            <MemoWorkflowDetailsForm
               workflow={workflow}
-              workflowNodes={enrichedWorkflowNodes}
-              workflowEdges={workflowEdges}
               onUpdate={setWorkflow}
             />
           )}

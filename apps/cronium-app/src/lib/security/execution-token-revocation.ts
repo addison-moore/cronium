@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { VALKEY_ANSWER_LIMITS } from "@/lib/valkey-answer-limit";
 import { describeFailure } from "@/lib/pg-errors";
 
 /**
@@ -17,16 +18,48 @@ import { describeFailure } from "@/lib/pg-errors";
  * could remain, keeping the keyspace bounded.
  *
  * Uses its own lazily-connected ioredis client (mirrors the other security
- * stores). The WRITE is best-effort: if it fails the token still expires at its
- * hard cap, and the runtime fails CLOSED on its own read errors — so a transient
- * outage cannot turn revocation into silent acceptance.
+ * stores). The WRITE is best-effort: if it fails it is written again once Valkey
+ * answers, the token still expires at its hard cap, and the runtime fails CLOSED
+ * on its own read errors — so a transient outage cannot turn revocation into
+ * silent acceptance.
  */
 
 const KEY_PREFIX = "cronium:exec-revoked:";
 const DEFAULT_TTL_SECONDS = 3 * 60 * 60; // > the runtime's 2h absolute token cap
 const CONNECT_TIMEOUT_MS = 5_000;
+const MAX_UNWRITTEN = 10_000;
 
 let commandClientPromise: Promise<RedisClient> | null = null;
+
+/**
+ * Markers that couldn't be written, by job, with their TTL, to write as soon as a
+ * connection is ready. The job's end has stopped waiting for its marker, and without
+ * this the job's token would work again once Valkey answered, until the token's own
+ * 2-hour cap. Held in this process only, at most MAX_UNWRITTEN, the oldest let go first.
+ */
+const unwritten = new Map<string, number>();
+
+function remember(jobId: string, ttlSeconds: number): void {
+  unwritten.delete(jobId);
+  if (unwritten.size >= MAX_UNWRITTEN) {
+    // Its token is the nearest its own cap.
+    const oldest = unwritten.keys().next().value;
+    if (oldest !== undefined) unwritten.delete(oldest);
+  }
+  unwritten.set(jobId, ttlSeconds);
+}
+
+async function writeUnwritten(client: RedisClient): Promise<void> {
+  for (const [jobId, ttlSeconds] of [...unwritten]) {
+    try {
+      await client.set(revocationKey(jobId), "1", "EX", ttlSeconds);
+    } catch {
+      // Not answering again. The next connection that's ready starts over.
+      return;
+    }
+    unwritten.delete(jobId);
+  }
+}
 
 function redisUrl(environment: NodeJS.ProcessEnv = process.env): string {
   const value = environment.VALKEY_URL ?? environment.REDIS_URL;
@@ -43,6 +76,12 @@ function newClient(url: string): RedisClient {
     lazyConnect: true,
     enableReadyCheck: true,
     maxRetriesPerRequest: 1,
+    // Every job that ends waits on this write (job-transition.ts), after its new state
+    // has committed. A Valkey that accepts connections and never answers held it for
+    // good: jobs.cancel and the orchestrator's job reports waited with it, and the
+    // worker kept each in-process job's slot, so after ten it started nothing more. Now
+    // the write gives up within VALKEY_ANSWER_MS, and is made again once Valkey answers.
+    ...VALKEY_ANSWER_LIMITS,
   });
   client.on("error", (error) => {
     console.error(
@@ -50,6 +89,9 @@ function newClient(url: string): RedisClient {
       describeFailure(error),
     );
   });
+  // ioredis can't keep these writes itself: a new connection whose ready check isn't
+  // answered fails every command waiting for it, the given-up ones included.
+  client.on("ready", () => void writeUnwritten(client));
   return client;
 }
 
@@ -92,8 +134,9 @@ export function revocationKey(jobId: string): string {
 
 /**
  * Revoke every execution token for a job (called when the job goes terminal).
- * Best-effort: a failure is logged and swallowed — the token's absolute
- * lifetime cap is the backstop, and the runtime's read fails closed.
+ * Best-effort: a failure is logged and swallowed, and the marker is written once a
+ * connection is ready — the token's absolute lifetime cap is the backstop, and the
+ * runtime's read fails closed.
  */
 export async function revokeJobExecutionTokens(
   jobId: string,
@@ -104,8 +147,9 @@ export async function revokeJobExecutionTokens(
     const client = await commandClient();
     await client.set(revocationKey(jobId), "1", "EX", ttlSeconds);
   } catch (error) {
+    remember(jobId, ttlSeconds);
     console.error(
-      `Failed to write execution-token revocation for job ${jobId} (token still expires at its hard cap):`,
+      `Failed to write execution-token revocation for job ${jobId} (written once Valkey answers; the token expires at its hard cap regardless):`,
       describeFailure(error),
     );
   }
