@@ -967,8 +967,9 @@ describe("SSHService's terminal pool", () => {
     // Their connection closes with the last of them, and not before.
     const last = firstFive.pop()!;
     firstFive.forEach(endAsTheTerminalDoes);
-    await until("four shells to close", () =>
-      firstFive.every(({ closed }) => closed()),
+    await until(
+      "four shells to close, here and at the server",
+      () => firstFive.every(({ closed }) => closed()) && a.shells() === 2,
     );
     await wait(300);
     expect(last.closed()).toBe(false);
@@ -1033,27 +1034,40 @@ describe("SSHService's terminal pool", () => {
   });
 
   it("closes a shell that opens after it stopped waiting, and doesn't count it", async () => {
-    sshService = new SSHService({ ...GRACE, terminalShellMs: 200 });
-    const letShellThrough = gate();
-    const a = await startServer(SERVER_A.answers, {
-      holdFirstShell: letShellThrough.opened,
-    });
+    // The only shell here is the one the server holds, so the short limit on opening a
+    // shell is never a race. The pool measures how long it has kept a connection with
+    // Date.now(), which stands still until the clock is moved on below.
+    let now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      sshService = new SSHService({
+        ...GRACE,
+        terminalShellMs: 200,
+        terminalIdleMs: 100,
+        terminalSweepMs: 50,
+      });
+      const letShellThrough = gate();
+      const a = await startServer(SERVER_A.answers, {
+        holdFirstShell: letShellThrough.opened,
+      });
 
-    await expect(openShell(a.port)).rejects.toThrow(
-      "Shell creation timeout - server may be overloaded",
-    );
-    // The server opens it after all, when nothing would ever read it or end it.
-    letShellThrough.open();
-    await until(
-      "the late shell to close",
-      () => a.shellsOpened() === 1 && a.shells() === 0,
-    );
-    expect(a.open()).toBe(1);
+      await expect(openShell(a.port)).rejects.toThrow(
+        "Shell creation timeout - server may be overloaded",
+      );
+      // The server opens it after all, when nothing would ever read it or end it.
+      letShellThrough.open();
+      await until(
+        "the late shell to close",
+        () => a.shellsOpened() === 1 && a.shells() === 0,
+      );
+      expect(a.open()).toBe(1);
 
-    // Nor is it one of the five shells its connection carries.
-    for (let shells = 0; shells < 5; shells += 1) {
-      await openShell(a.port);
+      // Nor does it count as the connection's shell: with none, the connection is idle,
+      // so once the clock moves past the limit, the next sweep closes it.
+      now += 1_000;
+      await until("the connection to close", () => a.open() === 0);
+    } finally {
+      clock.mockRestore();
     }
-    expect(a.connections()).toBe(1);
   });
 });
