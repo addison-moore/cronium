@@ -1,5 +1,6 @@
 import Redis, { type Redis as RedisClient } from "ioredis";
 import { normalizeValkeyUrl } from "@/lib/valkey-url";
+import { VALKEY_ANSWER_LIMITS } from "@/lib/valkey-answer-limit";
 import { describeFailure, failureWithStack } from "@/lib/pg-errors";
 
 const SOCKET_TICKET_PREFIX = "cronium:socket-ticket:consumed:";
@@ -26,11 +27,23 @@ function redisUrl(environment: NodeJS.ProcessEnv = process.env): string {
   return normalizeValkeyUrl(value);
 }
 
-function newClient(url: string): RedisClient {
+function newClient(
+  url: string,
+  options: { autoResubscribe?: boolean } = {},
+): RedisClient {
   const client = new Redis(url, {
     lazyConnect: true,
     enableReadyCheck: true,
     maxRetriesPerRequest: 1,
+    // A Valkey that accepts connections and never answers held every command here for
+    // good: each socket handshake's ticket, and each change that ends a user's sessions,
+    // which checks this store before it writes. Both now refuse within VALKEY_ANSWER_MS.
+    //
+    // The subscriber gets the same limits, and they never close it for being quiet:
+    // socketTimeout runs only while a command waits for its answer, and a subscriber
+    // sends nothing between SUBSCRIBE and UNSUBSCRIBE, however long no event comes.
+    ...VALKEY_ANSWER_LIMITS,
+    autoResubscribe: options.autoResubscribe ?? true,
   });
   client.on("error", (error) => {
     console.error(
@@ -99,9 +112,28 @@ export async function consumeSocketTicketOnce(
   return result === "OK";
 }
 
+/**
+ * Tells every socket server to disconnect a user's sockets, or everyone's, now.
+ *
+ * Every caller has already committed the change that calls for this, so a failure to
+ * send is logged, not thrown. Throwing told the admin their change had failed when it
+ * was in effect: requests read the account from Postgres, and every 10 seconds each
+ * socket server re-reads its connected users from Postgres (server.ts), disconnects
+ * those whose account changed, and ends terminals that lost their server or console
+ * access. The event only makes that immediate, and while Valkey isn't answering no
+ * socket server could hear it anyway.
+ */
 async function publish(event: SocketSecurityEvent): Promise<void> {
-  const client = await commandClient();
-  await client.publish(SOCKET_SECURITY_CHANNEL, JSON.stringify(event));
+  try {
+    const client = await commandClient();
+    await client.publish(SOCKET_SECURITY_CHANNEL, JSON.stringify(event));
+  } catch (error) {
+    const whose = event.userId ? `user ${event.userId}` : "everyone";
+    console.error(
+      `Couldn't tell socket servers to disconnect ${whose} (${event.reason}). They will at their next check of connected users, within 10 seconds:`,
+      describeFailure(error),
+    );
+  }
 }
 
 export async function publishUserSocketRevocation(
@@ -151,9 +183,31 @@ function parseSocketSecurityEvent(value: string): SocketSecurityEvent | null {
 export async function subscribeToSocketSecurityEvents(
   handler: (event: SocketSecurityEvent) => void | Promise<void>,
 ): Promise<() => Promise<void>> {
-  const subscriber = newClient(redisUrl());
+  // This subscribes again on each new connection itself. ioredis resubscribes only to
+  // channels the closed connection had confirmed, and under VALKEY_ANSWER_LIMITS a
+  // resubscribe left unanswered closes its connection before Valkey confirms anything.
+  // The connection after that would subscribe to nothing, for good, and the timed-out
+  // resubscribe would be an unhandled rejection, which ends the socket server.
+  const subscriber = newClient(redisUrl(), { autoResubscribe: false });
   await connectClient(subscriber);
-  await subscriber.subscribe(SOCKET_SECURITY_CHANNEL);
+  try {
+    await subscriber.subscribe(SOCKET_SECURITY_CHANNEL);
+  } catch (error) {
+    // Unanswered, it now fails rather than waiting, and the client would otherwise go
+    // on connecting for good with no one to close it.
+    subscriber.disconnect();
+    throw error;
+  }
+  const subscribeAgain = () => {
+    // Unanswered, this connection is closed and the next one tries again.
+    subscriber.subscribe(SOCKET_SECURITY_CHANNEL).catch((error: unknown) => {
+      console.error(
+        "Socket security subscriber couldn't subscribe on its new connection:",
+        describeFailure(error),
+      );
+    });
+  };
+  subscriber.on("ready", subscribeAgain);
 
   subscriber.on("message", (channel, message) => {
     if (channel !== SOCKET_SECURITY_CHANNEL) return;
@@ -171,6 +225,7 @@ export async function subscribeToSocketSecurityEvents(
   });
 
   return async () => {
+    subscriber.off("ready", subscribeAgain);
     await subscriber.unsubscribe(SOCKET_SECURITY_CHANNEL).catch(() => 0);
     subscriber.disconnect();
   };

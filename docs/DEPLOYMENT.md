@@ -124,7 +124,9 @@ Authenticated users obtain a 30-second, audience-specific ticket before each
 connection. Tickets are consumed atomically in shared Valkey across replicas.
 The server rechecks that the user is active (plus console permission for
 terminals), subscribes to authorization revocations, and periodically
-revalidates connected principals.
+revalidates connected principals. If Valkey stops answering, handshakes are
+refused within 2 seconds. A revocation that can't be published is logged, and
+the next revalidation, within 10 seconds, disconnects those sockets instead.
 
 The bundled Valkey service uses the `noeviction` policy because consumed socket
 ticket markers are security state, not disposable cache entries. If Valkey
